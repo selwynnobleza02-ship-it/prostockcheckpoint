@@ -1,0 +1,250 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/customer.dart';
+import '../services/firestore_service.dart';
+import '../utils/error_logger.dart';
+
+class CustomerProvider with ChangeNotifier {
+  List<Customer> _customers = [];
+  bool _isLoading = false;
+  String? _error;
+
+  final Map<String, List<Customer>> _cache = {};
+  final Map<String, DateTime> _cacheTimestamps = {};
+  static const Duration _cacheExpiry = Duration(minutes: 5);
+  static const int _pageSize = 50;
+  DocumentSnapshot? _lastDocument; // Changed from _currentPage to _lastDocument
+  bool _hasMoreData = true;
+  String? _currentSearchQuery;
+
+  List<Customer> get customers => _customers;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+  bool get hasMoreData => _hasMoreData;
+
+  List<Customer> get overdueCustomers =>
+      _customers.where((customer) => customer.hasOverdueBalance).toList();
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  Future<void> loadCustomers({
+    bool refresh = false,
+    String? searchQuery,
+  }) async {
+    if (_isLoading) return;
+
+    if (!refresh && !_shouldRefreshCache('customers_${searchQuery ?? 'all'}')) {
+      final cachedData = _getCachedData('customers_${searchQuery ?? 'all'}');
+      if (cachedData != null) {
+        _customers = cachedData;
+        notifyListeners();
+        return;
+      }
+    }
+
+    _isLoading = true;
+    _error = null;
+    _lastDocument = null; // Reset pagination
+    _hasMoreData = true;
+    _currentSearchQuery = searchQuery;
+    notifyListeners();
+
+    try {
+      final result = await FirestoreService.instance.getCustomersPaginated(
+        limit: _pageSize,
+        lastDocument: null, // Start from beginning
+        searchQuery: searchQuery,
+      );
+
+      _customers = result.items;
+      _lastDocument = result.lastDocument;
+      _hasMoreData = result.items.length == _pageSize;
+
+      // Cache the data
+      _setCachedData('customers_${searchQuery ?? 'all'}', _customers);
+    } catch (e) {
+      _error = 'Failed to load customers: ${e.toString()}';
+      ErrorLogger.logError(
+        'Error loading customers',
+        error: e,
+        context: 'CustomerProvider.loadCustomers',
+      );
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> loadMoreCustomers() async {
+    if (_isLoading || !_hasMoreData) return;
+
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final result = await FirestoreService.instance
+          .getCustomersPaginated(
+            limit: _pageSize,
+            lastDocument: _lastDocument,
+            searchQuery: _currentSearchQuery,
+          );
+
+      _customers.addAll(result.items);
+      _lastDocument = result.lastDocument;
+      _hasMoreData = result.items.length == _pageSize;
+
+      // Update cache
+      _setCachedData('customers_${_currentSearchQuery ?? 'all'}', _customers);
+    } catch (e) {
+      _error = 'Failed to load more customers: ${e.toString()}';
+      ErrorLogger.logError(
+        'Error loading more customers',
+        error: e,
+        context: 'CustomerProvider.loadMoreCustomers',
+      );
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  bool _shouldRefreshCache(String key) {
+    final timestamp = _cacheTimestamps[key];
+    if (timestamp == null) return true;
+    return DateTime.now().difference(timestamp) > _cacheExpiry;
+  }
+
+  List<Customer>? _getCachedData(String key) {
+    return _cache[key];
+  }
+
+  void _setCachedData(String key, List<Customer> data) {
+    _cache[key] = List.from(data);
+    _cacheTimestamps[key] = DateTime.now();
+  }
+
+  void clearCache() {
+    _cache.clear();
+    _cacheTimestamps.clear();
+  }
+
+  Future<bool> addCustomer(Customer customer) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final id = await FirestoreService.instance.insertCustomer(customer);
+      final newCustomer = Customer(
+        id: id,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        address: customer.address,
+        creditLimit: customer.creditLimit,
+        currentBalance: customer.currentBalance,
+        createdAt: customer.createdAt,
+        updatedAt: customer.updatedAt,
+      );
+      _customers.add(newCustomer);
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Failed to add customer: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error adding customer',
+        error: e,
+        context: 'CustomerProvider.addCustomer',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateCustomer(Customer customer) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await FirestoreService.instance.updateCustomer(customer);
+      final index = _customers.indexWhere((c) => c.id == customer.id);
+      if (index != -1) {
+        _customers[index] = customer;
+        _isLoading = false;
+        notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      _error = 'Failed to update customer: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error updating customer',
+        error: e,
+        context: 'CustomerProvider.updateCustomer',
+      );
+      return false;
+    }
+  }
+
+  /// Updates a customer's balance and refreshes the local data
+  Future<bool> updateCustomerBalance(
+    String customerId,
+    double newBalance,
+  ) async {
+    try {
+      final customerIndex = _customers.indexWhere((c) => c.id == customerId);
+      if (customerIndex == -1) {
+        _error = 'Customer not found';
+        notifyListeners();
+        return false;
+      }
+
+      final customer = _customers[customerIndex];
+      final updatedCustomer = Customer(
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        address: customer.address,
+        creditLimit: customer.creditLimit,
+        currentBalance: newBalance,
+        createdAt: customer.createdAt,
+        updatedAt: DateTime.now(),
+      );
+
+      await FirestoreService.instance.updateCustomer(updatedCustomer);
+      _customers[customerIndex] = updatedCustomer;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Failed to update customer balance: ${e.toString()}';
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error updating customer balance',
+        error: e,
+        context: 'CustomerProvider.updateCustomerBalance',
+      );
+      return false;
+    }
+  }
+
+  Customer? getCustomerById(String id) {
+    try {
+      return _customers.firstWhere((customer) => customer.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Refreshes customer data from database
+  Future<void> refreshCustomers() async {
+    await loadCustomers(refresh: true);
+  }
+}

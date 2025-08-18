@@ -1,0 +1,499 @@
+import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/providers/connectivity_provider.dart';
+import 'package:sqflite/sqflite.dart';
+import '../models/product.dart';
+import '../services/firestore_service.dart';
+import '../services/local_database_service.dart';
+import '../utils/error_logger.dart'; // Added ErrorLogger import
+import 'package:collection/collection.dart'; // Import for firstOrNull
+
+class InventoryProvider with ChangeNotifier {
+  List<Product> _products = [];
+  bool _isLoading = false;
+  String? _error;
+  final Map<String, int> _reservedStock = {}; // productId -> reserved quantity
+  final Map<String, int> _reorderPoints = {}; // productId -> reorder point
+
+  final LocalDatabaseService _localDatabaseService = LocalDatabaseService.instance;
+  ConnectivityProvider _connectivityProvider;
+
+  InventoryProvider(this._connectivityProvider);
+
+  void update(ConnectivityProvider connectivityProvider) {
+    _connectivityProvider = connectivityProvider;
+    notifyListeners();
+  }
+
+  List<Product> get products => _products;
+  bool get isLoading => _isLoading;
+  String? get error => _error;
+
+  List<Product> get lowStockProducts =>
+      _products.where((product) => product.isLowStock).toList();
+
+  List<Product> get criticalStockProducts => _products
+      .where(
+        (product) =>
+            product.stock <= (_reorderPoints[product.id.toString()] ?? 5),
+      )
+      .toList();
+
+  void clearError() {
+    _error = null;
+    notifyListeners();
+  }
+
+  Future<void> loadProducts({bool refresh = false, String? searchQuery}) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final db = await _localDatabaseService.database;
+      final localProducts = await db.query('products');
+
+      if (localProducts.isNotEmpty) {
+        _products = localProducts.map((json) => Product.fromMap(json)).toList();
+        notifyListeners();
+      }
+
+      if (refresh || localProducts.isEmpty) {
+        final result = await FirestoreService.instance.getProductsPaginated(
+          limit: 50,
+          lastDocument: null,
+          searchQuery: searchQuery,
+        );
+
+        _products = result.items;
+        await _saveProductsToLocalDB(_products);
+      }
+    } catch (e) {
+      _error = 'Failed to load products: ${e.toString()}';
+      ErrorLogger.logError(
+        'Error loading products',
+        error: e,
+        context: 'InventoryProvider.loadProducts',
+      );
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _saveProductsToLocalDB(List<Product> products) async {
+    final db = await _localDatabaseService.database;
+    final batch = db.batch();
+
+    for (var product in products) {
+      batch.insert(
+        'products',
+        product.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    }
+
+    await batch.commit(noResult: true);
+  }
+
+  Future<bool> addProduct(Product product) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final db = await _localDatabaseService.database;
+      final id = await db.insert('products', product.toMap());
+
+      final newProduct = product.copyWith(id: id.toString());
+      _products.add(newProduct);
+      _reorderPoints[id.toString()] = (product.stock * 0.1).ceil().clamp(5, 50);
+
+      if (_connectivityProvider.isOnline) {
+        await FirestoreService.instance.insertProduct(product);
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Failed to add product: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error adding product',
+        error: e,
+        context: 'InventoryProvider.addProduct',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateProduct(Product product) async {
+    try {
+      final db = await _localDatabaseService.database;
+      await db.update(
+        'products',
+        product.toMap(),
+        where: 'id = ?',
+        whereArgs: [product.id],
+      );
+
+      if (_connectivityProvider.isOnline) {
+        await FirestoreService.instance.updateProduct(product);
+      }
+
+      final index = _products.indexWhere((p) => p.id == product.id);
+      if (index != -1) {
+        _products[index] = product;
+        notifyListeners();
+      }
+      return true;
+    } catch (e) {
+      _error = 'Error updating product: ${e.toString()}';
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error updating product',
+        error: e,
+        context: 'InventoryProvider.updateProduct',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> updateStock(
+    String productId,
+    int newStock, {
+    String? reason,
+  }) async {
+    try {
+      final index = _products.indexWhere((p) => p.id == productId);
+      if (index == -1) return false;
+
+      final product = _products[index];
+      final oldStock = product.stock;
+      final stockChange = newStock - oldStock;
+
+      final updatedProduct = product.copyWith(
+        stock: newStock,
+        updatedAt: DateTime.now(),
+      );
+
+      final db = await _localDatabaseService.database;
+      await db.update(
+        'products',
+        updatedProduct.toMap(),
+        where: 'id = ?',
+        whereArgs: [productId],
+      );
+
+      if (_connectivityProvider.isOnline) {
+        await FirestoreService.instance.updateProduct(updatedProduct);
+
+        // Record stock movement
+        final movementType = stockChange > 0 ? 'stock_in' : 'stock_out';
+        await FirestoreService.instance.insertStockMovement(
+          productId,
+          movementType,
+          stockChange.abs(),
+          reason ?? 'Manual adjustment',
+        );
+      }
+
+      _products[index] = updatedProduct;
+
+      _checkStockAlerts(updatedProduct);
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Error updating stock: ${e.toString()}';
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error updating stock',
+        error: e,
+        context: 'InventoryProvider.updateStock',
+      );
+      return false;
+    }
+  }
+
+  Future<Product?> getProductByBarcode(String barcode) async {
+    try {
+      final db = await _localDatabaseService.database;
+      final maps = await db.query(
+        'products',
+        where: 'barcode = ?',
+        whereArgs: [barcode],
+      );
+
+      if (maps.isNotEmpty) {
+        return Product.fromMap(maps.first);
+      } else {
+        if (_connectivityProvider.isOnline) {
+          final product = await FirestoreService.instance.getProductByBarcode(barcode);
+          if (product != null) {
+            await _saveProductsToLocalDB([product]);
+          }
+          return product;
+        }
+      }
+      return null;
+    } catch (e) {
+      _error = 'Error getting product by barcode: ${e.toString()}';
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error getting product by barcode',
+        error: e,
+        context: 'InventoryProvider.getProductByBarcode',
+      );
+      return null;
+    }
+  }
+
+  bool isStockAvailable(String productId, int requestedQuantity) {
+    final product = getProductById(productId);
+    if (product == null) return false;
+
+    final reservedQuantity = _reservedStock[productId] ?? 0;
+    final availableStock = product.stock - reservedQuantity;
+
+    return availableStock >= requestedQuantity;
+  }
+
+  bool reserveStock(String productId, int quantity) {
+    if (!isStockAvailable(productId, quantity)) {
+      _error = 'Insufficient stock available for reservation';
+      notifyListeners();
+      return false;
+    }
+
+    _reservedStock[productId] = (_reservedStock[productId] ?? 0) + quantity;
+    notifyListeners();
+    return true;
+  }
+
+  void releaseReservedStock(String productId, int quantity) {
+    final currentReserved = _reservedStock[productId] ?? 0;
+    final newReserved = (currentReserved - quantity).clamp(0, currentReserved);
+
+    if (newReserved == 0) {
+      _reservedStock.remove(productId);
+    } else {
+      _reservedStock[productId] = newReserved;
+    }
+    notifyListeners();
+  }
+
+  int getAvailableStock(String productId) {
+    final product = getProductById(productId);
+    if (product == null) return 0;
+
+    final reservedQuantity = _reservedStock[productId] ?? 0;
+    return (product.stock - reservedQuantity).clamp(0, product.stock);
+  }
+
+  Future<bool> receiveStock(String productId, int quantity) async {
+    try {
+      final index = _products.indexWhere((p) => p.id == productId);
+      if (index == -1) {
+        _error = 'Product not found';
+        notifyListeners();
+        return false;
+      }
+
+      if (quantity <= 0) {
+        _error = 'Quantity must be greater than zero';
+        notifyListeners();
+        return false;
+      }
+
+      final product = _products[index];
+      final newStock = product.stock + quantity;
+      final success = await updateStock(
+        productId,
+        newStock,
+        reason: 'Stock received via barcode scan',
+      );
+
+      if (!success) {
+        _error = 'Failed to update stock';
+        notifyListeners();
+      }
+
+      return success;
+    } catch (e) {
+      _error = 'Error receiving stock: ${e.toString()}';
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error receiving stock',
+        error: e,
+        context: 'InventoryProvider.receiveStock',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> reduceStock(String productId, int quantity) async {
+    try {
+      final index = _products.indexWhere((p) => p.id == productId);
+      if (index == -1) {
+        _error = 'Product not found';
+        notifyListeners();
+        return false;
+      }
+
+      final product = _products[index];
+      if (product.stock < quantity) {
+        _error = 'Insufficient stock for ${product.name}';
+        notifyListeners();
+        return false;
+      }
+
+      final newStock = product.stock - quantity;
+      final success = await updateStock(productId, newStock, reason: 'Sale');
+
+      releaseReservedStock(productId, quantity);
+
+      if (!success) {
+        _error = 'Failed to update stock';
+        notifyListeners();
+      }
+
+      return success;
+    } catch (e) {
+      _error = 'Error reducing stock: ${e.toString()}';
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error reducing stock',
+        error: e,
+        context: 'InventoryProvider.reduceStock',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> batchUpdateStock(
+    Map<String, int> stockUpdates, {
+    String? reason,
+  }) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      for (final entry in stockUpdates.entries) {
+        final success = await updateStock(
+          entry.key,
+          entry.value,
+          reason: reason,
+        );
+        if (!success) {
+          _error = 'Failed to update stock for product ID: ${entry.key}';
+          _isLoading = false;
+          notifyListeners();
+          return false;
+        }
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Error in batch stock update: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error in batch stock update',
+        error: e,
+        context: 'InventoryProvider.batchUpdateStock',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> reconcileStock(Map<String, int> physicalCounts) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final discrepancies = <String, Map<String, int>>{};
+
+      for (final entry in physicalCounts.entries) {
+        final productId = entry.key;
+        final physicalCount = entry.value;
+        final product = getProductById(productId);
+
+        if (product != null && product.stock != physicalCount) {
+          discrepancies[productId] = {
+            'system': product.stock,
+            'physical': physicalCount,
+            'difference': physicalCount - product.stock,
+          };
+
+          // Update to physical count
+          await updateStock(
+            productId,
+            physicalCount,
+            reason: 'Stock reconciliation',
+          );
+        }
+      }
+
+      if (discrepancies.isNotEmpty) {
+        ErrorLogger.logInfo(
+          'Stock reconciliation completed with ${discrepancies.length} discrepancies',
+          context: 'InventoryProvider.reconcileStock',
+        );
+      }
+
+      _isLoading = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Error in stock reconciliation: ${e.toString()}';
+      _isLoading = false;
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error in stock reconciliation',
+        error: e,
+        context: 'InventoryProvider.reconcileStock',
+      );
+      return false;
+    }
+  }
+
+  void setReorderPoint(String productId, int reorderPoint) {
+    _reorderPoints[productId] = reorderPoint;
+    notifyListeners();
+  }
+
+  int getReorderPoint(String productId) {
+    return _reorderPoints[productId] ?? 5;
+  }
+
+  List<Product> getProductsNeedingReorder() {
+    return _products.where((product) {
+      if (product.id == null) return false;
+      final reorderPoint = _reorderPoints[product.id!] ?? 5;
+      return product.stock <= reorderPoint;
+    }).toList();
+  }
+
+  Product? getProductById(String id) {
+    try {
+      return _products.firstWhere((product) => product.id == id);
+    } catch (e) {
+      return null;
+    }
+  }
+
+  Future<void> refreshProducts() async {
+    await loadProducts(refresh: true);
+  }
+
+  void _checkStockAlerts(Product product) {
+    // Implementation for checking stock alerts
+  }
+}

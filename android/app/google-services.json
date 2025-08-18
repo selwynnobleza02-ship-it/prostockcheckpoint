@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "717667508105",
+    "project_id": "prostock-a913b",
+    "storage_bucket": "prostock-a913b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:717667508105:android:d9ccc389bc899998000b58",
+        "android_client_info": {
+          "package_name": "com.example.prostock"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCzapltT_RItwO0lCP-S3qPkXlkIIqfKqc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
