@@ -51,22 +51,32 @@ class InventoryProvider with ChangeNotifier {
 
     try {
       final db = await _localDatabaseService.database;
-      final localProducts = await db.query('products');
+      final List<Product> localProducts = (await db.query('products'))
+          .map((json) => Product.fromMap(json))
+          .toList();
 
-      if (localProducts.isNotEmpty) {
-        _products = localProducts.map((json) => Product.fromMap(json)).toList();
-        notifyListeners();
-      }
+      _products = localProducts; // Always load local products first
+      notifyListeners();
 
-      if (refresh || localProducts.isEmpty) {
+      if (refresh || localProducts.isEmpty || _connectivityProvider.isOnline) {
         final result = await FirestoreService.instance.getProductsPaginated(
           limit: 50,
           lastDocument: null,
           searchQuery: searchQuery,
         );
 
-        _products = result.items;
-        await _saveProductsToLocalDB(_products);
+        final List<Product> firestoreProducts = result.items;
+
+        // Merge local and Firestore products, prioritizing local changes
+        final Map<String, Product> mergedProductsMap = {
+          for (var p in firestoreProducts) p.id!: p,
+        };
+        for (var p in localProducts) {
+          mergedProductsMap[p.id!] = p; // Local version takes precedence
+        }
+
+        _products = mergedProductsMap.values.toList();
+        await _saveProductsToLocalDB(_products); // Save merged list to local DB
       }
     } catch (e) {
       _error = 'Failed to load products: ${e.toString()}';
@@ -111,6 +121,14 @@ class InventoryProvider with ChangeNotifier {
 
       if (_connectivityProvider.isOnline) {
         await FirestoreService.instance.insertProduct(product);
+      } else {
+        // Queue the operation for later synchronization
+        await _queueOfflineOperation(
+          'insert',
+          'products',
+          newProduct.id,
+          product.toMap(),
+        );
       }
 
       _isLoading = false;

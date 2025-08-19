@@ -32,8 +32,11 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProxyProvider<ConnectivityProvider, InventoryProvider>(
-          create: (context) =>
-              InventoryProvider(context.read<ConnectivityProvider>()),
+          create: (context) {
+            final inventoryProvider = InventoryProvider(context.read<ConnectivityProvider>());
+            inventoryProvider.loadProducts(); // Load products when provider is created
+            return inventoryProvider;
+          },
           update: (context, connectivityProvider, previousInventoryProvider) =>
               previousInventoryProvider!..update(connectivityProvider),
         ),
@@ -61,15 +64,22 @@ class RetailCreditApp extends StatefulWidget {
 }
 
 class _RetailCreditAppState extends State<RetailCreditApp> {
+  late final SynchronizationService _synchronizationService;
+
+  @override
+  void initState() {
+    super.initState();
+    _synchronizationService = SynchronizationService(
+      context.read<ConnectivityProvider>(),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Builder(
       builder: (context) {
-        final connectivityProvider = context.watch<ConnectivityProvider>();
-        final synchronizationService = SynchronizationService(
-          connectivityProvider,
-        );
-        synchronizationService.synchronize();
+        // The synchronize() call is now handled by the SynchronizationService's listener
+        // on ConnectivityProvider changes, so it's removed from here.
 
         return MaterialApp(
           title: 'Retail Credit Manager',
@@ -89,5 +99,11 @@ class _RetailCreditAppState extends State<RetailCreditApp> {
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    _synchronizationService.dispose(); // Dispose of the listener
+    super.dispose();
   }
 }

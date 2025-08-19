@@ -5,7 +5,8 @@ import '../models/product.dart';
 import 'dart:convert';
 
 class SynchronizationService {
-  final LocalDatabaseService _localDatabaseService = LocalDatabaseService.instance;
+  final LocalDatabaseService _localDatabaseService =
+      LocalDatabaseService.instance;
   final FirestoreService _firestoreService = FirestoreService.instance;
   final ConnectivityProvider _connectivityProvider;
 
@@ -22,25 +23,8 @@ class SynchronizationService {
   Future<void> synchronize() async {
     if (!_connectivityProvider.isOnline) return;
 
-    await _synchronizeProducts();
+    await _synchronizeOfflineOperations();
     // Add other synchronization methods here
-  }
-
-  Future<void> _synchronizeProducts() async {
-    final db = await _localDatabaseService.database;
-    final localProducts = await db.query('products');
-
-    if (localProducts.isEmpty) return;
-
-    for (var productMap in localProducts) {
-      final product = Product.fromMap(productMap);
-      try {
-        await _firestoreService.insertProduct(product);
-      } catch (e) {
-        // Handle potential conflicts or errors
-        print('Error syncing product: ${product.id}, $e');
-      }
-    }
   }
 
   Future<void> _synchronizeOfflineOperations() async {
@@ -58,8 +42,15 @@ class SynchronizationService {
 
       try {
         switch (operationType) {
+          case 'insert':
+            await _firestoreService.insertProduct(Product.fromMap(data));
+            break;
           case 'update_product':
-            await _firestoreService.updateDocument(collectionName, documentId!, data);
+            await _firestoreService.updateDocument(
+              collectionName,
+              documentId!,
+              data,
+            );
             break;
           case 'insert_stock_movement':
             // For stock movements, the data already contains all necessary fields
@@ -68,11 +59,19 @@ class SynchronizationService {
             break;
           // Add other operation types as needed (e.g., delete_product, insert_customer)
         }
-        await db.delete('offline_operations', where: 'id = ?', whereArgs: [opId]);
+        await db.delete(
+          'offline_operations',
+          where: 'id = ?',
+          whereArgs: [opId],
+        );
       } catch (e) {
         print('Error syncing offline operation $opId: $e');
         // Consider more robust error handling, e.g., retry logic, dead-letter queue
       }
     }
+  }
+
+  void dispose() {
+    _connectivityProvider.removeListener(_onConnectivityChanged);
   }
 }

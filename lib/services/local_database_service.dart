@@ -19,14 +19,23 @@ class LocalDatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 2, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return await openDatabase(path, version: 3, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    if (oldVersion < newVersion) {
-      await db.execute('DROP TABLE IF EXISTS products');
-      await _createDB(db, newVersion);
+    if (oldVersion < 3) { // Version 3 is when offline_operations was introduced
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS offline_operations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          operation_type TEXT NOT NULL,
+          collection_name TEXT NOT NULL,
+          document_id TEXT,
+          data TEXT NOT NULL,
+          timestamp TEXT NOT NULL
+        )
+        ''');
     }
+    // Add other upgrade paths for future versions here
   }
 
   Future _createDB(Database db, int version) async {
@@ -42,7 +51,9 @@ class LocalDatabaseService {
         category TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL
-      );
+      )
+      ''');
+    await db.execute('''
       CREATE TABLE offline_operations (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         operation_type TEXT NOT NULL,
