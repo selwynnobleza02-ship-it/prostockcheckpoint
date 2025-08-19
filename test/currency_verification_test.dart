@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:prostock/providers/connectivity_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
@@ -16,17 +17,34 @@ import 'package:prostock/widgets/add_product_dialog.dart';
 import 'package:prostock/widgets/add_customer_dialog.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/models/customer.dart';
+import 'package:firebase_core/firebase_core.dart'; // New
+import '../test/firebase_mock_setup.dart'; // New
 
 void main() {
+  setupFirebaseAuthMocks(); // Use the new function name
+
+  setUpAll(() async {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: 'testApiKey',
+        appId: 'testAppId',
+        messagingSenderId: 'testSenderId',
+        projectId: 'testProjectId',
+      ),
+    );
+  });
+
   group('Currency Symbol Verification Tests', () {
     late InventoryProvider inventoryProvider;
-
+    late ConnectivityProvider connectivityProvider; // New
     late CustomerProvider customerProvider;
     late CreditProvider creditProvider;
     late AuthProvider authProvider;
 
     setUp(() {
-      inventoryProvider = InventoryProvider();
+      connectivityProvider = ConnectivityProvider(); // Initialize ConnectivityProvider
+      authProvider = AuthProvider(); // Initialize AuthProvider first
+      inventoryProvider = InventoryProvider(connectivityProvider); // Pass ConnectivityProvider
       ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
         create: (context) =>
             SalesProvider(inventoryProvider: context.read<InventoryProvider>()),
@@ -36,7 +54,6 @@ void main() {
       );
       customerProvider = CustomerProvider();
       creditProvider = CreditProvider();
-      authProvider = AuthProvider();
 
       // Add sample data for testing
       inventoryProvider.products.add(

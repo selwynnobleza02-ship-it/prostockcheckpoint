@@ -48,6 +48,7 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true, // Added to make the dialog content scrollable
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -147,206 +148,200 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
   }
 
   Widget _buildFormContent() {
-    return SizedBox(
-      width: MediaQuery.of(context).size.width * 0.9,
-      child: Form(
-        key: _formKey,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Product Name
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Product Name *',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.inventory),
+    return Form(
+      key: _formKey,
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Product Name
+            TextFormField(
+              controller: _nameController,
+              decoration: const InputDecoration(
+                labelText: 'Product Name *',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.inventory),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Please enter product name';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Category Dropdown
+            DropdownButtonFormField<String>(
+              initialValue: _selectedCategory,
+              decoration: const InputDecoration(
+                labelText: 'Category',
+                border: OutlineInputBorder(),
+                prefixIcon: Icon(Icons.category),
+              ),
+              items: _categories.map((category) {
+                return DropdownMenuItem(value: category, child: Text(category));
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedCategory = value!;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+
+            // Price and Cost Row
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _priceController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Selling Price *',
+                      border: OutlineInputBorder(),
+                      prefixText: '₱ ',
+                      prefixIcon: Icon(Icons.attach_money),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Enter price';
+                      }
+                      final price = double.tryParse(value);
+                      if (price == null || price <= 0) {
+                        return 'Enter valid price';
+                      }
+                      return null;
+                    },
+                  ),
                 ),
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Please enter product name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Category Dropdown
-              DropdownButtonFormField<String>(
-                value: _selectedCategory,
-                decoration: const InputDecoration(
-                  labelText: 'Category',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.category),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _costController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    decoration: const InputDecoration(
+                      labelText: 'Cost Price *',
+                      border: OutlineInputBorder(),
+                      prefixText: '₱ ',
+                      prefixIcon: Icon(Icons.money_off),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Enter cost';
+                      }
+                      final cost = double.tryParse(value);
+                      if (cost == null || cost < 0) {
+                        return 'Enter valid cost';
+                      }
+                      return null;
+                    },
+                  ),
                 ),
-                items: _categories.map((category) {
-                  return DropdownMenuItem(
-                    value: category,
-                    child: Text(category),
-                  );
-                }).toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _selectedCategory = value!;
-                  });
-                },
-              ),
-              const SizedBox(height: 16),
+              ],
+            ),
+            const SizedBox(height: 16),
 
-              // Price and Cost Row
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _priceController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      decoration: const InputDecoration(
-                        labelText: 'Selling Price *',
-                        border: OutlineInputBorder(),
-                        prefixText: '₱ ',
-                        prefixIcon: Icon(Icons.attach_money),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Enter price';
-                        }
-                        final price = double.tryParse(value);
-                        if (price == null || price <= 0) {
-                          return 'Enter valid price';
-                        }
+            // Stock and Min Stock Row
+            Row(
+              children: [
+                Expanded(
+                  child: TextFormField(
+                    controller: _stockController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Initial Stock *',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.inventory_2),
+                      suffixText: 'pcs',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Enter stock';
+                      }
+                      final stock = int.tryParse(value);
+                      if (stock == null || stock < 0) {
+                        return 'Enter valid stock';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: TextFormField(
+                    controller: _minStockController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Min Stock Alert',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.warning),
+                      suffixText: 'pcs',
+                    ),
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
                         return null;
-                      },
+                      }
+                      final minStock = int.tryParse(value);
+                      if (minStock == null || minStock < 0) {
+                        return 'Enter valid number';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Profit Margin Display
+            Consumer<InventoryProvider>(
+              builder: (context, provider, child) {
+                final price = double.tryParse(_priceController.text) ?? 0;
+                final cost = double.tryParse(_costController.text) ?? 0;
+                final profit = price - cost;
+                final margin = cost > 0 ? (profit / cost * 100) : 0;
+
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: margin > 20
+                        ? Colors.green.shade50
+                        : Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: margin > 20 ? Colors.green : Colors.orange,
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _costController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Profit Margin',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            '₱${profit.toStringAsFixed(2)} (${margin.toStringAsFixed(1)}%)',
+                          ),
+                        ],
                       ),
-                      decoration: const InputDecoration(
-                        labelText: 'Cost Price *',
-                        border: OutlineInputBorder(),
-                        prefixText: '₱ ',
-                        prefixIcon: Icon(Icons.money_off),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Enter cost';
-                        }
-                        final cost = double.tryParse(value);
-                        if (cost == null || cost < 0) {
-                          return 'Enter valid cost';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Stock and Min Stock Row
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _stockController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Initial Stock *',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.inventory_2),
-                        suffixText: 'pcs',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Enter stock';
-                        }
-                        final stock = int.tryParse(value);
-                        if (stock == null || stock < 0) {
-                          return 'Enter valid stock';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _minStockController,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(
-                        labelText: 'Min Stock Alert',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.warning),
-                        suffixText: 'pcs',
-                      ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return null;
-                        }
-                        final minStock = int.tryParse(value);
-                        if (minStock == null || minStock < 0) {
-                          return 'Enter valid number';
-                        }
-                        return null;
-                      },
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Profit Margin Display
-              Consumer<InventoryProvider>(
-                builder: (context, provider, child) {
-                  final price = double.tryParse(_priceController.text) ?? 0;
-                  final cost = double.tryParse(_costController.text) ?? 0;
-                  final profit = price - cost;
-                  final margin = cost > 0 ? (profit / cost * 100) : 0;
-
-                  return Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: margin > 20
-                          ? Colors.green.shade50
-                          : Colors.orange.shade50,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
+                      Icon(
+                        margin > 20 ? Icons.trending_up : Icons.warning,
                         color: margin > 20 ? Colors.green : Colors.orange,
                       ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Profit Margin',
-                              style: TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              '₱${profit.toStringAsFixed(2)} (${margin.toStringAsFixed(1)}%)',
-                            ),
-                          ],
-                        ),
-                        Icon(
-                          margin > 20 ? Icons.trending_up : Icons.warning,
-                          color: margin > 20 ? Colors.green : Colors.orange,
-                        ),
-                      ],
-                    ),
-                  );
-                },
-              ),
-            ],
-          ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
         ),
       ),
     );

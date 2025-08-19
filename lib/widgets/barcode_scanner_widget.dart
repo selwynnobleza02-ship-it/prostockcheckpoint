@@ -201,10 +201,12 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                   if (_errorMessage!.contains('permanently denied')) {
                     openAppSettings();
                   } else {
-                    setState(() {
-                      _errorMessage = null;
-                      _isInitializing = true;
-                    });
+                    if (mounted) {
+                      setState(() {
+                        _errorMessage = null;
+                        _isInitializing = true;
+                      });
+                    }
                     _initializeCamera();
                   }
                 },
@@ -258,9 +260,11 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                         foregroundColor: Colors.white,
                       ),
                       onPressed: () {
-                        setState(() {
-                          _isInitializing = true;
-                        });
+                        if (mounted) {
+                          setState(() {
+                            _isInitializing = true;
+                          });
+                        }
                         _initializeCamera();
                       },
                       child: const Text('Retry'),
@@ -572,6 +576,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
       final success = await inventoryProvider.reduceStock(
         product.id!,
         quantity,
+        reason: 'Stock removed via barcode scanner',
       );
 
       if (mounted) {

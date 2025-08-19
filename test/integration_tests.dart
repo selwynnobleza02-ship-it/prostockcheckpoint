@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:prostock/models/customer.dart';
+import 'package:prostock/providers/connectivity_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/main.dart';
 import 'package:prostock/providers/auth_provider.dart';
@@ -41,7 +42,9 @@ void main() {
       final authProvider = AuthProvider();
       await authProvider.login('admin', 'admin123');
 
-      final inventoryProvider = InventoryProvider();
+      final inventoryProvider = InventoryProvider(
+        authProvider as ConnectivityProvider,
+      );
       final salesProvider = SalesProvider(inventoryProvider: inventoryProvider);
 
       // Add test product to inventory
@@ -110,7 +113,10 @@ void main() {
     testWidgets('Barcode scanning to product addition flow', (
       WidgetTester tester,
     ) async {
-      final inventoryProvider = InventoryProvider();
+      final authProvider = AuthProvider(); // New AuthProvider for this test
+      final inventoryProvider = InventoryProvider(
+        authProvider as ConnectivityProvider,
+      );
 
       await tester.pumpWidget(
         MultiProvider(
@@ -234,7 +240,10 @@ void main() {
     });
 
     testWidgets('Error handling in providers', (WidgetTester tester) async {
-      final inventoryProvider = InventoryProvider();
+      final authProvider = AuthProvider(); // New AuthProvider for this test
+      final inventoryProvider = InventoryProvider(
+        authProvider as ConnectivityProvider,
+      );
 
       await tester.pumpWidget(
         MultiProvider(

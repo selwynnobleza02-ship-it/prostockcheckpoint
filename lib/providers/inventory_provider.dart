@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/providers/connectivity_provider.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/product.dart';
 import '../services/firestore_service.dart';
 import '../services/local_database_service.dart';
 import '../utils/error_logger.dart'; // Added ErrorLogger import
-import 'package:collection/collection.dart'; // Import for firstOrNull
+import 'dart:convert'; // Required for JSON encoding
 
 class InventoryProvider with ChangeNotifier {
   List<Product> _products = [];
@@ -15,7 +14,8 @@ class InventoryProvider with ChangeNotifier {
   final Map<String, int> _reservedStock = {}; // productId -> reserved quantity
   final Map<String, int> _reorderPoints = {}; // productId -> reorder point
 
-  final LocalDatabaseService _localDatabaseService = LocalDatabaseService.instance;
+  final LocalDatabaseService _localDatabaseService =
+      LocalDatabaseService.instance;
   ConnectivityProvider _connectivityProvider;
 
   InventoryProvider(this._connectivityProvider);
@@ -231,7 +231,9 @@ class InventoryProvider with ChangeNotifier {
         return Product.fromMap(maps.first);
       } else {
         if (_connectivityProvider.isOnline) {
-          final product = await FirestoreService.instance.getProductByBarcode(barcode);
+          final product = await FirestoreService.instance.getProductByBarcode(
+            barcode,
+          );
           if (product != null) {
             await _saveProductsToLocalDB([product]);
           }
@@ -334,7 +336,7 @@ class InventoryProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> reduceStock(String productId, int quantity) async {
+    Future<bool> reduceStock(String productId, int quantity, {String? reason}) async {
     try {
       final index = _products.indexWhere((p) => p.id == productId);
       if (index == -1) {
@@ -351,7 +353,7 @@ class InventoryProvider with ChangeNotifier {
       }
 
       final newStock = product.stock - quantity;
-      final success = await updateStock(productId, newStock, reason: 'Sale');
+      final success = await updateStock(productId, newStock, reason: reason ?? 'Manual removal');
 
       releaseReservedStock(productId, quantity);
 
@@ -429,7 +431,7 @@ class InventoryProvider with ChangeNotifier {
           discrepancies[productId] = {
             'system': product.stock,
             'physical': physicalCount,
-            'difference': physicalCount - product.stock,
+            'difference': (physicalCount - product.stock).toInt(),
           };
 
           // Update to physical count
@@ -495,5 +497,25 @@ class InventoryProvider with ChangeNotifier {
 
   void _checkStockAlerts(Product product) {
     // Implementation for checking stock alerts
+  }
+
+  Future<void> _queueOfflineOperation(
+    String operationType,
+    String collectionName,
+    String? documentId,
+    Map<String, dynamic> data,
+  ) async {
+    final db = await _localDatabaseService.database;
+    await db.insert(
+      'offline_operations',
+      {
+        'operation_type': operationType,
+        'collection_name': collectionName,
+        'document_id': documentId,
+        'data': jsonEncode(data),
+        'timestamp': DateTime.now().toIso8601String(),
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 }

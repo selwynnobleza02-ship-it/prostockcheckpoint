@@ -124,7 +124,7 @@ class FirestoreService {
       _sanitizeData(data);
 
       data['updatedAt'] = FieldValue.serverTimestamp();
-      await _firestore.collection(collection).doc(docId).update(data);
+      await _firestore.collection(collection).doc(docId).set(data, SetOptions(merge: true));
     } catch (e) {
       throw FirestoreException('Failed to update document in $collection: $e');
     }

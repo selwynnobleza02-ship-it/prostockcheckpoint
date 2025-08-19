@@ -15,6 +15,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _usernameController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  UserRole _selectedRole = UserRole.user;
 
   @override
   Widget build(BuildContext context) {
@@ -87,6 +88,30 @@ class _SignupScreenState extends State<SignupScreen> {
                     return null;
                   },
                 ),
+                const SizedBox(height: 20),
+                DropdownButtonFormField<UserRole>(
+                  initialValue: _selectedRole,
+                  decoration: const InputDecoration(
+                    labelText: 'Role',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person_pin_rounded),
+                    filled: true,
+                    fillColor: Colors.white70,
+                  ),
+                  items: UserRole.values.map((role) {
+                    return DropdownMenuItem<UserRole>(
+                      value: role,
+                      child: Text(role.name),
+                    );
+                  }).toList(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedRole = value;
+                      });
+                    }
+                  },
+                ),
                 const SizedBox(height: 30),
                 SizedBox(
                   width: double.infinity,
@@ -98,7 +123,7 @@ class _SignupScreenState extends State<SignupScreen> {
                           _usernameController.text,
                           _emailController.text,
                           _passwordController.text,
-                          UserRole.user, // Default role
+                          _selectedRole,
                         );
                         if (success) {
                           Navigator.of(context).pushReplacementNamed('/login');
@@ -119,7 +144,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     child: const Text(
                       'Sign Up',
-                      style: const TextStyle(fontSize: 18),
+                      style: TextStyle(fontSize: 18),
                     ),
                   ),
                 ),

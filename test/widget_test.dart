@@ -21,8 +21,24 @@ import 'package:prostock/widgets/barcode_scanner_widget.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/utils/currency_utils.dart';
+import 'package:prostock/providers/connectivity_provider.dart'; // New
+import 'package:firebase_core/firebase_core.dart'; // New
+import '../test/firebase_mock_setup.dart'; // New
 
 void main() {
+  setupFirebaseAuthMocks(); // Use the new function name
+
+  setUpAll(() async {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: 'testApiKey',
+        appId: 'testAppId',
+        messagingSenderId: 'testSenderId',
+        projectId: 'testProjectId',
+      ),
+    );
+  });
+
   group('Retail Credit App Tests', () {
     testWidgets('App starts with splash screen', (WidgetTester tester) async {
       // Build our app and trigger a frame.
@@ -41,7 +57,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => AuthProvider()),
-            ChangeNotifierProvider(create: (_) => InventoryProvider()),
+            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -71,7 +87,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => AuthProvider()),
-            ChangeNotifierProvider(create: (_) => InventoryProvider()),
+            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -119,7 +135,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: authProvider),
-            ChangeNotifierProvider(create: (_) => InventoryProvider()),
+            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -167,7 +183,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: authProvider),
-            ChangeNotifierProvider(create: (_) => InventoryProvider()),
+            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -205,7 +221,7 @@ void main() {
       await tester.pumpWidget(
         MultiProvider(
           providers: [
-            ChangeNotifierProvider(create: (_) => InventoryProvider()),
+            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -501,7 +517,7 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: authProvider),
-            ChangeNotifierProvider(create: (_) => InventoryProvider()),
+            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),

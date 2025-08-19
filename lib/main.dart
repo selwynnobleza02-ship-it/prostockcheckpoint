@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:prostock/providers/connectivity_provider.dart';
 import 'package:prostock/services/synchronization_service.dart';
-import 'package:prostock/widgets/connectivity_status.dart';
 import 'firebase_options.dart';
 import 'providers/inventory_provider.dart';
 import 'providers/sales_provider.dart';
@@ -13,6 +12,7 @@ import 'providers/auth_provider.dart';
 import 'screens/admin_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
+import 'screens/user_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -32,7 +32,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
         ChangeNotifierProxyProvider<ConnectivityProvider, InventoryProvider>(
-          create: (context) => InventoryProvider(context.read<ConnectivityProvider>()),
+          create: (context) =>
+              InventoryProvider(context.read<ConnectivityProvider>()),
           update: (context, connectivityProvider, previousInventoryProvider) =>
               previousInventoryProvider!..update(connectivityProvider),
         ),
@@ -65,7 +66,9 @@ class _RetailCreditAppState extends State<RetailCreditApp> {
     return Builder(
       builder: (context) {
         final connectivityProvider = context.watch<ConnectivityProvider>();
-        final synchronizationService = SynchronizationService(connectivityProvider);
+        final synchronizationService = SynchronizationService(
+          connectivityProvider,
+        );
         synchronizationService.synchronize();
 
         return MaterialApp(
@@ -81,6 +84,7 @@ class _RetailCreditAppState extends State<RetailCreditApp> {
             '/admin': (context) => const AdminScreen(),
             '/login': (context) => const LoginScreen(),
             '/signup': (context) => const SignupScreen(),
+            '/user': (context) => const UserScreen(),
           },
         );
       },

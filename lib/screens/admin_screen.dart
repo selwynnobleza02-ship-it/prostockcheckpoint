@@ -281,7 +281,7 @@ class _AdminActivityMonitorState extends State<AdminActivityMonitor> {
                         filled: true,
                         fillColor: Colors.white,
                       ),
-                      value: _selectedUserId,
+                      initialValue: _selectedUserId,
                       items: [
                         const DropdownMenuItem<String?>(
                           value: null,

@@ -1,4 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:prostock/providers/auth_provider.dart';
+import 'package:prostock/providers/connectivity_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/models/product.dart';
@@ -6,7 +8,10 @@ import 'package:prostock/models/product.dart';
 void main() {
   group('Performance Tests', () {
     test('InventoryProvider handles large product lists efficiently', () async {
-      final inventoryProvider = InventoryProvider();
+      final authProvider = AuthProvider(); // New AuthProvider for this test
+      final inventoryProvider = InventoryProvider(
+        authProvider as ConnectivityProvider,
+      );
       final stopwatch = Stopwatch()..start();
 
       // Generate large number of products
@@ -40,7 +45,10 @@ void main() {
     });
 
     test('SalesProvider handles multiple sale items efficiently', () async {
-      final inventoryProvider = InventoryProvider();
+      final authProvider = AuthProvider(); // New AuthProvider for this test
+      final inventoryProvider = InventoryProvider(
+        authProvider as ConnectivityProvider,
+      );
       final salesProvider = SalesProvider(inventoryProvider: inventoryProvider);
       final stopwatch = Stopwatch()..start();
 
@@ -77,7 +85,10 @@ void main() {
     });
 
     test('Cache performance in providers', () async {
-      final inventoryProvider = InventoryProvider();
+      final authProvider = AuthProvider(); // New AuthProvider for this test
+      final inventoryProvider = InventoryProvider(
+        authProvider as ConnectivityProvider,
+      );
       final stopwatch = Stopwatch();
 
       // First load (should be slower - cache miss)
@@ -99,7 +110,10 @@ void main() {
     });
 
     test('Memory usage with large datasets', () {
-      final inventoryProvider = InventoryProvider();
+      final authProvider = AuthProvider(); // New AuthProvider for this test
+      final inventoryProvider = InventoryProvider(
+        authProvider as ConnectivityProvider,
+      );
 
       // Add large dataset
       final products = List.generate(

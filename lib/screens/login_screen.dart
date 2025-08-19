@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+// Make sure UserRole is imported if defined elsewhere
+import '../models/user_role.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -80,7 +82,15 @@ class _LoginScreenState extends State<LoginScreen> {
                           _passwordController.text,
                         );
                         if (success) {
-                          Navigator.of(context).pushReplacementNamed('/admin');
+                          if (!mounted) return; // Check if the widget is still mounted
+                          final userRole = authProvider.userRole;
+                          if (userRole == UserRole.admin) {
+                            Navigator.of(
+                              context,
+                            ).pushReplacementNamed('/admin');
+                          } else {
+                            Navigator.of(context).pushReplacementNamed('/user');
+                          }
                         } else {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(content: Text('Login failed')),
@@ -96,7 +106,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       backgroundColor: Colors.blueAccent,
                       foregroundColor: Colors.white,
                     ),
-                    child: const Text('Login', style: const TextStyle(fontSize: 18)),
+                    child: const Text('Login', style: TextStyle(fontSize: 18)),
                   ),
                 ),
                 const SizedBox(height: 10),

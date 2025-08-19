@@ -195,7 +195,7 @@ class _POSScreenState extends State<POSScreen> {
                 Consumer<CustomerProvider>(
                   builder: (context, provider, child) {
                     return DropdownButtonFormField<Customer>(
-                      value: _selectedCustomer,
+                      initialValue: _selectedCustomer,
                       decoration: const InputDecoration(
                         labelText: 'Customer',
                         border: OutlineInputBorder(),
@@ -235,7 +235,7 @@ class _POSScreenState extends State<POSScreen> {
                 const SizedBox(height: 8), // Reduced from 12 to 8
                 // Payment method
                 DropdownButtonFormField<String>(
-                  value: _paymentMethod,
+                  initialValue: _paymentMethod,
                   decoration: const InputDecoration(
                     labelText: 'Payment Method',
                     border: OutlineInputBorder(),
@@ -316,9 +316,7 @@ class _POSScreenState extends State<POSScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                CurrencyUtils.formatCurrency(
-                                  item.totalPrice,
-                                ),
+                                CurrencyUtils.formatCurrency(item.totalPrice),
                                 style: const TextStyle(
                                   fontSize: 10,
                                 ), // Reduced font size

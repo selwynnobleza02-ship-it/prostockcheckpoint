@@ -12,17 +12,36 @@ import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/providers/auth_provider.dart';
+import 'package:prostock/providers/connectivity_provider.dart'; // New
+import 'package:firebase_core/firebase_core.dart'; // New
+import '../test/firebase_mock_setup.dart'; // New
 
 void main() {
+  setupFirebaseAuthMocks(); // Use the new function name
+
+  setUpAll(() async {
+    await Firebase.initializeApp(
+      options: const FirebaseOptions(
+        apiKey: 'testApiKey',
+        appId: 'testAppId',
+        messagingSenderId: 'testSenderId',
+        projectId: 'testProjectId',
+      ),
+    );
+  });
+
   group('Screen Integration Tests with Philippine Peso', () {
     late InventoryProvider inventoryProvider;
+    late ConnectivityProvider connectivityProvider; // New
 
     late CustomerProvider customerProvider;
     late CreditProvider creditProvider;
     late AuthProvider authProvider;
 
     setUp(() {
-      inventoryProvider = InventoryProvider();
+      connectivityProvider = ConnectivityProvider(); // Initialize ConnectivityProvider
+      authProvider = AuthProvider(); // Initialize AuthProvider first
+      inventoryProvider = InventoryProvider(connectivityProvider); // Pass ConnectivityProvider
       ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
         create: (context) =>
             SalesProvider(inventoryProvider: context.read<InventoryProvider>()),
@@ -32,7 +51,6 @@ void main() {
       );
       customerProvider = CustomerProvider();
       creditProvider = CreditProvider();
-      authProvider = AuthProvider();
     });
 
     Widget createTestApp(Widget child) {

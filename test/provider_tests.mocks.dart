@@ -4,8 +4,10 @@
 
 // ignore_for_file: no_leading_underscores_for_library_prefixes
 import 'dart:async' as _i5;
+import 'dart:ui' as _i16;
 
 import 'package:cloud_firestore/cloud_firestore.dart' as _i2;
+import 'package:connectivity_plus/connectivity_plus.dart' as _i20;
 import 'package:firebase_auth/firebase_auth.dart' as _i6;
 import 'package:mockito/mockito.dart' as _i1;
 import 'package:mockito/src/dummies.dart' as _i7;
@@ -14,8 +16,14 @@ import 'package:prostock/models/credit_transaction.dart' as _i11;
 import 'package:prostock/models/customer.dart' as _i9;
 import 'package:prostock/models/paginated_result.dart' as _i3;
 import 'package:prostock/models/product.dart' as _i8;
+import 'package:prostock/models/receipt.dart' as _i18;
 import 'package:prostock/models/sale.dart' as _i10;
 import 'package:prostock/models/user_activity.dart' as _i13;
+import 'package:prostock/models/user_role.dart' as _i15;
+import 'package:prostock/providers/auth_provider.dart' as _i14;
+import 'package:prostock/providers/connectivity_provider.dart' as _i19;
+import 'package:prostock/providers/inventory_provider.dart' as _i21;
+import 'package:prostock/providers/sales_provider.dart' as _i17;
 import 'package:prostock/services/firestore_service.dart' as _i4;
 
 // ignore_for_file: type=lint
@@ -290,9 +298,11 @@ class MockFirestoreService extends _i1.Mock implements _i4.FirestoreService {
           as _i5.Future<String>);
 
   @override
-  _i5.Future<List<String>> insertProductsBatch(List<_i8.Product>? products) =>
+  _i5.Future<List<String>> insertProductsBatch(
+    List<_i8.Product>? productsList,
+  ) =>
       (super.noSuchMethod(
-            Invocation.method(#insertProductsBatch, [products]),
+            Invocation.method(#insertProductsBatch, [productsList]),
             returnValue: _i5.Future<List<String>>.value(<String>[]),
           )
           as _i5.Future<List<String>>);
@@ -432,6 +442,31 @@ class MockFirestoreService extends _i1.Mock implements _i4.FirestoreService {
             returnValueForMissingStub: _i5.Future<void>.value(),
           )
           as _i5.Future<void>);
+
+  @override
+  _i5.Future<_i3.PaginatedResult<_i9.Customer>> getCustomersPaginated({
+    int? limit = 50,
+    _i2.DocumentSnapshot<Object?>? lastDocument,
+    String? searchQuery,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getCustomersPaginated, [], {
+              #limit: limit,
+              #lastDocument: lastDocument,
+              #searchQuery: searchQuery,
+            }),
+            returnValue: _i5.Future<_i3.PaginatedResult<_i9.Customer>>.value(
+              _FakePaginatedResult_2<_i9.Customer>(
+                this,
+                Invocation.method(#getCustomersPaginated, [], {
+                  #limit: limit,
+                  #lastDocument: lastDocument,
+                  #searchQuery: searchQuery,
+                }),
+              ),
+            ),
+          )
+          as _i5.Future<_i3.PaginatedResult<_i9.Customer>>);
 
   @override
   _i5.Future<String> insertSale(_i10.Sale? sale) =>
@@ -637,6 +672,14 @@ class MockFirestoreService extends _i1.Mock implements _i4.FirestoreService {
           as _i5.Future<_i12.AppUser?>);
 
   @override
+  _i5.Future<_i12.AppUser?> getUserByEmail(String? email) =>
+      (super.noSuchMethod(
+            Invocation.method(#getUserByEmail, [email]),
+            returnValue: _i5.Future<_i12.AppUser?>.value(),
+          )
+          as _i5.Future<_i12.AppUser?>);
+
+  @override
   _i5.Future<_i12.AppUser?> getUserById(String? id) =>
       (super.noSuchMethod(
             Invocation.method(#getUserById, [id]),
@@ -664,15 +707,6 @@ class MockFirestoreService extends _i1.Mock implements _i4.FirestoreService {
             ),
           )
           as _i5.Future<String>);
-
-  @override
-  _i5.Future<void> debugFirestoreOperations() =>
-      (super.noSuchMethod(
-            Invocation.method(#debugFirestoreOperations, []),
-            returnValue: _i5.Future<void>.value(),
-            returnValueForMissingStub: _i5.Future<void>.value(),
-          )
-          as _i5.Future<void>);
 
   @override
   _i5.Future<void> updateUser(_i12.AppUser? user) =>
@@ -769,27 +803,604 @@ class MockFirestoreService extends _i1.Mock implements _i4.FirestoreService {
           as _i5.Future<_i3.PaginatedResult<_i13.UserActivity>>);
 
   @override
-  _i5.Future<_i3.PaginatedResult<_i9.Customer>> getCustomersPaginated({
-    int? limit = 50,
-    _i2.DocumentSnapshot<Object?>? lastDocument,
-    String? searchQuery,
+  _i5.Future<void> debugFirestoreOperations() =>
+      (super.noSuchMethod(
+            Invocation.method(#debugFirestoreOperations, []),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+}
+
+/// A class which mocks [AuthProvider].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockAuthProvider extends _i1.Mock implements _i14.AuthProvider {
+  MockAuthProvider() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  bool get isAuthenticated =>
+      (super.noSuchMethod(
+            Invocation.getter(#isAuthenticated),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool get isAdmin =>
+      (super.noSuchMethod(Invocation.getter(#isAdmin), returnValue: false)
+          as bool);
+
+  @override
+  bool get hasListeners =>
+      (super.noSuchMethod(Invocation.getter(#hasListeners), returnValue: false)
+          as bool);
+
+  @override
+  _i5.Future<bool> login(String? email, String? password) =>
+      (super.noSuchMethod(
+            Invocation.method(#login, [email, password]),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<void> logout() =>
+      (super.noSuchMethod(
+            Invocation.method(#logout, []),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> checkAuthStatus() =>
+      (super.noSuchMethod(
+            Invocation.method(#checkAuthStatus, []),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> logActivity(
+    String? action, {
+    String? productName,
+    String? productBarcode,
+    int? quantity,
+    double? amount,
+    String? details,
   }) =>
       (super.noSuchMethod(
-            Invocation.method(#getCustomersPaginated, [], {
-              #limit: limit,
-              #lastDocument: lastDocument,
-              #searchQuery: searchQuery,
-            }),
-            returnValue: _i5.Future<_i3.PaginatedResult<_i9.Customer>>.value(
-              _FakePaginatedResult_2<_i9.Customer>(
-                this,
-                Invocation.method(#getCustomersPaginated, [], {
-                  #limit: limit,
-                  #lastDocument: lastDocument,
-                  #searchQuery: searchQuery,
-                }),
-              ),
+            Invocation.method(
+              #logActivity,
+              [action],
+              {
+                #productName: productName,
+                #productBarcode: productBarcode,
+                #quantity: quantity,
+                #amount: amount,
+                #details: details,
+              },
+            ),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<bool> createUser(
+    String? username,
+    String? email,
+    String? password,
+    _i15.UserRole? role,
+  ) =>
+      (super.noSuchMethod(
+            Invocation.method(#createUser, [username, email, password, role]),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<bool> resetPassword(String? email) =>
+      (super.noSuchMethod(
+            Invocation.method(#resetPassword, [email]),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  void addListener(_i16.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#addListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void removeListener(_i16.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#removeListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void dispose() => super.noSuchMethod(
+    Invocation.method(#dispose, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void notifyListeners() => super.noSuchMethod(
+    Invocation.method(#notifyListeners, []),
+    returnValueForMissingStub: null,
+  );
+}
+
+/// A class which mocks [SalesProvider].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockSalesProvider extends _i1.Mock implements _i17.SalesProvider {
+  MockSalesProvider() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  List<_i10.Sale> get sales =>
+      (super.noSuchMethod(Invocation.getter(#sales), returnValue: <_i10.Sale>[])
+          as List<_i10.Sale>);
+
+  @override
+  List<_i10.SaleItem> get currentSaleItems =>
+      (super.noSuchMethod(
+            Invocation.getter(#currentSaleItems),
+            returnValue: <_i10.SaleItem>[],
+          )
+          as List<_i10.SaleItem>);
+
+  @override
+  bool get isLoading =>
+      (super.noSuchMethod(Invocation.getter(#isLoading), returnValue: false)
+          as bool);
+
+  @override
+  bool get hasMoreData =>
+      (super.noSuchMethod(Invocation.getter(#hasMoreData), returnValue: false)
+          as bool);
+
+  @override
+  double get currentSaleTotal =>
+      (super.noSuchMethod(
+            Invocation.getter(#currentSaleTotal),
+            returnValue: 0.0,
+          )
+          as double);
+
+  @override
+  String get formattedCurrentSaleTotal =>
+      (super.noSuchMethod(
+            Invocation.getter(#formattedCurrentSaleTotal),
+            returnValue: _i7.dummyValue<String>(
+              this,
+              Invocation.getter(#formattedCurrentSaleTotal),
             ),
           )
-          as _i5.Future<_i3.PaginatedResult<_i9.Customer>>);
+          as String);
+
+  @override
+  bool get hasListeners =>
+      (super.noSuchMethod(Invocation.getter(#hasListeners), returnValue: false)
+          as bool);
+
+  @override
+  void clearError() => super.noSuchMethod(
+    Invocation.method(#clearError, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i5.Future<void> loadSales({
+    bool? refresh = false,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#loadSales, [], {
+              #refresh: refresh,
+              #startDate: startDate,
+              #endDate: endDate,
+            }),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<void> loadMoreSales({DateTime? startDate, DateTime? endDate}) =>
+      (super.noSuchMethod(
+            Invocation.method(#loadMoreSales, [], {
+              #startDate: startDate,
+              #endDate: endDate,
+            }),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  void clearCache() => super.noSuchMethod(
+    Invocation.method(#clearCache, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void addItemToCurrentSale(_i8.Product? product, int? quantity) =>
+      super.noSuchMethod(
+        Invocation.method(#addItemToCurrentSale, [product, quantity]),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void removeItemFromCurrentSale(int? index) => super.noSuchMethod(
+    Invocation.method(#removeItemFromCurrentSale, [index]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i5.Future<_i18.Receipt?> completeSale({
+    String? customerId,
+    required String? paymentMethod,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#completeSale, [], {
+              #customerId: customerId,
+              #paymentMethod: paymentMethod,
+            }),
+            returnValue: _i5.Future<_i18.Receipt?>.value(),
+          )
+          as _i5.Future<_i18.Receipt?>);
+
+  @override
+  void clearCurrentSale() => super.noSuchMethod(
+    Invocation.method(#clearCurrentSale, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i5.Future<Map<String, dynamic>?> getSalesAnalytics({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(#getSalesAnalytics, [], {
+              #startDate: startDate,
+              #endDate: endDate,
+            }),
+            returnValue: _i5.Future<Map<String, dynamic>?>.value(),
+          )
+          as _i5.Future<Map<String, dynamic>?>);
+
+  @override
+  void addListener(_i16.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#addListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void removeListener(_i16.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#removeListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void dispose() => super.noSuchMethod(
+    Invocation.method(#dispose, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void notifyListeners() => super.noSuchMethod(
+    Invocation.method(#notifyListeners, []),
+    returnValueForMissingStub: null,
+  );
+}
+
+/// A class which mocks [ConnectivityProvider].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockConnectivityProvider extends _i1.Mock
+    implements _i19.ConnectivityProvider {
+  MockConnectivityProvider() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  _i20.ConnectivityResult get connectivity =>
+      (super.noSuchMethod(
+            Invocation.getter(#connectivity),
+            returnValue: _i20.ConnectivityResult.bluetooth,
+          )
+          as _i20.ConnectivityResult);
+
+  @override
+  bool get isOnline =>
+      (super.noSuchMethod(Invocation.getter(#isOnline), returnValue: false)
+          as bool);
+
+  @override
+  bool get hasListeners =>
+      (super.noSuchMethod(Invocation.getter(#hasListeners), returnValue: false)
+          as bool);
+
+  @override
+  void addListener(_i16.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#addListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void removeListener(_i16.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#removeListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void dispose() => super.noSuchMethod(
+    Invocation.method(#dispose, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void notifyListeners() => super.noSuchMethod(
+    Invocation.method(#notifyListeners, []),
+    returnValueForMissingStub: null,
+  );
+}
+
+/// A class which mocks [InventoryProvider].
+///
+/// See the documentation for Mockito's code generation for more information.
+class MockInventoryProvider extends _i1.Mock implements _i21.InventoryProvider {
+  MockInventoryProvider() {
+    _i1.throwOnMissingStub(this);
+  }
+
+  @override
+  List<_i8.Product> get products =>
+      (super.noSuchMethod(
+            Invocation.getter(#products),
+            returnValue: <_i8.Product>[],
+          )
+          as List<_i8.Product>);
+
+  @override
+  bool get isLoading =>
+      (super.noSuchMethod(Invocation.getter(#isLoading), returnValue: false)
+          as bool);
+
+  @override
+  List<_i8.Product> get lowStockProducts =>
+      (super.noSuchMethod(
+            Invocation.getter(#lowStockProducts),
+            returnValue: <_i8.Product>[],
+          )
+          as List<_i8.Product>);
+
+  @override
+  List<_i8.Product> get criticalStockProducts =>
+      (super.noSuchMethod(
+            Invocation.getter(#criticalStockProducts),
+            returnValue: <_i8.Product>[],
+          )
+          as List<_i8.Product>);
+
+  @override
+  bool get hasListeners =>
+      (super.noSuchMethod(Invocation.getter(#hasListeners), returnValue: false)
+          as bool);
+
+  @override
+  void update(_i19.ConnectivityProvider? connectivityProvider) =>
+      super.noSuchMethod(
+        Invocation.method(#update, [connectivityProvider]),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  void clearError() => super.noSuchMethod(
+    Invocation.method(#clearError, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  _i5.Future<void> loadProducts({bool? refresh = false, String? searchQuery}) =>
+      (super.noSuchMethod(
+            Invocation.method(#loadProducts, [], {
+              #refresh: refresh,
+              #searchQuery: searchQuery,
+            }),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  _i5.Future<bool> addProduct(_i8.Product? product) =>
+      (super.noSuchMethod(
+            Invocation.method(#addProduct, [product]),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<bool> updateProduct(_i8.Product? product) =>
+      (super.noSuchMethod(
+            Invocation.method(#updateProduct, [product]),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<bool> updateStock(
+    String? productId,
+    int? newStock, {
+    String? reason,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #updateStock,
+              [productId, newStock],
+              {#reason: reason},
+            ),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<_i8.Product?> getProductByBarcode(String? barcode) =>
+      (super.noSuchMethod(
+            Invocation.method(#getProductByBarcode, [barcode]),
+            returnValue: _i5.Future<_i8.Product?>.value(),
+          )
+          as _i5.Future<_i8.Product?>);
+
+  @override
+  bool isStockAvailable(String? productId, int? requestedQuantity) =>
+      (super.noSuchMethod(
+            Invocation.method(#isStockAvailable, [
+              productId,
+              requestedQuantity,
+            ]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  bool reserveStock(String? productId, int? quantity) =>
+      (super.noSuchMethod(
+            Invocation.method(#reserveStock, [productId, quantity]),
+            returnValue: false,
+          )
+          as bool);
+
+  @override
+  void releaseReservedStock(String? productId, int? quantity) =>
+      super.noSuchMethod(
+        Invocation.method(#releaseReservedStock, [productId, quantity]),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  int getAvailableStock(String? productId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getAvailableStock, [productId]),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  _i5.Future<bool> receiveStock(String? productId, int? quantity) =>
+      (super.noSuchMethod(
+            Invocation.method(#receiveStock, [productId, quantity]),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<bool> reduceStock(
+    String? productId,
+    int? quantity, {
+    String? reason,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #reduceStock,
+              [productId, quantity],
+              {#reason: reason},
+            ),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+  @override
+  _i5.Future<bool> batchUpdateStock(
+    Map<String, int>? stockUpdates, {
+    String? reason,
+  }) =>
+      (super.noSuchMethod(
+            Invocation.method(
+              #batchUpdateStock,
+              [stockUpdates],
+              {#reason: reason},
+            ),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  _i5.Future<bool> reconcileStock(Map<String, int>? physicalCounts) =>
+      (super.noSuchMethod(
+            Invocation.method(#reconcileStock, [physicalCounts]),
+            returnValue: _i5.Future<bool>.value(false),
+          )
+          as _i5.Future<bool>);
+
+  @override
+  void setReorderPoint(String? productId, int? reorderPoint) =>
+      super.noSuchMethod(
+        Invocation.method(#setReorderPoint, [productId, reorderPoint]),
+        returnValueForMissingStub: null,
+      );
+
+  @override
+  int getReorderPoint(String? productId) =>
+      (super.noSuchMethod(
+            Invocation.method(#getReorderPoint, [productId]),
+            returnValue: 0,
+          )
+          as int);
+
+  @override
+  List<_i8.Product> getProductsNeedingReorder() =>
+      (super.noSuchMethod(
+            Invocation.method(#getProductsNeedingReorder, []),
+            returnValue: <_i8.Product>[],
+          )
+          as List<_i8.Product>);
+
+  @override
+  _i8.Product? getProductById(String? id) =>
+      (super.noSuchMethod(Invocation.method(#getProductById, [id]))
+          as _i8.Product?);
+
+  @override
+  _i5.Future<void> refreshProducts() =>
+      (super.noSuchMethod(
+            Invocation.method(#refreshProducts, []),
+            returnValue: _i5.Future<void>.value(),
+            returnValueForMissingStub: _i5.Future<void>.value(),
+          )
+          as _i5.Future<void>);
+
+  @override
+  void addListener(_i16.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#addListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void removeListener(_i16.VoidCallback? listener) => super.noSuchMethod(
+    Invocation.method(#removeListener, [listener]),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void dispose() => super.noSuchMethod(
+    Invocation.method(#dispose, []),
+    returnValueForMissingStub: null,
+  );
+
+  @override
+  void notifyListeners() => super.noSuchMethod(
+    Invocation.method(#notifyListeners, []),
+    returnValueForMissingStub: null,
+  );
 }

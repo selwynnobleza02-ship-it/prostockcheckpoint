@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:mockito/annotations.dart';
 import 'package:prostock/models/paginated_result.dart';
+import 'package:prostock/providers/connectivity_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/providers/auth_provider.dart';
@@ -10,18 +11,28 @@ import 'package:prostock/models/product.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/services/firestore_service.dart';
 
-// Generate mocks
-@GenerateMocks([FirestoreService])
+// Generate mocks - Added InventoryProvider to the list
+@GenerateMocks([
+  FirestoreService,
+  AuthProvider,
+  SalesProvider,
+  ConnectivityProvider,
+  InventoryProvider,
+])
 import 'provider_tests.mocks.dart';
 
 void main() {
   group('InventoryProvider Tests', () {
     late InventoryProvider inventoryProvider;
     late MockFirestoreService mockFirestoreService;
+    late MockAuthProvider mockAuthProvider;
+    late MockConnectivityProvider mockConnectivityProvider;
 
     setUp(() {
       mockFirestoreService = MockFirestoreService();
-      inventoryProvider = InventoryProvider();
+      mockAuthProvider = MockAuthProvider();
+      mockConnectivityProvider = MockConnectivityProvider();
+      inventoryProvider = InventoryProvider(mockConnectivityProvider);
     });
 
     test('loadProducts updates products list', () async {
@@ -105,16 +116,11 @@ void main() {
 
       when(mockFirestoreService.updateProduct(any)).thenAnswer((_) async => {});
       when(
-        mockFirestoreService.insertStockMovement(
-          any.toString(),
-          any.toString(),
-          any.toString() as int,
-          any,
-        ),
+        mockFirestoreService.insertStockMovement(any, any, any, any),
       ).thenAnswer((_) async => 'movement-id');
 
       // Act
-      final result = await inventoryProvider.reduceStock(1 as String, 10);
+      final result = await inventoryProvider.reduceStock('1', 10);
 
       // Assert
       expect(result, isTrue);
@@ -136,7 +142,7 @@ void main() {
       inventoryProvider.products.add(product);
 
       // Act
-      final result = await inventoryProvider.reduceStock(1 as String, 10);
+      final result = await inventoryProvider.reduceStock('1', 10);
 
       // Assert
       expect(result, isFalse);
@@ -181,11 +187,13 @@ void main() {
 
   group('SalesProvider Tests', () {
     late SalesProvider salesProvider;
-    late InventoryProvider inventoryProvider;
+    late MockInventoryProvider mockInventoryProvider;
+    late MockConnectivityProvider mockConnectivityProvider;
 
     setUp(() {
-      inventoryProvider = InventoryProvider();
-      salesProvider = SalesProvider(inventoryProvider: inventoryProvider);
+      mockConnectivityProvider = MockConnectivityProvider();
+      mockInventoryProvider = MockInventoryProvider();
+      salesProvider = SalesProvider(inventoryProvider: mockInventoryProvider);
     });
 
     test('addItemToCurrentSale adds item correctly', () {
@@ -366,10 +374,7 @@ void main() {
       customerProvider.customers.add(customer);
 
       // Act
-      final result = await customerProvider.updateCustomerBalance(
-        1 as String,
-        50.0,
-      );
+      final result = await customerProvider.updateCustomerBalance('1', 50.0);
 
       // Assert
       expect(result, isTrue);
