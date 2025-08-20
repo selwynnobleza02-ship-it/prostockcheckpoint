@@ -195,6 +195,17 @@ class SalesProvider with ChangeNotifier {
       return;
     }
 
+    if (product.id == null) {
+      _error = 'Product ID cannot be null when adding to sale';
+      ErrorLogger.logError(
+        'Product ID is null',
+        context: 'SalesProvider.addItemToCurrentSale',
+        error: 'Product: ${product.name}',
+      );
+      notifyListeners();
+      return;
+    }
+
     final existingIndex = _currentSaleItems.indexWhere(
       (item) => item.productId == product.id,
     );

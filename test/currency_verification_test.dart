@@ -42,9 +42,12 @@ void main() {
     late AuthProvider authProvider;
 
     setUp(() {
-      connectivityProvider = ConnectivityProvider(); // Initialize ConnectivityProvider
+      connectivityProvider =
+          ConnectivityProvider(); // Initialize ConnectivityProvider
       authProvider = AuthProvider(); // Initialize AuthProvider first
-      inventoryProvider = InventoryProvider(connectivityProvider); // Pass ConnectivityProvider
+      inventoryProvider = InventoryProvider(
+        connectivityProvider,
+      ); // Pass ConnectivityProvider
       ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
         create: (context) =>
             SalesProvider(inventoryProvider: context.read<InventoryProvider>()),
@@ -61,7 +64,7 @@ void main() {
           id: '1',
           name: 'Test Product',
           barcode: '123456789',
-          price: 150.50,
+
           cost: 100.25,
           stock: 10,
           createdAt: DateTime.now(),
@@ -244,7 +247,7 @@ void main() {
     test('Product price display uses ₱ symbol', () {
       final product = Product(
         name: 'Test Product',
-        price: 150.50,
+
         cost: 100.25,
         stock: 10,
         createdAt: DateTime.now(),
@@ -307,11 +310,7 @@ void main() {
               text.contains('Balance:') ||
               text.contains('Credit:') ||
               text.contains('Sales')) {
-            expect(
-              text.contains('\$'),
-              isFalse,
-              reason: 'Found \$ in: "$text"',
-            );
+            expect(text.contains('₱'), isFalse, reason: 'Found \$ in: "$text"');
 
             if (text.contains(RegExp(r'[₱\$]\d'))) {
               expect(

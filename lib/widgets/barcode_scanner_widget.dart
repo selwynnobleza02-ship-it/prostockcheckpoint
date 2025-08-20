@@ -23,7 +23,9 @@ class BarcodeScannerWidget extends StatefulWidget {
 }
 
 class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
-  MobileScannerController cameraController = MobileScannerController();
+  MobileScannerController cameraController = MobileScannerController(
+    autoStart: false,
+  );
   bool _isProcessing = false;
   bool _hasPermission = false;
   bool _isInitializing = true;
