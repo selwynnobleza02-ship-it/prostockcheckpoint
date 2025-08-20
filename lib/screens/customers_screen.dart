@@ -15,6 +15,30 @@ class CustomersScreen extends StatefulWidget {
 
 class _CustomersScreenState extends State<CustomersScreen> {
   String _searchQuery = '';
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    // Fetch initial customers after the first frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<CustomerProvider>(context, listen: false).loadCustomers();
+    });
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels ==
+          _scrollController.position.maxScrollExtent) {
+        // User has scrolled to the end, load more data
+        Provider.of<CustomerProvider>(context, listen: false).loadMoreCustomers();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,28 +65,20 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 border: OutlineInputBorder(),
               ),
               onChanged: (value) {
-                setState(() {
-                  _searchQuery = value.toLowerCase();
-                });
+                // Update search query and trigger data fetch
+                _searchQuery = value.toLowerCase();
+                Provider.of<CustomerProvider>(context, listen: false).loadCustomers(searchQuery: _searchQuery);
               },
             ),
           ),
           Expanded(
             child: Consumer<CustomerProvider>(
               builder: (context, provider, child) {
-                if (provider.isLoading) {
+                if (provider.isLoading && provider.customers.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final filteredCustomers = provider.customers.where((customer) {
-                  return customer.name.toLowerCase().contains(_searchQuery) ||
-                      (customer.phone?.toLowerCase().contains(_searchQuery) ??
-                          false) ||
-                      (customer.email?.toLowerCase().contains(_searchQuery) ??
-                          false);
-                }).toList();
-
-                if (filteredCustomers.isEmpty) {
+                if (provider.customers.isEmpty && !provider.isLoading) {
                   return const Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -88,9 +104,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 }
 
                 return ListView.builder(
-                  itemCount: filteredCustomers.length,
+                  controller: _scrollController,
+                  itemCount: provider.customers.length + (provider.hasMoreData ? 1 : 0),
                   itemBuilder: (context, index) {
-                    final customer = filteredCustomers[index];
+                    if (index == provider.customers.length) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    final customer = provider.customers[index];
                     return Card(
                       margin: const EdgeInsets.symmetric(
                         horizontal: 16,
@@ -121,19 +141,23 @@ class _CustomersScreenState extends State<CustomersScreen> {
                               Text('Email: ${customer.email}'),
                             Row(
                               children: [
-                                Text(
-                                  'Credit: ${CurrencyUtils.formatCurrency(customer.creditLimit)}',
+                                Expanded(
+                                  child: Text(
+                                    'Credit: ${CurrencyUtils.formatCurrency(customer.creditLimit)}',
+                                  ),
                                 ),
                                 const SizedBox(width: 16),
-                                Text(
-                                  'Balance: ${CurrencyUtils.formatCurrency(customer.currentBalance)}',
-                                  style: TextStyle(
-                                    color: customer.hasOverdueBalance
-                                        ? Colors.red
-                                        : customer.currentBalance > 0
-                                        ? Colors.orange
-                                        : Colors.green,
-                                    fontWeight: FontWeight.bold,
+                                Expanded(
+                                  child: Text(
+                                    'Balance: ${CurrencyUtils.formatCurrency(customer.currentBalance)}',
+                                    style: TextStyle(
+                                      color: customer.hasOverdueBalance
+                                          ? Colors.red
+                                          : customer.currentBalance > 0
+                                          ? Colors.orange
+                                          : Colors.green,
+                                      fontWeight: FontWeight.bold,
+                                    ),
                                   ),
                                 ),
                               ],

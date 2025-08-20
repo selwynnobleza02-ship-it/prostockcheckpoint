@@ -13,6 +13,7 @@ import 'screens/admin_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/user_screen.dart';
+import 'screens/splash_screen.dart'; // Added import for SplashScreen
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,9 +89,9 @@ class _RetailCreditAppState extends State<RetailCreditApp> {
             useMaterial3: true,
             colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           ),
-          initialRoute: '/',
+          initialRoute: '/splash', // Changed initial route to SplashScreen
           routes: {
-            '/': (context) => const LoginScreen(),
+            '/splash': (context) => const SplashScreen(), // Added SplashScreen route
             '/admin': (context) => const AdminScreen(),
             '/login': (context) => const LoginScreen(),
             '/signup': (context) => const SignupScreen(),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_user.dart';
 import '../models/user_role.dart';
@@ -85,6 +86,7 @@ class AuthProvider with ChangeNotifier {
           _currentUser = user;
           _firebaseUser = credential.user;
 
+          // Save to SharedPreferences
           final prefs = await SharedPreferences.getInstance();
           await prefs.setBool('isAuthenticated', true);
           await prefs.setString('userId', user.id.toString());
@@ -98,12 +100,12 @@ class AuthProvider with ChangeNotifier {
         }
       }
       return false;
-    } catch (e) {
+    } on FirebaseAuthException catch (e) {
       ErrorLogger.logError(
         'Error during login',
         error: e,
         context: 'AuthProvider.login',
-      ); // Replaced print with ErrorLogger
+      );
       return false;
     }
   }

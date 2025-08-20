@@ -159,9 +159,10 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               ),
                           ],
                         ),
-                        trailing: const Icon(
-                          Icons.qr_code_scanner,
-                          color: Colors.grey,
+                        trailing: Icon(
+                          Icons.inventory_2,
+                          color: product.isLowStock ? Colors.red : Colors.teal,
+                          size: 24,
                         ),
                       ),
                     );
