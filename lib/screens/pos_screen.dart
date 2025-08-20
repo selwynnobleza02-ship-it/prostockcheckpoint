@@ -282,7 +282,6 @@ class _POSScreenState extends State<POSScreen> {
                           (p) => p.id == item.productId,
                           orElse: () => Product(
                             name: 'Unknown Product',
-                            price: 0,
                             cost: 0,
                             stock: 0,
                             createdAt: DateTime.now(),

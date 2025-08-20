@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/inventory_provider.dart';
 import '../models/product.dart';
+import '../utils/constants.dart';
 
 class AddProductDialog extends StatefulWidget {
   const AddProductDialog({super.key});
@@ -14,7 +15,6 @@ class _AddProductDialogState extends State<AddProductDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _barcodeController = TextEditingController();
-  final _priceController = TextEditingController();
   final _costController = TextEditingController();
   final _stockController = TextEditingController();
   final _minStockController = TextEditingController(text: '5');
@@ -37,7 +37,6 @@ class _AddProductDialogState extends State<AddProductDialog> {
   void dispose() {
     _nameController.dispose();
     _barcodeController.dispose();
-    _priceController.dispose();
     _costController.dispose();
     _stockController.dispose();
     _minStockController.dispose();
@@ -117,69 +116,33 @@ class _AddProductDialogState extends State<AddProductDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Price and Cost Row
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _priceController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Selling Price *',
-                          border: OutlineInputBorder(),
-                          prefixText: '₱ ', // Philippine Peso symbol
-                          prefixIcon: Icon(Icons.attach_money),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Enter price';
-                          }
-                          final price = double.tryParse(value.trim());
-                          if (price == null || price <= 0) {
-                            return 'Enter valid price';
-                          }
-                          return null;
-                        },
-                        onChanged: (value) {
-                          setState(
-                            () {},
-                          ); // Trigger profit margin recalculation
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _costController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Cost Price *',
-                          border: OutlineInputBorder(),
-                          prefixText: '₱ ', // Philippine Peso symbol
-                          prefixIcon: Icon(Icons.money_off),
-                        ),
-                        validator: (value) {
-                          if (value == null || value.trim().isEmpty) {
-                            return 'Enter cost';
-                          }
-                          final cost = double.tryParse(value.trim());
-                          if (cost == null || cost < 0) {
-                            return 'Enter valid cost';
-                          }
-                          return null;
-                        },
-                        onChanged: (value) {
-                          setState(
-                            () {},
-                          ); // Trigger profit margin recalculation
-                        },
-                      ),
-                    ),
-                  ],
+                // Cost Row
+                TextFormField(
+                  controller: _costController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Cost Price *',
+                    border: OutlineInputBorder(),
+                    prefixText: '₱ ', // Philippine Peso symbol
+                    prefixIcon: Icon(Icons.money_off),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Enter cost';
+                    }
+                    final cost = double.tryParse(value.trim());
+                    if (cost == null || cost < 0) {
+                      return 'Enter valid cost';
+                    }
+                    return null;
+                  },
+                  onChanged: (value) {
+                    setState(
+                      () {},
+                    ); // Trigger profit margin recalculation
+                  },
                 ),
                 const SizedBox(height: 16),
 
@@ -262,13 +225,13 @@ class _AddProductDialogState extends State<AddProductDialog> {
   }
 
   Widget _buildProfitMarginDisplay() {
-    final price = double.tryParse(_priceController.text.trim()) ?? 0;
     final cost = double.tryParse(_costController.text.trim()) ?? 0;
+    final price = cost * (1 + AppConstants.taxRate);
     final profit = price - cost;
     final margin = cost > 0 ? (profit / cost * 100) : 0;
 
     // Only show if both price and cost have values
-    if (price == 0 && cost == 0) {
+    if (cost == 0) {
       return const SizedBox.shrink();
     }
 
@@ -285,6 +248,14 @@ class _AddProductDialogState extends State<AddProductDialog> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              const Text(
+                'Selling Price',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              Text(
+                '₱${price.toStringAsFixed(2)}',
+              ),
+              const SizedBox(height: 8),
               const Text(
                 'Profit Margin',
                 style: TextStyle(fontWeight: FontWeight.bold),
@@ -312,13 +283,12 @@ class _AddProductDialogState extends State<AddProductDialog> {
 
     try {
       // Safely parse the values using tryParse to avoid FormatException
-      final price = double.tryParse(_priceController.text.trim());
       final cost = double.tryParse(_costController.text.trim());
       final stock = int.tryParse(_stockController.text.trim());
       final minStock = int.tryParse(_minStockController.text.trim()) ?? 5;
 
       // Double-check parsed values (should be caught by validation, but just in case)
-      if (price == null || cost == null || stock == null) {
+      if (cost == null || stock == null) {
         throw const FormatException('Invalid number format');
       }
 
@@ -329,7 +299,6 @@ class _AddProductDialogState extends State<AddProductDialog> {
       final product = Product(
         name: _nameController.text.trim(),
         barcode: finalBarcode,
-        price: price,
         cost: cost,
         stock: stock,
         minStock: minStock,

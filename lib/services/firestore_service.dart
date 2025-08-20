@@ -124,7 +124,10 @@ class FirestoreService {
       _sanitizeData(data);
 
       data['updatedAt'] = FieldValue.serverTimestamp();
-      await _firestore.collection(collection).doc(docId).set(data, SetOptions(merge: true));
+      await _firestore
+          .collection(collection)
+          .doc(docId)
+          .set(data, SetOptions(merge: true));
     } catch (e) {
       throw FirestoreException('Failed to update document in $collection: $e');
     }
@@ -1029,6 +1032,14 @@ class FirestoreService {
       );
     } catch (e) {
       throw FirestoreException('Failed to update user: $e');
+    }
+  }
+
+  Future<void> deleteUser(String id) async {
+    try {
+      await deleteDocument(AppConstants.usersCollection, id);
+    } catch (e) {
+      throw FirestoreException('Failed to delete user: $e');
     }
   }
 

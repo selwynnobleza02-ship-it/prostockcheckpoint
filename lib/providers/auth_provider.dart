@@ -238,11 +238,19 @@ class AuthProvider with ChangeNotifier {
     String password,
     UserRole role,
   ) async {
+
+    AppUser? newUser;
     try {
+      // Check if username already exists
+      final existingUser = await _firestoreService.getUserByUsername(username);
+      if (existingUser != null) {
+        throw Exception('Username already exists');
+      }
+
       final hashedPassword = PasswordHelper.hashPassword(password);
 
       // Create user in Firestore first
-      final newUser = AppUser(
+      newUser = AppUser(
         username: username,
         email: email,
         passwordHash: hashedPassword, // Store hashed password
@@ -250,20 +258,28 @@ class AuthProvider with ChangeNotifier {
         createdAt: DateTime.now(),
       );
 
-      final _ = await _firestoreService.insertUser(newUser);
+      final userId = await _firestoreService.insertUser(newUser);
+      newUser.id = userId;
 
       // Create Firebase Auth account
-      final credential = await _firebaseAuth.createUserWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
+      try {
+        final credential = await _firebaseAuth.createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
 
-      if (credential.user != null) {
-        await credential.user!.updateDisplayName(username);
-        return true;
+        if (credential.user != null) {
+          await credential.user!.updateDisplayName(username);
+          return true;
+        }
+        return false;
+      } catch (e) {
+        // If Firebase Auth creation fails, delete the Firestore user
+        if (newUser.id != null) {
+          await _firestoreService.deleteUser(newUser.id!);
+        }
+        rethrow; // Re-throw the exception to be caught by the outer catch block
       }
-
-      return false;
     } catch (e) {
       ErrorLogger.logError(
         'Error creating user',

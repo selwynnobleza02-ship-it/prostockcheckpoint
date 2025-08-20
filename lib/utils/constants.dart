@@ -9,4 +9,7 @@ class AppConstants {
   static const String saleItemsCollection = 'sale_items';
   static const String stockMovementsCollection = 'stock_movements';
   static const String errorLogsCollection = 'error_logs';
+
+  // Tax rate
+  static const double taxRate = 0.12;
 }

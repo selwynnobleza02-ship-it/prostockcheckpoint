@@ -1,8 +1,9 @@
+import '../utils/constants.dart';
+
 class Product {
   final String? id;
   final String name;
   final String? barcode;
-  final double price;
   final double cost;
   final int stock;
   final int minStock;
@@ -14,7 +15,6 @@ class Product {
     this.id,
     required this.name,
     this.barcode,
-    required this.price,
     required this.cost,
     required this.stock,
     this.minStock = 5,
@@ -25,15 +25,14 @@ class Product {
     _validateProduct();
   }
 
+  double get price => cost * (1 + AppConstants.taxRate);
+
   void _validateProduct() {
     if (name.trim().isEmpty) {
       throw ArgumentError('Product name cannot be empty');
     }
     if (name.length > 100) {
       throw ArgumentError('Product name cannot exceed 100 characters');
-    }
-    if (price < 0) {
-      throw ArgumentError('Product price cannot be negative');
     }
     if (cost < 0) {
       throw ArgumentError('Product cost cannot be negative');
@@ -56,7 +55,7 @@ class Product {
 
   bool _isValidBarcode(String barcode) {
     // Basic barcode validation - alphanumeric, 8-13 characters
-    final barcodeRegex = RegExp(r'^[A-Za-z0-9]{8,13}$');
+    final barcodeRegex = RegExp(r'^[A-Za-z0-9]{8,13}');
     return barcodeRegex.hasMatch(barcode);
   }
 
@@ -84,7 +83,6 @@ class Product {
       id: map['id']?.toString(),
       name: map['name'],
       barcode: map['barcode'],
-      price: map['price'].toDouble(),
       cost: map['cost'].toDouble(),
       stock: map['stock'],
       minStock: map['min_stock'] ?? 5,
@@ -98,7 +96,6 @@ class Product {
     String? id,
     String? name,
     String? barcode,
-    double? price,
     double? cost,
     int? stock,
     int? minStock,
@@ -110,7 +107,6 @@ class Product {
       id: id ?? this.id,
       name: name ?? this.name,
       barcode: barcode ?? this.barcode,
-      price: price ?? this.price,
       cost: cost ?? this.cost,
       stock: stock ?? this.stock,
       minStock: minStock ?? this.minStock,

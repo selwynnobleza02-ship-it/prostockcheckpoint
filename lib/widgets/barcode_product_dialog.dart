@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/inventory_provider.dart';
 import '../models/product.dart';
+import '../utils/constants.dart';
 
 class BarcodeProductDialog extends StatefulWidget {
   final String barcode;
@@ -15,7 +16,6 @@ class BarcodeProductDialog extends StatefulWidget {
 class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
-  final _priceController = TextEditingController();
   final _costController = TextEditingController();
   final _stockController = TextEditingController();
   final _minStockController = TextEditingController(text: '5');
@@ -38,7 +38,6 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
   @override
   void dispose() {
     _nameController.dispose();
-    _priceController.dispose();
     _costController.dispose();
     _stockController.dispose();
     _minStockController.dispose();
@@ -70,6 +69,8 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
   }
 
   Widget _buildSuccessContent() {
+    final cost = double.tryParse(_costController.text.trim()) ?? 0;
+    final price = cost * (1 + AppConstants.taxRate);
     return SizedBox(
       width: MediaQuery.of(context).size.width * 0.9,
       child: Column(
@@ -122,7 +123,7 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
                             'Initial Stock:',
                             style: TextStyle(fontWeight: FontWeight.w500),
                           ),
-                          Text('${_stockController.text} pcs'),
+                          Text('${_stockController.text}pcs'),
                         ],
                       ),
                       const SizedBox(height: 4),
@@ -133,7 +134,7 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
                             'Selling Price:',
                             style: TextStyle(fontWeight: FontWeight.w500),
                           ),
-                          Text('₱${_priceController.text}'),
+                          Text('₱${price.toStringAsFixed(2)}'),
                         ],
                       ),
                     ],
@@ -190,59 +191,28 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
             ),
             const SizedBox(height: 16),
 
-            // Price and Cost Row
-            Row(
-              children: [
-                Expanded(
-                  child: TextFormField(
-                    controller: _priceController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Selling Price *',
-                      border: OutlineInputBorder(),
-                      prefixText: '₱ ',
-                      prefixIcon: Icon(Icons.attach_money),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Enter price';
-                      }
-                      final price = double.tryParse(value);
-                      if (price == null || price <= 0) {
-                        return 'Enter valid price';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextFormField(
-                    controller: _costController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    decoration: const InputDecoration(
-                      labelText: 'Cost Price *',
-                      border: OutlineInputBorder(),
-                      prefixText: '₱ ',
-                      prefixIcon: Icon(Icons.money_off),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Enter cost';
-                      }
-                      final cost = double.tryParse(value);
-                      if (cost == null || cost < 0) {
-                        return 'Enter valid cost';
-                      }
-                      return null;
-                    },
-                  ),
-                ),
-              ],
+            // Cost Row
+            TextFormField(
+              controller: _costController,
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
+              decoration: const InputDecoration(
+                labelText: 'Cost Price *',
+                border: OutlineInputBorder(),
+                prefixText: '₱ ',
+                prefixIcon: Icon(Icons.money_off),
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Enter cost';
+                }
+                final cost = double.tryParse(value);
+                if (cost == null || cost < 0) {
+                  return 'Enter valid cost';
+                }
+                return null;
+              },
             ),
             const SizedBox(height: 16),
 
@@ -301,8 +271,8 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
             // Profit Margin Display
             Consumer<InventoryProvider>(
               builder: (context, provider, child) {
-                final price = double.tryParse(_priceController.text) ?? 0;
                 final cost = double.tryParse(_costController.text) ?? 0;
+                final price = cost * (1 + AppConstants.taxRate);
                 final profit = price - cost;
                 final margin = cost > 0 ? (profit / cost * 100) : 0;
 
@@ -323,6 +293,14 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          const Text(
+                            'Selling Price',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          Text(
+                            '₱${price.toStringAsFixed(2)}',
+                          ),
+                          const SizedBox(height: 8),
                           const Text(
                             'Profit Margin',
                             style: TextStyle(fontWeight: FontWeight.bold),
@@ -394,7 +372,6 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
       final product = Product(
         name: _nameController.text.trim(),
         barcode: widget.barcode,
-        price: double.parse(_priceController.text),
         cost: double.parse(_costController.text),
         stock: int.parse(_stockController.text),
         minStock: int.tryParse(_minStockController.text) ?? 5,

@@ -1,7 +1,7 @@
 import 'user_role.dart';
 
 class AppUser {
-  final String? id; // Changed from int to String for Firestore compatibility
+  String? id; // Changed from int to String for Firestore compatibility
   final String username;
   final String email;
   final String

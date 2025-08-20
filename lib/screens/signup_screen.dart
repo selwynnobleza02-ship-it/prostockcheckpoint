@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/user_role.dart';
+import '../utils/password_helper.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -16,6 +17,7 @@ class _SignupScreenState extends State<SignupScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   UserRole _selectedRole = UserRole.user;
+  bool _isLoading = false;
 
   @override
   Widget build(BuildContext context) {
@@ -79,11 +81,15 @@ class _SignupScreenState extends State<SignupScreen> {
                     prefixIcon: Icon(Icons.lock),
                     filled: true,
                     fillColor: Colors.white70,
+                    helperText: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.',
                   ),
                   obscureText: true,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a password';
+                    }
+                    if (!PasswordHelper.isPasswordStrong(value)) {
+                      return 'Password is not strong enough.';
                     }
                     return null;
                   },
@@ -116,22 +122,34 @@ class _SignupScreenState extends State<SignupScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () async {
+                    onPressed: _isLoading ? null : () async {
                       if (_formKey.currentState!.validate()) {
-                        final authProvider = context.read<AuthProvider>();
-                        final success = await authProvider.createUser(
-                          _usernameController.text,
-                          _emailController.text,
-                          _passwordController.text,
-                          _selectedRole,
-                        );
-                        if (success) {
-                          Navigator.of(context).pushReplacementNamed('/login');
-                        } else {
+                        setState(() {
+                          _isLoading = true;
+                        });
+                        try {
+                          final authProvider = context.read<AuthProvider>();
+                          final success = await authProvider.createUser(
+                            _usernameController.text,
+                            _emailController.text,
+                            _passwordController.text,
+                            _selectedRole,
+                          );
+                          if (success) {
+                            Navigator.of(context).pushReplacementNamed('/login');
+                          } else {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Signup failed')),
+                            );
+                          }
+                        } catch (e) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Signup failed')),
+                            SnackBar(content: Text(e.toString())),
                           );
                         }
+                        setState(() {
+                          _isLoading = false;
+                        });
                       }
                     },
                     style: ElevatedButton.styleFrom(
@@ -142,7 +160,9 @@ class _SignupScreenState extends State<SignupScreen> {
                       backgroundColor: Colors.blueAccent,
                       foregroundColor: Colors.white,
                     ),
-                    child: const Text(
+                    child: _isLoading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
                       'Sign Up',
                       style: TextStyle(fontSize: 18),
                     ),
