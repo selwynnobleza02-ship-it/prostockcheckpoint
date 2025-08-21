@@ -58,10 +58,14 @@ class Sale {
   }
 
   factory Sale.fromMap(Map<String, dynamic> map) {
+    final totalAmount = map['total_amount'];
+    if (totalAmount == null) {
+      throw ArgumentError('Total amount cannot be null');
+    }
     return Sale(
       id: map['id']?.toString(),
       customerId: map['customer_id']?.toString(),
-      totalAmount: (map['total_amount'] ?? 0).toDouble(),
+      totalAmount: totalAmount.toDouble(),
       paymentMethod: map['payment_method'] ?? '',
       status: map['status'] ?? 'pending',
       createdAt: DateTime.parse(

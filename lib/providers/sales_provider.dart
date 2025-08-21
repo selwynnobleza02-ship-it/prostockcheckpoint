@@ -7,6 +7,7 @@ import '../models/product.dart';
 import '../models/receipt.dart';
 import '../services/firestore_service.dart';
 import '../utils/currency_utils.dart';
+
 import '../utils/error_logger.dart';
 import 'inventory_provider.dart';
 
@@ -296,7 +297,9 @@ class SalesProvider with ChangeNotifier {
     notifyListeners();
 
     try {
+      print('Completing sale...');
       // STEP 1: Pre-validation - Verify all products exist and have sufficient stock
+      final List<Product> productsInSale = [];
       for (final item in _currentSaleItems) {
         final product = _inventoryProvider.getProductById(item.productId);
         if (product == null) {
@@ -311,6 +314,7 @@ class SalesProvider with ChangeNotifier {
           notifyListeners();
           return null;
         }
+        productsInSale.add(product);
       }
 
       final sale = Sale(
@@ -322,7 +326,8 @@ class SalesProvider with ChangeNotifier {
       );
 
       if (OfflineManager.instance.isOnline) {
-        final saleId = await FirestoreService.instance.insertSale(sale);
+        print('Online sale');
+        final saleId = await FirestoreService.instance.insertSale(sale, productsInSale);
 
         final List<SaleItem> processedItems = [];
         final List<ReceiptItem> receiptItems = [];
@@ -391,8 +396,14 @@ class SalesProvider with ChangeNotifier {
         notifyListeners();
         return receipt;
       } else {
+        print('Offline sale');
         final saleId = const Uuid().v4();
         final offlineSale = sale.copyWith(id: saleId);
+
+        final List<Map<String, dynamic>> saleItems = [];
+        for (final item in _currentSaleItems) {
+          saleItems.add(item.toMap());
+        }
 
         await OfflineManager.instance.queueOperation(
           OfflineOperation(
@@ -400,28 +411,52 @@ class SalesProvider with ChangeNotifier {
             type: OperationType.insertSale,
             collectionName: 'sales',
             documentId: offlineSale.id,
-            data: offlineSale.toMap(),
+            data: {
+              'sale': offlineSale.toMap(),
+              'saleItems': saleItems,
+            },
             timestamp: DateTime.now(),
           ),
         );
 
-        for (final item in _currentSaleItems) {
-          final stockReduced = await _inventoryProvider.reduceStock(
-            item.productId,
-            item.quantity,
-          );
-          if (!stockReduced) {
-            _error = 'Failed to reduce stock for product: ${item.productId}';
-            _isLoading = false;
-            notifyListeners();
-            return null;
-          }
+        for (final product in productsInSale) {
+          await _inventoryProvider.reduceStock(product.id!, 1, offline: true);
         }
+
+        final List<ReceiptItem> receiptItems = [];
+        for (final item in _currentSaleItems) {
+          final product = _inventoryProvider.getProductById(item.productId);
+          receiptItems.add(
+            ReceiptItem(
+              productName: product?.name ?? 'Unknown Product',
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+            ),
+          );
+        }
+
+        String? customerName;
+        if (customerId != null) {
+          customerName = 'Customer #$customerId';
+        }
+
+        final receipt = Receipt(
+          saleId: saleId,
+          receiptNumber: saleId,
+          timestamp: DateTime.now(),
+          customerName: customerName,
+          paymentMethod: paymentMethod,
+          items: receiptItems,
+          subtotal: currentSaleTotal,
+          tax: 0.0,
+          total: currentSaleTotal,
+        );
 
         _currentSaleItems.clear();
         _isLoading = false;
         notifyListeners();
-        return null;
+        return receipt;
       }
     } catch (e) {
       _error = 'Error completing sale: ${e.toString()}';
@@ -470,4 +505,3 @@ class SalesProvider with ChangeNotifier {
     }
   }
 }
-

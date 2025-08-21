@@ -627,16 +627,27 @@ class FirestoreService {
   }
 
   // Sales operations
-  Future<String> insertSale(Sale sale) async {
+  Future<String> insertSale(Sale sale, List<Product> products) async {
     try {
       if (!_isValidSale(sale)) {
         throw ArgumentError('Invalid sale data');
       }
 
+      final batch = _firestore.batch();
+
       final saleData = sale.toMap();
       saleData.remove('id');
+      final saleRef = sales.doc();
+      batch.set(saleRef, saleData);
 
-      return await addDocument(AppConstants.salesCollection, saleData);
+      for (final product in products) {
+        final productRef = this.products.doc(product.id);
+        batch.update(productRef, {'stock': FieldValue.increment(-1)});
+      }
+
+      await batch.commit();
+
+      return saleRef.id;
     } catch (e) {
       throw FirestoreException('Failed to insert sale: $e');
     }

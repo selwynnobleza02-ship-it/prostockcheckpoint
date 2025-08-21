@@ -4,10 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
-import '../models/product.dart';
-import '../models/customer.dart';
 import '../models/sale.dart';
-import '../models/credit_transaction.dart';
 import '../services/firestore_service.dart';
 import '../services/local_database_service.dart';
 import '../utils/error_logger.dart';
@@ -32,7 +29,8 @@ import '../utils/error_logger.dart';
 /// - Conflict resolution prioritizes local changes for business continuity
 class OfflineManager with ChangeNotifier {
   static final OfflineManager instance = OfflineManager._init();
-  final LocalDatabaseService _localDatabaseService = LocalDatabaseService.instance;
+  final LocalDatabaseService _localDatabaseService =
+      LocalDatabaseService.instance;
   static const int maxRetries = 3;
   OfflineManager._init();
 
@@ -85,32 +83,29 @@ class OfflineManager with ChangeNotifier {
   /// - Provides user feedback about connectivity changes
   /// - Handles rapid connectivity changes gracefully
   void _startConnectivityMonitoring() {
-    _connectivitySubscription =
-        Connectivity().onConnectivityChanged.listen((
-              List<ConnectivityResult> results,
-            ) async {
-              final wasOnline = _isOnline;
-              // Check if any of the connectivity results indicate we're online
-              _isOnline = results.any(
-                (result) => result != ConnectivityResult.none,
-              );
-              if (!wasOnline && _isOnline) {
-                // Just came back online - trigger automatic sync
-                ErrorLogger.logInfo(
-                  'Back online - syncing pending operations',
-                  context: 'OfflineManager._startConnectivityMonitoring',
-                );
-                await syncPendingOperations();
-              } else if (wasOnline && !_isOnline) {
-                // Just went offline - prepare for offline mode
-                ErrorLogger.logInfo(
-                  'Went offline',
-                  context: 'OfflineManager._startConnectivityMonitoring',
-                );
-              }
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      List<ConnectivityResult> results,
+    ) async {
+      final wasOnline = _isOnline;
+      // Check if any of the connectivity results indicate we're online
+      _isOnline = results.any((result) => result != ConnectivityResult.none);
+      if (!wasOnline && _isOnline) {
+        // Just came back online - trigger automatic sync
+        ErrorLogger.logInfo(
+          'Back online - syncing pending operations',
+          context: 'OfflineManager._startConnectivityMonitoring',
+        );
+        await syncPendingOperations();
+      } else if (wasOnline && !_isOnline) {
+        // Just went offline - prepare for offline mode
+        ErrorLogger.logInfo(
+          'Went offline',
+          context: 'OfflineManager._startConnectivityMonitoring',
+        );
+      }
 
-              notifyListeners();
-            });
+      notifyListeners();
+    });
   }
 
   /// Multi-Tier Cache Management System
@@ -272,7 +267,9 @@ class OfflineManager with ChangeNotifier {
             context: 'OfflineManager.syncPendingOperations',
           );
           if (operation.retryCount < maxRetries) {
-            final updatedOperation = operation.copyWith(retryCount: operation.retryCount + 1);
+            final updatedOperation = operation.copyWith(
+              retryCount: operation.retryCount + 1,
+            );
             failedOperations.add(updatedOperation);
           } else {
             // Move to dead letter queue or handle as a permanent failure
@@ -389,7 +386,9 @@ class OfflineManager with ChangeNotifier {
   Future<void> _loadPendingOperationsFromDb() async {
     try {
       final db = await _localDatabaseService.database;
-      final List<Map<String, dynamic>> maps = await db.query('offline_operations');
+      final List<Map<String, dynamic>> maps = await db.query(
+        'offline_operations',
+      );
       _pendingOperations = List.generate(maps.length, (i) {
         return OfflineOperation.fromMap(maps[i]);
       });
@@ -472,7 +471,8 @@ class OfflineManager with ChangeNotifier {
       whereArgs: ['insertSale'],
     );
     return List.generate(maps.length, (i) {
-      return Sale.fromMap(jsonDecode(maps[i]['data']));
+      final data = jsonDecode(maps[i]['data']);
+      return Sale.fromMap(data['sale']);
     });
   }
 
@@ -561,7 +561,7 @@ class OfflineOperation {
       dbId: map['id'] as int,
       id: map['operation_id'] as String,
       type: OperationType.values.firstWhere(
-            (e) => e.toString().split('.').last == map['operation_type'],
+        (e) => e.toString().split('.').last == map['operation_type'],
       ),
       collectionName: map['collection_name'] as String,
       documentId: map['document_id'] as String?,

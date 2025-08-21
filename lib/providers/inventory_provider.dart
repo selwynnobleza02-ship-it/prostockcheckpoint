@@ -432,6 +432,7 @@ class InventoryProvider with ChangeNotifier {
     String productId,
     int quantity, {
     String? reason,
+    bool offline = false,
   }) async {
     try {
       final index = _products.indexWhere((p) => p.id == productId);
@@ -449,20 +450,51 @@ class InventoryProvider with ChangeNotifier {
       }
 
       final newStock = product.stock - quantity;
-      final success = await updateStock(
-        productId,
-        newStock,
-        reason: reason ?? 'Manual removal',
+      final updatedProduct = product.copyWith(
+        stock: newStock,
+        updatedAt: DateTime.now(),
       );
+
+      final db = await _localDatabaseService.database;
+      await db.update(
+        'products',
+        updatedProduct.toMap(),
+        where: 'id = ?',
+        whereArgs: [productId],
+      );
+
+      if (!offline && OfflineManager.instance.isOnline) {
+        await FirestoreService.instance.updateProduct(updatedProduct);
+
+        // Record stock movement
+        final movementType = 'stock_out';
+        await FirestoreService.instance.insertStockMovement(
+          productId,
+          movementType,
+          quantity,
+          reason ?? 'Sale',
+        );
+      } else if (offline) {
+        await OfflineManager.instance.queueOperation(
+          OfflineOperation(
+            id: updatedProduct.id!,
+            type: OperationType.updateProduct,
+            collectionName: 'products',
+            documentId: updatedProduct.id,
+            data: updatedProduct.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+
+      _products[index] = updatedProduct;
 
       releaseReservedStock(productId, quantity);
 
-      if (!success) {
-        _error = 'Failed to update stock';
-        notifyListeners();
-      }
+      _checkStockAlerts(updatedProduct);
 
-      return success;
+      notifyListeners();
+      return true;
     } catch (e) {
       _error = 'Error reducing stock: ${e.toString()}';
       notifyListeners();
