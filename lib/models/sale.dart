@@ -69,6 +69,24 @@ class Sale {
       ),
     );
   }
+
+  Sale copyWith({
+    String? id,
+    String? customerId,
+    double? totalAmount,
+    String? paymentMethod,
+    String? status,
+    DateTime? createdAt,
+  }) {
+    return Sale(
+      id: id ?? this.id,
+      customerId: customerId ?? this.customerId,
+      totalAmount: totalAmount ?? this.totalAmount,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
 }
 
 class SaleItem {

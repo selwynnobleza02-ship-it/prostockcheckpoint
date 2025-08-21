@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/services/offline_manager.dart';
+import 'package:uuid/uuid.dart';
 import '../models/sale.dart';
 import '../models/product.dart';
 import '../models/receipt.dart';
@@ -98,16 +100,30 @@ class SalesProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await FirestoreService.instance.getSalesPaginated(
-        limit: _pageSize,
-        lastDocument: null,
-        startDate: startDate,
-        endDate: endDate,
-      );
+      List<Sale> onlineSales = [];
+      if (OfflineManager.instance.isOnline) {
+        final result = await FirestoreService.instance.getSalesPaginated(
+          limit: _pageSize,
+          lastDocument: null,
+          startDate: startDate,
+          endDate: endDate,
+        );
+        onlineSales = result.items;
+        _lastDocument = result.lastDocument;
+        _hasMoreData = result.items.length == _pageSize;
+      }
 
-      _sales = result.items;
-      _lastDocument = result.lastDocument;
-      _hasMoreData = result.items.length == _pageSize;
+      final offlineSales = await OfflineManager.instance.getPendingSales();
+
+      final Map<String, Sale> mergedSalesMap = {
+        for (var s in onlineSales) s.id!: s,
+      };
+      for (var s in offlineSales) {
+        mergedSalesMap[s.id!] = s;
+      }
+
+      _sales = mergedSalesMap.values.toList();
+      _sales.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
       // Cache the data
       _setCachedData(cacheKey, _sales);
@@ -297,7 +313,6 @@ class SalesProvider with ChangeNotifier {
         }
       }
 
-      // STEP 2: Create sale record
       final sale = Sale(
         customerId: customerId,
         totalAmount: currentSaleTotal,
@@ -306,74 +321,108 @@ class SalesProvider with ChangeNotifier {
         createdAt: DateTime.now(),
       );
 
-      final saleId = await FirestoreService.instance.insertSale(sale);
+      if (OfflineManager.instance.isOnline) {
+        final saleId = await FirestoreService.instance.insertSale(sale);
 
-      final List<SaleItem> processedItems = [];
-      final List<ReceiptItem> receiptItems = [];
+        final List<SaleItem> processedItems = [];
+        final List<ReceiptItem> receiptItems = [];
 
-      // STEP 3: Process each sale item and update inventory
-      for (final item in _currentSaleItems) {
-        final product = _inventoryProvider.getProductById(item.productId);
+        // STEP 3: Process each sale item and update inventory
+        for (final item in _currentSaleItems) {
+          final product = _inventoryProvider.getProductById(item.productId);
 
-        // Create sale item record
-        final saleItem = SaleItem(
-          saleId: saleId,
-          productId: item.productId,
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
-        );
-
-        await FirestoreService.instance.insertSaleItem(saleItem);
-        processedItems.add(saleItem);
-
-        // Create receipt line item
-        receiptItems.add(
-          ReceiptItem(
-            productName: product?.name ?? 'Unknown Product',
+          // Create sale item record
+          final saleItem = SaleItem(
+            saleId: saleId,
+            productId: item.productId,
             quantity: item.quantity,
             unitPrice: item.unitPrice,
             totalPrice: item.totalPrice,
+          );
+
+          await FirestoreService.instance.insertSaleItem(saleItem);
+          processedItems.add(saleItem);
+
+          // Create receipt line item
+          receiptItems.add(
+            ReceiptItem(
+              productName: product?.name ?? 'Unknown Product',
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+            ),
+          );
+
+          // STEP 4: Update inventory through InventoryProvider (maintains business rules)
+          final stockReduced = await _inventoryProvider.reduceStock(
+            item.productId,
+            item.quantity,
+          );
+          if (!stockReduced) {
+            _error = 'Failed to reduce stock for product: ${item.productId}';
+            _isLoading = false;
+            notifyListeners();
+            return null;
+          }
+        }
+
+        // STEP 5: Generate customer receipt
+        String? customerName;
+        if (customerId != null) {
+          customerName = 'Customer #$customerId';
+        }
+
+        final receipt = Receipt(
+          saleId: saleId,
+          receiptNumber: saleId,
+          timestamp: DateTime.now(),
+          customerName: customerName,
+          paymentMethod: paymentMethod,
+          items: receiptItems,
+          subtotal: currentSaleTotal,
+          tax: 0.0,
+          total: currentSaleTotal,
+        );
+
+        // STEP 6: Transaction cleanup and data refresh
+        _currentSaleItems.clear();
+        await loadSales();
+        _isLoading = false;
+        notifyListeners();
+        return receipt;
+      } else {
+        final saleId = const Uuid().v4();
+        final offlineSale = sale.copyWith(id: saleId);
+
+        await OfflineManager.instance.queueOperation(
+          OfflineOperation(
+            id: offlineSale.id!,
+            type: OperationType.insertSale,
+            collectionName: 'sales',
+            documentId: offlineSale.id,
+            data: offlineSale.toMap(),
+            timestamp: DateTime.now(),
           ),
         );
 
-        // STEP 4: Update inventory through InventoryProvider (maintains business rules)
-        final stockReduced = await _inventoryProvider.reduceStock(
-          item.productId,
-          item.quantity,
-        );
-        if (!stockReduced) {
-          _error = 'Failed to reduce stock for product: ${item.productId}';
-          _isLoading = false;
-          notifyListeners();
-          return null;
+        for (final item in _currentSaleItems) {
+          final stockReduced = await _inventoryProvider.reduceStock(
+            item.productId,
+            item.quantity,
+          );
+          if (!stockReduced) {
+            _error = 'Failed to reduce stock for product: ${item.productId}';
+            _isLoading = false;
+            notifyListeners();
+            return null;
+          }
         }
+
+        _currentSaleItems.clear();
+        _isLoading = false;
+        notifyListeners();
+        return null;
       }
-
-      // STEP 5: Generate customer receipt
-      String? customerName;
-      if (customerId != null) {
-        customerName = 'Customer #$customerId';
-      }
-
-      final receipt = Receipt(
-        saleId: saleId,
-        receiptNumber: saleId,
-        timestamp: DateTime.now(),
-        customerName: customerName,
-        paymentMethod: paymentMethod,
-        items: receiptItems,
-        subtotal: currentSaleTotal,
-        tax: 0.0,
-        total: currentSaleTotal,
-      );
-
-      // STEP 6: Transaction cleanup and data refresh
-      _currentSaleItems.clear();
-      await loadSales();
-      _isLoading = false;
-      notifyListeners();
-      return receipt;
     } catch (e) {
       _error = 'Error completing sale: ${e.toString()}';
       _isLoading = false;
@@ -421,3 +470,4 @@ class SalesProvider with ChangeNotifier {
     }
   }
 }
+

@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:prostock/providers/connectivity_provider.dart';
+import 'package:prostock/services/offline_manager.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/product.dart';
 import '../services/firestore_service.dart';
 import '../services/local_database_service.dart';
 import '../utils/error_logger.dart'; // Added ErrorLogger import
-import 'dart:convert'; // Required for JSON encoding
+// Required for JSON encoding
 
 class InventoryProvider with ChangeNotifier {
   List<Product> _products = [];
@@ -16,14 +16,8 @@ class InventoryProvider with ChangeNotifier {
 
   final LocalDatabaseService _localDatabaseService =
       LocalDatabaseService.instance;
-  ConnectivityProvider _connectivityProvider;
 
-  InventoryProvider(this._connectivityProvider);
-
-  void update(ConnectivityProvider connectivityProvider) {
-    _connectivityProvider = connectivityProvider;
-    notifyListeners();
-  }
+  InventoryProvider();
 
   List<Product> get products => _products;
   bool get isLoading => _isLoading;
@@ -51,14 +45,16 @@ class InventoryProvider with ChangeNotifier {
 
     try {
       final db = await _localDatabaseService.database;
-      final List<Product> localProducts = (await db.query('products'))
-          .map((json) => Product.fromMap(json))
-          .toList();
+      final List<Product> localProducts = (await db.query(
+        'products',
+      )).map((json) => Product.fromMap(json)).toList();
 
       _products = localProducts; // Always load local products first
       notifyListeners();
 
-      if (refresh || localProducts.isEmpty || _connectivityProvider.isOnline) {
+      if (refresh ||
+          localProducts.isEmpty ||
+          OfflineManager.instance.isOnline) {
         final result = await FirestoreService.instance.getProductsPaginated(
           limit: 50,
           lastDocument: null,
@@ -67,12 +63,14 @@ class InventoryProvider with ChangeNotifier {
 
         final List<Product> firestoreProducts = result.items;
 
-        // Merge local and Firestore products, prioritizing local changes
         final Map<String, Product> mergedProductsMap = {
-          for (var p in firestoreProducts) p.id!: p,
+          for (var p in firestoreProducts)
+            if (p.id != null) p.id!: p,
         };
         for (var p in localProducts) {
-          mergedProductsMap[p.id!] = p; // Local version takes precedence
+          if (p.id != null) {
+            mergedProductsMap[p.id!] = p; // Local version takes precedence
+          }
         }
 
         _products = mergedProductsMap.values.toList();
@@ -106,7 +104,7 @@ class InventoryProvider with ChangeNotifier {
     await batch.commit(noResult: true);
   }
 
-  Future<bool> addProduct(Product product) async {
+  Future<Product?> addProduct(Product product) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -119,21 +117,25 @@ class InventoryProvider with ChangeNotifier {
       _products.add(newProduct);
       _reorderPoints[id.toString()] = (product.stock * 0.1).ceil().clamp(5, 50);
 
-      if (_connectivityProvider.isOnline) {
+      if (OfflineManager.instance.isOnline) {
         await FirestoreService.instance.insertProduct(product);
       } else {
         // Queue the operation for later synchronization
-        await _queueOfflineOperation(
-          'insert',
-          'products',
-          newProduct.id,
-          product.toMap(),
+        await OfflineManager.instance.queueOperation(
+          OfflineOperation(
+            id: newProduct.id!,
+            type: OperationType.insertProduct,
+            collectionName: 'products',
+            documentId: newProduct.id,
+            data: product.toMap(),
+            timestamp: DateTime.now(),
+          ),
         );
       }
 
       _isLoading = false;
       notifyListeners();
-      return true;
+      return newProduct;
     } catch (e) {
       _error = 'Failed to add product: ${e.toString()}';
       _isLoading = false;
@@ -143,29 +145,74 @@ class InventoryProvider with ChangeNotifier {
         error: e,
         context: 'InventoryProvider.addProduct',
       );
-      return false;
+      return null;
     }
   }
 
   Future<bool> updateProduct(Product product) async {
     try {
       final db = await _localDatabaseService.database;
-      await db.update(
-        'products',
-        product.toMap(),
-        where: 'id = ?',
-        whereArgs: [product.id],
-      );
 
-      if (_connectivityProvider.isOnline) {
-        await FirestoreService.instance.updateProduct(product);
+      if (OfflineManager.instance.isOnline) {
+        final existingProduct = await FirestoreService.instance.getProductById(
+          product.id!,
+        );
+        if (existingProduct != null &&
+            existingProduct.version > product.version) {
+          // Conflict detected
+          final mergedProduct = _mergeProducts(existingProduct, product);
+          await FirestoreService.instance.updateProduct(mergedProduct);
+          await db.update(
+            'products',
+            mergedProduct.toMap(),
+            where: 'id = ?',
+            whereArgs: [mergedProduct.id],
+          );
+          final index = _products.indexWhere((p) => p.id == mergedProduct.id);
+          if (index != -1) {
+            _products[index] = mergedProduct;
+            notifyListeners();
+          }
+        } else {
+          final updatedProduct = product.copyWith(version: product.version + 1);
+          await FirestoreService.instance.updateProduct(updatedProduct);
+          await db.update(
+            'products',
+            updatedProduct.toMap(),
+            where: 'id = ?',
+            whereArgs: [updatedProduct.id],
+          );
+          final index = _products.indexWhere((p) => p.id == updatedProduct.id);
+          if (index != -1) {
+            _products[index] = updatedProduct;
+            notifyListeners();
+          }
+        }
+      } else {
+        final updatedProduct = product.copyWith(version: product.version + 1);
+        await db.update(
+          'products',
+          updatedProduct.toMap(),
+          where: 'id = ?',
+          whereArgs: [updatedProduct.id],
+        );
+        await OfflineManager.instance.queueOperation(
+          OfflineOperation(
+            id: updatedProduct.id!,
+            type: OperationType.updateProduct,
+            collectionName: 'products',
+            documentId: updatedProduct.id,
+            data: updatedProduct.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+        final index = _products.indexWhere((p) => p.id == updatedProduct.id);
+        if (index != -1) {
+          _products[index] = updatedProduct;
+          notifyListeners();
+        }
       }
 
-      final index = _products.indexWhere((p) => p.id == product.id);
-      if (index != -1) {
-        _products[index] = product;
-        notifyListeners();
-      }
       return true;
     } catch (e) {
       _error = 'Error updating product: ${e.toString()}';
@@ -177,6 +224,21 @@ class InventoryProvider with ChangeNotifier {
       );
       return false;
     }
+  }
+
+  Product _mergeProducts(Product remote, Product local) {
+    // Simple merge strategy: last write wins for most fields
+    // More sophisticated logic can be added here based on business rules
+    return remote.copyWith(
+      name: local.name,
+      barcode: local.barcode,
+      cost: local.cost,
+      stock: local.stock,
+      minStock: local.minStock,
+      category: local.category,
+      updatedAt: DateTime.now(),
+      version: remote.version + 1, // Ensure the version is incremented
+    );
   }
 
   Future<bool> updateStock(
@@ -205,7 +267,7 @@ class InventoryProvider with ChangeNotifier {
         whereArgs: [productId],
       );
 
-      if (_connectivityProvider.isOnline) {
+      if (OfflineManager.instance.isOnline) {
         await FirestoreService.instance.updateProduct(updatedProduct);
 
         // Record stock movement
@@ -215,6 +277,17 @@ class InventoryProvider with ChangeNotifier {
           movementType,
           stockChange.abs(),
           reason ?? 'Manual adjustment',
+        );
+      } else {
+        await OfflineManager.instance.queueOperation(
+          OfflineOperation(
+            id: updatedProduct.id!,
+            type: OperationType.updateProduct,
+            collectionName: 'products',
+            documentId: updatedProduct.id,
+            data: updatedProduct.toMap(),
+            timestamp: DateTime.now(),
+          ),
         );
       }
 
@@ -248,7 +321,8 @@ class InventoryProvider with ChangeNotifier {
       if (maps.isNotEmpty) {
         return Product.fromMap(maps.first);
       } else {
-        if (_connectivityProvider.isOnline) {
+        if (OfflineManager.instance.isOnline) {
+          // Try to get the product from Firestore using its barcode
           final product = await FirestoreService.instance.getProductByBarcode(
             barcode,
           );
@@ -354,7 +428,11 @@ class InventoryProvider with ChangeNotifier {
     }
   }
 
-    Future<bool> reduceStock(String productId, int quantity, {String? reason}) async {
+  Future<bool> reduceStock(
+    String productId,
+    int quantity, {
+    String? reason,
+  }) async {
     try {
       final index = _products.indexWhere((p) => p.id == productId);
       if (index == -1) {
@@ -371,7 +449,11 @@ class InventoryProvider with ChangeNotifier {
       }
 
       final newStock = product.stock - quantity;
-      final success = await updateStock(productId, newStock, reason: reason ?? 'Manual removal');
+      final success = await updateStock(
+        productId,
+        newStock,
+        reason: reason ?? 'Manual removal',
+      );
 
       releaseReservedStock(productId, quantity);
 
@@ -515,25 +597,5 @@ class InventoryProvider with ChangeNotifier {
 
   void _checkStockAlerts(Product product) {
     // Implementation for checking stock alerts
-  }
-
-  Future<void> _queueOfflineOperation(
-    String operationType,
-    String collectionName,
-    String? documentId,
-    Map<String, dynamic> data,
-  ) async {
-    final db = await _localDatabaseService.database;
-    await db.insert(
-      'offline_operations',
-      {
-        'operation_type': operationType,
-        'collection_name': collectionName,
-        'document_id': documentId,
-        'data': jsonEncode(data),
-        'timestamp': DateTime.now().toIso8601String(),
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
   }
 }

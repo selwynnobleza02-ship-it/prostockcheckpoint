@@ -10,6 +10,7 @@ class Product {
   final String? category;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int version;
 
   Product({
     this.id,
@@ -21,6 +22,7 @@ class Product {
     this.category,
     required this.createdAt,
     required this.updatedAt,
+    this.version = 1,
   }) {
     _validateProduct();
   }
@@ -75,6 +77,7 @@ class Product {
       'category': category,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'version': version,
     };
   }
 
@@ -89,6 +92,7 @@ class Product {
       category: map['category'],
       createdAt: DateTime.parse(map['created_at']),
       updatedAt: DateTime.parse(map['updated_at']),
+      version: map['version'] ?? 1,
     );
   }
 
@@ -102,6 +106,7 @@ class Product {
     String? category,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? version,
   }) {
     return Product(
       id: id ?? this.id,
@@ -113,6 +118,7 @@ class Product {
       category: category ?? this.category,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
     );
   }
 

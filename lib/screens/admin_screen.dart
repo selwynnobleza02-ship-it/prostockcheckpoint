@@ -8,6 +8,7 @@ import '../screens/pos_screen.dart';
 import '../screens/inventory_screen.dart';
 import '../screens/reports_screen.dart';
 import '../screens/customers_screen.dart';
+import '../services/offline_manager.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -39,6 +40,17 @@ class _AdminScreenState extends State<AdminScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_forever),
+            onPressed: () async {
+              await OfflineManager.instance.clearCache();
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Cache cleared')),
+                );
+              }
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
@@ -133,7 +145,7 @@ class _AdminActivityMonitorState extends State<AdminActivityMonitor> {
       // Search filter
       if (_searchQuery.isNotEmpty) {
         final searchLower = _searchQuery.toLowerCase();
-        final matchesSearch =
+        final matchesSearch = 
             activity['username'].toString().toLowerCase().contains(
               searchLower,
             ) ||
@@ -252,7 +264,7 @@ class _AdminActivityMonitorState extends State<AdminActivityMonitor> {
               // Search bar
               TextField(
                 decoration: InputDecoration(
-                  hintText: 'Search activities...',
+                  hintText: 'Search activities...', 
                   prefixIcon: const Icon(Icons.search),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),

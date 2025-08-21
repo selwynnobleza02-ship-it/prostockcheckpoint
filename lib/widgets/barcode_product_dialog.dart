@@ -380,12 +380,12 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
         updatedAt: DateTime.now(),
       );
 
-      final success = await Provider.of<InventoryProvider>(
+      final newProduct = await Provider.of<InventoryProvider>(
         context,
         listen: false,
       ).addProduct(product);
 
-      if (success && mounted) {
+      if (newProduct != null && mounted) {
         setState(() {
           _isLoading = false;
           _showSuccess = true;

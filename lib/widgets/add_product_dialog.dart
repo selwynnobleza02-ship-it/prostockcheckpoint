@@ -139,9 +139,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
                     return null;
                   },
                   onChanged: (value) {
-                    setState(
-                      () {},
-                    ); // Trigger profit margin recalculation
+                    setState(() {}); // Trigger profit margin recalculation
                   },
                 ),
                 const SizedBox(height: 16),
@@ -252,9 +250,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
                 'Selling Price',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
-              Text(
-                '₱${price.toStringAsFixed(2)}',
-              ),
+              Text('₱${price.toStringAsFixed(2)}'),
               const SizedBox(height: 8),
               const Text(
                 'Profit Margin',
@@ -308,14 +304,14 @@ class _AddProductDialogState extends State<AddProductDialog> {
       );
 
       // Call addProduct - assumes it returns void and throws on error
-      await Provider.of<InventoryProvider>(
+      final newProduct = await Provider.of<InventoryProvider>(
         context,
         listen: false,
       ).addProduct(product);
 
       // If we reach here, the product was added successfully
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pop(context, newProduct);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Product "${product.name}" added successfully!'),

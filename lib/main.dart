@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:prostock/providers/connectivity_provider.dart';
-import 'package:prostock/services/synchronization_service.dart';
+import 'package:prostock/services/background_sync_service.dart';
+import 'package:prostock/services/offline_manager.dart';
 import 'firebase_options.dart';
 import 'providers/inventory_provider.dart';
 import 'providers/sales_provider.dart';
@@ -14,13 +14,17 @@ import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
 import 'screens/user_screen.dart';
 import 'screens/splash_screen.dart'; // Added import for SplashScreen
+import 'package:background_fetch/background_fetch.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await OfflineManager.instance.initialize();
+  await BackgroundSyncService.init();
 
   runApp(const MyApp());
+  BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
 }
 
 class MyApp extends StatelessWidget {
@@ -31,15 +35,13 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => ConnectivityProvider()),
-        ChangeNotifierProxyProvider<ConnectivityProvider, InventoryProvider>(
+        ChangeNotifierProvider.value(value: OfflineManager.instance),
+        ChangeNotifierProvider(
           create: (context) {
-            final inventoryProvider = InventoryProvider(context.read<ConnectivityProvider>());
+            final inventoryProvider = InventoryProvider();
             inventoryProvider.loadProducts(); // Load products when provider is created
             return inventoryProvider;
           },
-          update: (context, connectivityProvider, previousInventoryProvider) =>
-              previousInventoryProvider!..update(connectivityProvider),
         ),
         ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
           create: (context) => SalesProvider(
@@ -65,23 +67,16 @@ class RetailCreditApp extends StatefulWidget {
 }
 
 class _RetailCreditAppState extends State<RetailCreditApp> {
-  late final SynchronizationService _synchronizationService;
 
   @override
   void initState() {
     super.initState();
-    _synchronizationService = SynchronizationService(
-      context.read<ConnectivityProvider>(),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Builder(
       builder: (context) {
-        // The synchronize() call is now handled by the SynchronizationService's listener
-        // on ConnectivityProvider changes, so it's removed from here.
-
         return MaterialApp(
           title: 'Retail Credit Manager',
           theme: ThemeData(
@@ -104,7 +99,6 @@ class _RetailCreditAppState extends State<RetailCreditApp> {
 
   @override
   void dispose() {
-    _synchronizationService.dispose(); // Dispose of the listener
     super.dispose();
   }
 }

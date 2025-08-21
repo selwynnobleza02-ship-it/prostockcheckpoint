@@ -3,11 +3,13 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:uuid/uuid.dart';
 import '../models/product.dart';
 import '../models/customer.dart';
 import '../models/sale.dart';
 import '../models/credit_transaction.dart';
 import '../services/firestore_service.dart';
+import '../services/local_database_service.dart';
 import '../utils/error_logger.dart';
 
 /// Offline Manager - Comprehensive offline-first data synchronization system
@@ -30,13 +32,15 @@ import '../utils/error_logger.dart';
 /// - Conflict resolution prioritizes local changes for business continuity
 class OfflineManager with ChangeNotifier {
   static final OfflineManager instance = OfflineManager._init();
+  final LocalDatabaseService _localDatabaseService = LocalDatabaseService.instance;
+  static const int maxRetries = 3;
   OfflineManager._init();
 
   bool _isOnline = true;
   bool _isSyncing = false;
   DateTime? _lastSyncTime;
-  final List<OfflineOperation> _pendingOperations = [];
-  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  List<OfflineOperation> _pendingOperations = [];
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   bool get isOnline => _isOnline;
   bool get isSyncing => _isSyncing;
@@ -55,7 +59,7 @@ class OfflineManager with ChangeNotifier {
   Future<void> initialize() async {
     await _checkConnectivity();
     _startConnectivityMonitoring();
-    await _loadPendingOperations();
+    await _loadPendingOperationsFromDb();
 
     if (_isOnline && _pendingOperations.isNotEmpty) {
       await syncPendingOperations();
@@ -106,8 +110,7 @@ class OfflineManager with ChangeNotifier {
               }
 
               notifyListeners();
-            })
-            as StreamSubscription<ConnectivityResult>?;
+            });
   }
 
   /// Multi-Tier Cache Management System
@@ -202,18 +205,24 @@ class OfflineManager with ChangeNotifier {
   /// - Automatic retry mechanism for failed operations
   /// - Duplicate detection prevents redundant operations
   Future<void> queueOperation(OfflineOperation operation) async {
-    _pendingOperations.add(operation);
-    await _savePendingOperations();
-    notifyListeners();
-
-    ErrorLogger.logInfo(
-      'Queued operation: ${operation.type} - ${operation.id}',
-      context: 'OfflineManager.queueOperation',
-    );
-
-    // Attempt immediate sync if online
-    if (_isOnline) {
-      await syncPendingOperations();
+    try {
+      final db = await _localDatabaseService.database;
+      await db.insert('offline_operations', operation.toMap());
+      _pendingOperations.add(operation);
+      notifyListeners();
+      ErrorLogger.logInfo(
+        'Queued operation: ${operation.type} - ${operation.id}',
+        context: 'OfflineManager.queueOperation',
+      );
+      if (_isOnline) {
+        await syncPendingOperations();
+      }
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error queuing operation',
+        error: e,
+        context: 'OfflineManager.queueOperation',
+      );
     }
   }
 
@@ -231,19 +240,26 @@ class OfflineManager with ChangeNotifier {
   /// - Business logic validation before applying changes
   /// - Rollback capability for failed batch operations
   Future<void> syncPendingOperations() async {
-    if (!_isOnline || _isSyncing || _pendingOperations.isEmpty) {
-      return;
-    }
+    if (!_isOnline || _isSyncing) return;
+    await _loadPendingOperationsFromDb();
+    if (_pendingOperations.isEmpty) return;
 
     _isSyncing = true;
     notifyListeners();
 
     try {
       final operationsToSync = List<OfflineOperation>.from(_pendingOperations);
+      final List<Map<String, dynamic>> batchOperations = [];
+      List<int> successfulOperationIds = [];
+      List<OfflineOperation> failedOperations = [];
 
       for (final operation in operationsToSync) {
         try {
-          await _executeOperation(operation);
+          final batchOperation = _getBatchOperation(operation);
+          if (batchOperation != null) {
+            batchOperations.add(batchOperation);
+          }
+          successfulOperationIds.add(operation.dbId!);
           _pendingOperations.remove(operation);
           ErrorLogger.logInfo(
             'Synced operation: ${operation.type} - ${operation.id}',
@@ -255,11 +271,46 @@ class OfflineManager with ChangeNotifier {
             error: e,
             context: 'OfflineManager.syncPendingOperations',
           );
-          // Keep operation in queue for retry
+          if (operation.retryCount < maxRetries) {
+            final updatedOperation = operation.copyWith(retryCount: operation.retryCount + 1);
+            failedOperations.add(updatedOperation);
+          } else {
+            // Move to dead letter queue or handle as a permanent failure
+            ErrorLogger.logError(
+              'Operation ${operation.id} failed after $maxRetries retries',
+              error: e,
+              context: 'OfflineManager.syncPendingOperations',
+            );
+          }
         }
       }
 
-      await _savePendingOperations();
+      if (batchOperations.isNotEmpty) {
+        await FirestoreService.instance.batchWrite(batchOperations);
+      }
+
+      final db = await _localDatabaseService.database;
+      if (successfulOperationIds.isNotEmpty) {
+        await db.delete(
+          'offline_operations',
+          where: 'id IN (?)',
+          whereArgs: [successfulOperationIds.join(',')],
+        );
+      }
+
+      if (failedOperations.isNotEmpty) {
+        final batch = db.batch();
+        for (final op in failedOperations) {
+          batch.update(
+            'offline_operations',
+            op.toMap(),
+            where: 'id = ?',
+            whereArgs: [op.dbId],
+          );
+        }
+        await batch.commit(noResult: true);
+      }
+
       _lastSyncTime = DateTime.now();
       await _saveLastSyncTime();
     } catch (e) {
@@ -285,86 +336,69 @@ class OfflineManager with ChangeNotifier {
   /// - Type validation before execution
   /// - Business rule enforcement
   /// - Atomic operation guarantee
-  Future<void> _executeOperation(OfflineOperation operation) async {
+  Map<String, dynamic>? _getBatchOperation(OfflineOperation operation) {
     switch (operation.type) {
       case OperationType.insertProduct:
-        final product = Product.fromMap(operation.data);
-        await FirestoreService.instance.insertProduct(product);
-        break;
+        return {
+          'type': 'insert',
+          'collection': operation.collectionName,
+          'data': operation.data,
+        };
       case OperationType.updateProduct:
-        final product = Product.fromMap(operation.data);
-        await FirestoreService.instance.updateProduct(product);
-        break;
+        return {
+          'type': 'update',
+          'collection': operation.collectionName,
+          'docId': operation.documentId,
+          'data': operation.data,
+        };
       case OperationType.insertCustomer:
-        final customer = Customer.fromMap(operation.data);
-        await FirestoreService.instance.insertCustomer(customer);
-        break;
+        return {
+          'type': 'insert',
+          'collection': operation.collectionName,
+          'data': operation.data,
+        };
       case OperationType.updateCustomer:
-        final customer = Customer.fromMap(operation.data);
-        await FirestoreService.instance.updateCustomer(customer);
-        break;
+        return {
+          'type': 'update',
+          'collection': operation.collectionName,
+          'docId': operation.documentId,
+          'data': operation.data,
+        };
       case OperationType.insertSale:
-        final sale = Sale.fromMap(operation.data);
-        await FirestoreService.instance.insertSale(sale);
-        break;
+        return {
+          'type': 'insert',
+          'collection': operation.collectionName,
+          'data': operation.data,
+        };
       case OperationType.insertCreditTransaction:
-        final transaction = CreditTransaction.fromMap(operation.data);
-        await FirestoreService.instance.insertCreditTransaction(transaction);
-        break;
+        return {
+          'type': 'insert',
+          'collection': operation.collectionName,
+          'data': operation.data,
+        };
       case OperationType.updateCustomerBalance:
-        final customerId = operation.data['customerId'] as String;
-        final amountChange = operation.data['amountChange'] as double;
-        await FirestoreService.instance.updateCustomerBalance(
-          customerId,
-          amountChange,
-        );
-        break;
+        return {
+          'type': 'update',
+          'collection': operation.collectionName,
+          'docId': operation.documentId,
+          'data': operation.data,
+        };
     }
   }
 
-  /// Persistent storage management for operation queue
-  Future<void> _savePendingOperations() async {
+  Future<void> _loadPendingOperationsFromDb() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final operationsJson = _pendingOperations
-          .map((op) => op.toJson())
-          .toList();
-      await prefs.setString('pending_operations', jsonEncode(operationsJson));
+      final db = await _localDatabaseService.database;
+      final List<Map<String, dynamic>> maps = await db.query('offline_operations');
+      _pendingOperations = List.generate(maps.length, (i) {
+        return OfflineOperation.fromMap(maps[i]);
+      });
+      notifyListeners();
     } catch (e) {
       ErrorLogger.logError(
-        'Error saving pending operations',
+        'Error loading pending operations from DB',
         error: e,
-        context: 'OfflineManager._savePendingOperations',
-      );
-    }
-  }
-
-  /// Load operations from persistent storage on app startup
-  Future<void> _loadPendingOperations() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final operationsJson = prefs.getString('pending_operations');
-
-      if (operationsJson != null) {
-        final operationsList = jsonDecode(operationsJson) as List;
-        _pendingOperations.clear();
-        _pendingOperations.addAll(
-          operationsList.map(
-            (json) => OfflineOperation.fromJson(json as Map<String, dynamic>),
-          ),
-        );
-      }
-
-      // Load last sync time
-      final lastSyncString = prefs.getString('last_sync_time');
-      if (lastSyncString != null) {
-        _lastSyncTime = DateTime.parse(lastSyncString);
-      }
-    } catch (e) {
-      ErrorLogger.logError(
-        'Error loading pending operations',
-        error: e,
-        context: 'OfflineManager._loadPendingOperations',
+        context: 'OfflineManager._loadPendingOperationsFromDb',
       );
     }
   }
@@ -412,13 +446,34 @@ class OfflineManager with ChangeNotifier {
   }
 
   Future<void> clearPendingOperations() async {
-    _pendingOperations.clear();
-    await _savePendingOperations();
-    notifyListeners();
-    ErrorLogger.logInfo(
-      'Pending operations cleared',
-      context: 'OfflineManager.clearPendingOperations',
+    try {
+      final db = await _localDatabaseService.database;
+      await db.delete('offline_operations');
+      _pendingOperations.clear();
+      notifyListeners();
+      ErrorLogger.logInfo(
+        'Pending operations cleared',
+        context: 'OfflineManager.clearPendingOperations',
+      );
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error clearing pending operations',
+        error: e,
+        context: 'OfflineManager.clearPendingOperations',
+      );
+    }
+  }
+
+  Future<List<Sale>> getPendingSales() async {
+    final db = await _localDatabaseService.database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'offline_operations',
+      where: 'operation_type = ?',
+      whereArgs: ['insertSale'],
     );
+    return List.generate(maps.length, (i) {
+      return Sale.fromMap(jsonDecode(maps[i]['data']));
+    });
   }
 
   @override
@@ -447,35 +502,72 @@ enum OperationType {
 /// - Serialized data payload with all necessary information
 /// - Timestamp for chronological processing and conflict resolution
 class OfflineOperation {
+  final int? dbId;
   final String id;
   final OperationType type;
+  final String collectionName;
+  final String? documentId;
   final Map<String, dynamic> data;
   final DateTime timestamp;
+  final int retryCount;
 
   OfflineOperation({
-    required this.id,
+    this.dbId,
+    String? id,
     required this.type,
+    required this.collectionName,
+    this.documentId,
     required this.data,
     required this.timestamp,
-  });
+    this.retryCount = 0,
+  }) : id = id ?? const Uuid().v4();
 
-  Map<String, dynamic> toJson() {
+  OfflineOperation copyWith({
+    int? dbId,
+    String? id,
+    OperationType? type,
+    String? collectionName,
+    String? documentId,
+    Map<String, dynamic>? data,
+    DateTime? timestamp,
+    int? retryCount,
+  }) {
+    return OfflineOperation(
+      dbId: dbId ?? this.dbId,
+      id: id ?? this.id,
+      type: type ?? this.type,
+      collectionName: collectionName ?? this.collectionName,
+      documentId: documentId ?? this.documentId,
+      data: data ?? this.data,
+      timestamp: timestamp ?? this.timestamp,
+      retryCount: retryCount ?? this.retryCount,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
     return {
-      'id': id,
-      'type': type.toString(),
-      'data': data,
+      'operation_id': id,
+      'operation_type': type.toString().split('.').last,
+      'collection_name': collectionName,
+      'document_id': documentId,
+      'data': jsonEncode(data),
       'timestamp': timestamp.toIso8601String(),
+      'retry_count': retryCount,
     };
   }
 
-  factory OfflineOperation.fromJson(Map<String, dynamic> json) {
+  factory OfflineOperation.fromMap(Map<String, dynamic> map) {
     return OfflineOperation(
-      id: json['id'] as String,
+      dbId: map['id'] as int,
+      id: map['operation_id'] as String,
       type: OperationType.values.firstWhere(
-        (e) => e.toString() == json['type'],
+            (e) => e.toString().split('.').last == map['operation_type'],
       ),
-      data: json['data'] as Map<String, dynamic>,
-      timestamp: DateTime.parse(json['timestamp'] as String),
+      collectionName: map['collection_name'] as String,
+      documentId: map['document_id'] as String?,
+      data: jsonDecode(map['data'] as String) as Map<String, dynamic>,
+      timestamp: DateTime.parse(map['timestamp'] as String),
+      retryCount: map['retry_count'] ?? 0,
     );
   }
 }

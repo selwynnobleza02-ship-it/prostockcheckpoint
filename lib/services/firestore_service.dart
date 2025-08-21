@@ -63,7 +63,7 @@ class FirestoreService {
   // Initialize Firestore with default data
   Future<void> initializeFirestore() async {
     try {
-      // Create initial admin user if it doesn't exist
+      // Create initial admin user if it doesn\'t exist
       final adminQuery = await users
           .where('username', isEqualTo: 'admin')
           .get();
@@ -78,7 +78,7 @@ class FirestoreService {
         });
       }
 
-      // Create initial regular user if it doesn't exist
+      // Create initial regular user if it doesn\'t exist
       final userQuery = await users.where('username', isEqualTo: 'user').get();
       if (userQuery.docs.isEmpty) {
         final hashedPassword = PasswordHelper.hashPassword('user123');
@@ -189,7 +189,7 @@ class FirestoreService {
         'details': details,
         'metadata': sanitizedMetadata,
         'timestamp': FieldValue.serverTimestamp(),
-        'ipAddress': 'hidden', // Don't log actual IP for privacy
+        'ipAddress': 'hidden', // Don\'t log actual IP for privacy
       });
     } catch (e) {
       throw FirestoreException('Failed to log activity: $e');
@@ -303,7 +303,7 @@ class FirestoreService {
   bool isValidEmail(String email) {
     if (email.isEmpty) return false;
     final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,',
     );
     return emailRegex.hasMatch(email);
   }
@@ -311,7 +311,7 @@ class FirestoreService {
   bool isValidPhoneNumber(String phone) {
     if (phone.isEmpty) return false;
     final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
-    final phoneRegex = RegExp(r'^\+?[1-9]\d{6,14}$');
+    final phoneRegex = RegExp(r'^\+?[1-9]\d{6,14');
     return phoneRegex.hasMatch(cleanPhone);
   }
 
@@ -1216,5 +1216,26 @@ class FirestoreService {
     } catch (e) {
       print('Firestore debug error: $e');
     }
+  }
+
+  Future<void> batchWrite(List<Map<String, dynamic>> operations) async {
+    final batch = _firestore.batch();
+
+    for (final operation in operations) {
+      final type = operation['type'];
+      final collection = operation['collection'];
+      final docId = operation['docId'];
+      final data = operation['data'];
+
+      if (type == 'insert') {
+        final docRef = _firestore.collection(collection).doc();
+        batch.set(docRef, data);
+      } else if (type == 'update') {
+        final docRef = _firestore.collection(collection).doc(docId);
+        batch.update(docRef, data);
+      }
+    }
+
+    await batch.commit();
   }
 }
