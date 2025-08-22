@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -200,6 +201,19 @@ class OfflineManager with ChangeNotifier {
   /// - Automatic retry mechanism for failed operations
   /// - Duplicate detection prevents redundant operations
   Future<void> queueOperation(OfflineOperation operation) async {
+    if (operation.type == OperationType.createSaleTransaction) {
+      final saleMap = operation.data['sale'] as Map<String, dynamic>;
+      final sale = Sale.fromMap(saleMap).copyWith(isSynced: 0);
+      final saleItems = (operation.data['saleItems'] as List)
+          .map((item) => SaleItem.fromMap(item as Map<String, dynamic>))
+          .toList();
+
+      await _localDatabaseService.insertSale(sale.toMap());
+      for (final item in saleItems) {
+        await _localDatabaseService.insertSaleItem(item.toMap());
+      }
+    }
+
     try {
       final db = await _localDatabaseService.database;
       await db.insert('offline_operations', operation.toMap());
@@ -242,70 +256,79 @@ class OfflineManager with ChangeNotifier {
     _isSyncing = true;
     notifyListeners();
 
-    try {
-      final operationsToSync = List<OfflineOperation>.from(_pendingOperations);
-      final List<Map<String, dynamic>> batchOperations = [];
-      List<int> successfulOperationIds = [];
-      List<OfflineOperation> failedOperations = [];
+    const int batchSize = 50;
+    final List<OfflineOperation> operationsToSync = List.from(_pendingOperations);
 
-      for (final operation in operationsToSync) {
-        try {
-          final batchOperation = _getBatchOperation(operation);
-          if (batchOperation != null) {
-            batchOperations.add(batchOperation);
-          }
-          successfulOperationIds.add(operation.dbId!);
-          _pendingOperations.remove(operation);
-          ErrorLogger.logInfo(
-            'Synced operation: ${operation.type} - ${operation.id}',
-            context: 'OfflineManager.syncPendingOperations',
-          );
-        } catch (e) {
-          ErrorLogger.logError(
-            'Failed to sync operation ${operation.id}',
-            error: e,
-            context: 'OfflineManager.syncPendingOperations',
-          );
-          if (operation.retryCount < maxRetries) {
-            final updatedOperation = operation.copyWith(
-              retryCount: operation.retryCount + 1,
+    try {
+      for (int i = 0; i < operationsToSync.length; i += batchSize) {
+        final List<OfflineOperation> batch = operationsToSync.sublist(
+            i,
+            i + batchSize > operationsToSync.length
+                ? operationsToSync.length
+                : i + batchSize);
+        final List<Map<String, dynamic>> batchOperations = [];
+        final List<int> successfulOperationIds = [];
+        final List<OfflineOperation> failedOperations = [];
+
+        for (final operation in batch) {
+          try {
+            final newBatchOperations = _getBatchOperations(operation);
+            batchOperations.addAll(newBatchOperations);
+            successfulOperationIds.add(operation.dbId!);
+            _pendingOperations.remove(operation);
+            ErrorLogger.logInfo(
+              'Synced operation: ${operation.type} - ${operation.id}',
+              context: 'OfflineManager.syncPendingOperations',
             );
-            failedOperations.add(updatedOperation);
-          } else {
-            // Move to dead letter queue or handle as a permanent failure
+          } catch (e) {
             ErrorLogger.logError(
-              'Operation ${operation.id} failed after $maxRetries retries',
+              'Failed to sync operation ${operation.id}',
               error: e,
               context: 'OfflineManager.syncPendingOperations',
             );
+            if (operation.retryCount < maxRetries) {
+              final updatedOperation = operation.copyWith(
+                retryCount: operation.retryCount + 1,
+              );
+              failedOperations.add(updatedOperation);
+            } else {
+              // Move to dead letter queue
+              await _moveToDeadLetterQueue(operation, e.toString());
+              successfulOperationIds.add(operation.dbId!);
+              ErrorLogger.logError(
+                'Operation ${operation.id} failed after $maxRetries retries',
+                error: e,
+                context: 'OfflineManager.syncPendingOperations',
+              );
+            }
           }
         }
-      }
 
-      if (batchOperations.isNotEmpty) {
-        await FirestoreService.instance.batchWrite(batchOperations);
-      }
+        if (batchOperations.isNotEmpty) {
+          await FirestoreService.instance.batchWrite(batchOperations);
+        }
 
-      final db = await _localDatabaseService.database;
-      if (successfulOperationIds.isNotEmpty) {
-        await db.delete(
-          'offline_operations',
-          where: 'id IN (?)',
-          whereArgs: [successfulOperationIds.join(',')],
-        );
-      }
-
-      if (failedOperations.isNotEmpty) {
-        final batch = db.batch();
-        for (final op in failedOperations) {
-          batch.update(
+        final db = await _localDatabaseService.database;
+        if (successfulOperationIds.isNotEmpty) {
+          await db.delete(
             'offline_operations',
-            op.toMap(),
-            where: 'id = ?',
-            whereArgs: [op.dbId],
+            where: 'id IN (?)',
+            whereArgs: [successfulOperationIds.join(',')],
           );
         }
-        await batch.commit(noResult: true);
+
+        if (failedOperations.isNotEmpty) {
+          final batchDb = db.batch();
+          for (final op in failedOperations) {
+            batchDb.update(
+              'offline_operations',
+              op.toMap(),
+              where: 'id = ?',
+              whereArgs: [op.dbId],
+            );
+          }
+          await batchDb.commit(noResult: true);
+        }
       }
 
       _lastSyncTime = DateTime.now();
@@ -322,6 +345,19 @@ class OfflineManager with ChangeNotifier {
     }
   }
 
+  Future<void> _moveToDeadLetterQueue(OfflineOperation operation, String error) async {
+    final db = await _localDatabaseService.database;
+    await db.insert('dead_letter_operations', {
+      'operation_id': operation.id,
+      'operation_type': operation.type.toString().split('.').last,
+      'collection_name': operation.collectionName,
+      'document_id': operation.documentId,
+      'data': jsonEncode(operation.data),
+      'timestamp': operation.timestamp.toIso8601String(),
+      'error': error,
+    });
+  }
+
   /// Operation Execution - Type-safe operation replay
   ///
   /// OPERATION TYPES:
@@ -333,53 +369,93 @@ class OfflineManager with ChangeNotifier {
   /// - Type validation before execution
   /// - Business rule enforcement
   /// - Atomic operation guarantee
-  Map<String, dynamic>? _getBatchOperation(OfflineOperation operation) {
+  List<Map<String, dynamic>> _getBatchOperations(OfflineOperation operation) {
     switch (operation.type) {
       case OperationType.insertProduct:
-        return {
+        return [{
           'type': 'insert',
           'collection': operation.collectionName,
           'data': operation.data,
-        };
+        }];
       case OperationType.updateProduct:
-        return {
+        return [{
           'type': 'update',
           'collection': operation.collectionName,
           'docId': operation.documentId,
           'data': operation.data,
-        };
+        }];
       case OperationType.insertCustomer:
-        return {
+        return [{
           'type': 'insert',
           'collection': operation.collectionName,
           'data': operation.data,
-        };
+        }];
       case OperationType.updateCustomer:
-        return {
+        return [{
           'type': 'update',
           'collection': operation.collectionName,
           'docId': operation.documentId,
           'data': operation.data,
-        };
-      case OperationType.insertSale:
-        return {
+        }];
+      case OperationType.createSaleTransaction:
+        final saleMap = operation.data['sale'] as Map<String, dynamic>;
+        final sale = Sale.fromMap(saleMap);
+        final saleItems = (operation.data['saleItems'] as List)
+            .map((item) => SaleItem.fromMap(item as Map<String, dynamic>))
+            .toList();
+
+        // Also save to local DB when syncing
+        unawaited(_localDatabaseService.insertSale(sale.copyWith(isSynced: 1).toMap()));
+        for (final item in saleItems) {
+          unawaited(_localDatabaseService.insertSaleItem(item.toMap()));
+        }
+
+        final List<Map<String, dynamic>> operations = [];
+
+        // Add sale insertion
+        operations.add({
           'type': 'insert',
-          'collection': operation.collectionName,
-          'data': operation.data,
-        };
+          'collection': 'sales',
+          'docId': sale.id,
+          'data': sale.toMap(),
+        });
+
+        // Add sale item insertions
+        for (final item in saleItems) {
+          operations.add({
+            'type': 'insert',
+            'collection': 'sale_items',
+            'docId': item.id,
+            'data': item.toMap(),
+          });
+        }
+
+        // Add stock updates
+        for (final item in saleItems) {
+          operations.add({
+            'type': 'update',
+            'collection': 'products',
+            'docId': item.productId,
+            'data': {
+              'stock': FieldValue.increment(-item.quantity),
+            },
+          });
+        }
+
+        return operations;
       case OperationType.insertCreditTransaction:
-        return {
+        return [{
           'type': 'insert',
           'collection': operation.collectionName,
           'data': operation.data,
-        };
+        }];
       case OperationType.updateCustomerBalance:
-        return {
+        return [{
           'type': 'update',
           'collection': operation.collectionName,
           'docId': operation.documentId,
           'data': operation.data,
-        };
+        }];
     }
   }
 
@@ -466,13 +542,12 @@ class OfflineManager with ChangeNotifier {
   Future<List<Sale>> getPendingSales() async {
     final db = await _localDatabaseService.database;
     final List<Map<String, dynamic>> maps = await db.query(
-      'offline_operations',
-      where: 'operation_type = ?',
-      whereArgs: ['insertSale'],
+      'sales',
+      where: 'is_synced = ?',
+      whereArgs: [0],
     );
     return List.generate(maps.length, (i) {
-      final data = jsonDecode(maps[i]['data']);
-      return Sale.fromMap(data['sale']);
+      return Sale.fromMap(maps[i]);
     });
   }
 
@@ -489,7 +564,7 @@ enum OperationType {
   updateProduct,
   insertCustomer,
   updateCustomer,
-  insertSale,
+  createSaleTransaction,
   insertCreditTransaction,
   updateCustomerBalance,
 }

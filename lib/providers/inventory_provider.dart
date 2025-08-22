@@ -16,8 +16,10 @@ class InventoryProvider with ChangeNotifier {
 
   final LocalDatabaseService _localDatabaseService =
       LocalDatabaseService.instance;
+  final OfflineManager _offlineManager;
 
-  InventoryProvider();
+  InventoryProvider({required OfflineManager offlineManager})
+      : _offlineManager = offlineManager;
 
   List<Product> get products => _products;
   bool get isLoading => _isLoading;
@@ -54,7 +56,7 @@ class InventoryProvider with ChangeNotifier {
 
       if (refresh ||
           localProducts.isEmpty ||
-          OfflineManager.instance.isOnline) {
+          _offlineManager.isOnline) {
         final result = await FirestoreService.instance.getProductsPaginated(
           limit: 50,
           lastDocument: null,
@@ -117,11 +119,11 @@ class InventoryProvider with ChangeNotifier {
       _products.add(newProduct);
       _reorderPoints[id.toString()] = (product.stock * 0.1).ceil().clamp(5, 50);
 
-      if (OfflineManager.instance.isOnline) {
+      if (_offlineManager.isOnline) {
         await FirestoreService.instance.insertProduct(product);
       } else {
         // Queue the operation for later synchronization
-        await OfflineManager.instance.queueOperation(
+        await _offlineManager.queueOperation(
           OfflineOperation(
             id: newProduct.id!,
             type: OperationType.insertProduct,
@@ -153,7 +155,7 @@ class InventoryProvider with ChangeNotifier {
     try {
       final db = await _localDatabaseService.database;
 
-      if (OfflineManager.instance.isOnline) {
+      if (_offlineManager.isOnline) {
         final existingProduct = await FirestoreService.instance.getProductById(
           product.id!,
         );
@@ -196,7 +198,7 @@ class InventoryProvider with ChangeNotifier {
           where: 'id = ?',
           whereArgs: [updatedProduct.id],
         );
-        await OfflineManager.instance.queueOperation(
+        await _offlineManager.queueOperation(
           OfflineOperation(
             id: updatedProduct.id!,
             type: OperationType.updateProduct,
@@ -267,7 +269,7 @@ class InventoryProvider with ChangeNotifier {
         whereArgs: [productId],
       );
 
-      if (OfflineManager.instance.isOnline) {
+      if (_offlineManager.isOnline) {
         await FirestoreService.instance.updateProduct(updatedProduct);
 
         // Record stock movement
@@ -279,7 +281,7 @@ class InventoryProvider with ChangeNotifier {
           reason ?? 'Manual adjustment',
         );
       } else {
-        await OfflineManager.instance.queueOperation(
+        await _offlineManager.queueOperation(
           OfflineOperation(
             id: updatedProduct.id!,
             type: OperationType.updateProduct,
@@ -321,7 +323,7 @@ class InventoryProvider with ChangeNotifier {
       if (maps.isNotEmpty) {
         return Product.fromMap(maps.first);
       } else {
-        if (OfflineManager.instance.isOnline) {
+        if (_offlineManager.isOnline) {
           // Try to get the product from Firestore using its barcode
           final product = await FirestoreService.instance.getProductByBarcode(
             barcode,
@@ -463,7 +465,7 @@ class InventoryProvider with ChangeNotifier {
         whereArgs: [productId],
       );
 
-      if (!offline && OfflineManager.instance.isOnline) {
+      if (!offline && _offlineManager.isOnline) {
         await FirestoreService.instance.updateProduct(updatedProduct);
 
         // Record stock movement
@@ -475,7 +477,7 @@ class InventoryProvider with ChangeNotifier {
           reason ?? 'Sale',
         );
       } else if (offline) {
-        await OfflineManager.instance.queueOperation(
+        await _offlineManager.queueOperation(
           OfflineOperation(
             id: updatedProduct.id!,
             type: OperationType.updateProduct,

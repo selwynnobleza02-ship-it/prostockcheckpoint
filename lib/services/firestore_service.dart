@@ -633,21 +633,36 @@ class FirestoreService {
         throw ArgumentError('Invalid sale data');
       }
 
-      final batch = _firestore.batch();
+      return await _firestore.runTransaction((transaction) async {
+        // 1. Read all product documents first.
+        final productRefs = products.map((p) => this.products.doc(p.id)).toList();
+        final productDocs = await Future.wait(productRefs.map((ref) => transaction.get(ref)));
 
-      final saleData = sale.toMap();
-      saleData.remove('id');
-      final saleRef = sales.doc();
-      batch.set(saleRef, saleData);
+        // 2. Validate products and prepare updates.
+        for (int i = 0; i < products.length; i++) {
+          final productDoc = productDocs[i];
+          if (!productDoc.exists) {
+            throw Exception('Product with ID ${products[i].id} not found');
+          }
+          final currentStock = (productDoc.data() as Map<String, dynamic>)['stock'] ?? 0;
+          if (currentStock <= 0) {
+            throw Exception('Product with ID ${products[i].id} is out of stock');
+          }
+        }
 
-      for (final product in products) {
-        final productRef = this.products.doc(product.id);
-        batch.update(productRef, {'stock': FieldValue.increment(-1)});
-      }
+        // 3. Perform all write operations.
+        final saleRef = sales.doc();
+        final saleData = sale.toMap();
+        saleData.remove('id');
+        transaction.set(saleRef, saleData);
 
-      await batch.commit();
+        for (int i = 0; i < products.length; i++) {
+          final productRef = productRefs[i];
+          transaction.update(productRef, {'stock': FieldValue.increment(-1)});
+        }
 
-      return saleRef.id;
+        return saleRef.id;
+      });
     } catch (e) {
       throw FirestoreException('Failed to insert sale: $e');
     }
@@ -1067,7 +1082,8 @@ class FirestoreService {
   }
 
   Future<List<UserActivity>> getUserActivities(
-    String userId, {
+    String userId,
+    {
     int limit = 100,
   }) async {
     try {

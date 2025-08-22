@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/utils/global_error_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:prostock/services/background_sync_service.dart';
@@ -18,6 +19,7 @@ import 'package:background_fetch/background_fetch.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  GlobalErrorHandler.initialize();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await OfflineManager.instance.initialize();
@@ -38,7 +40,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: OfflineManager.instance),
         ChangeNotifierProvider(
           create: (context) {
-            final inventoryProvider = InventoryProvider();
+            final inventoryProvider = InventoryProvider(
+              offlineManager: context.read<OfflineManager>(),
+            );
             inventoryProvider.loadProducts(); // Load products when provider is created
             return inventoryProvider;
           },

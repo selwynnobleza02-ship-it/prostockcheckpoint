@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/sales_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/customer_provider.dart';
+import '../services/local_database_service.dart';
 import '../widgets/inventory_chart.dart';
 import '../utils/currency_utils.dart';
 import '../widgets/receipt_dialog.dart';
@@ -25,6 +26,15 @@ class _ReportsScreenState extends State<ReportsScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  void _loadData() {
+    Provider.of<SalesProvider>(context, listen: false).loadSales(refresh: true);
+    Provider.of<CustomerProvider>(context, listen: false)
+        .loadCustomers(refresh: true);
+    Provider.of<InventoryProvider>(context, listen: false)
+        .loadProducts(refresh: true);
   }
 
   @override
@@ -530,9 +540,15 @@ class _ReportsScreenState extends State<ReportsScreen>
         builder: (context) => const Center(child: CircularProgressIndicator()),
       );
 
-      final saleItems = await FirestoreService.instance.getSaleItemsBySaleId(
-        sale.id!,
-      );
+      List<SaleItem> saleItems = [];
+      if (sale.isSynced == 1) {
+        saleItems = await FirestoreService.instance.getSaleItemsBySaleId(
+          sale.id!,
+        );
+      } else {
+        final localItems = await LocalDatabaseService.instance.getSaleItems(sale.id!);
+        saleItems = localItems.map((item) => SaleItem.fromMap(item)).toList();
+      }
 
       // Get customer info if available
       String? customerName;

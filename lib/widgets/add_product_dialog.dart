@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/utils/error_logger.dart';
 import 'package:provider/provider.dart';
 import '../providers/inventory_provider.dart';
 import '../models/product.dart';
@@ -328,7 +329,12 @@ class _AddProductDialogState extends State<AddProductDialog> {
           ),
         );
       }
-    } on FormatException {
+    } on FormatException catch (e, s) {
+      ErrorLogger.logError(
+        'Invalid number format in add product dialog',
+        error: e,
+        stackTrace: s,
+      );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -338,7 +344,12 @@ class _AddProductDialogState extends State<AddProductDialog> {
           ),
         );
       }
-    } on ArgumentError catch (e) {
+    } on ArgumentError catch (e, s) {
+      ErrorLogger.logError(
+        'Invalid argument in add product dialog',
+        error: e,
+        stackTrace: s,
+      );
       // Catch ArgumentError from model validation
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -349,7 +360,12 @@ class _AddProductDialogState extends State<AddProductDialog> {
           ),
         );
       }
-    } catch (e) {
+    } catch (e, s) {
+      ErrorLogger.logError(
+        'Error adding product',
+        error: e,
+        stackTrace: s,
+      );
       if (mounted) {
         String errorMessage = 'Error adding product';
 

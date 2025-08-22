@@ -12,6 +12,7 @@ import 'customers_screen.dart';
 import 'reports_screen.dart';
 import '../widgets/barcode_scanner_widget.dart';
 import '../utils/currency_utils.dart';
+import 'package:prostock/services/offline_manager.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -119,6 +120,25 @@ class DashboardHome extends StatelessWidget {
       appBar: AppBar(
         title: const Text('Dashboard'),
         actions: [
+          Consumer<OfflineManager>(
+            builder: (context, offlineManager, child) {
+              return Row(
+                children: [
+                  Icon(
+                    Icons.circle,
+                    size: 12,
+                    color: offlineManager.isOnline ? Colors.green : Colors.red,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    offlineManager.isOnline ? 'Online' : 'Offline',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+                  const SizedBox(width: 8),
+                ],
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.notifications),
             onPressed: () {

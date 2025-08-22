@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:uuid/uuid.dart';
 import '../models/sale.dart';
@@ -44,7 +45,7 @@ class SalesProvider with ChangeNotifier {
   bool _hasMoreData = true;
 
   SalesProvider({required InventoryProvider inventoryProvider})
-    : _inventoryProvider = inventoryProvider;
+      : _inventoryProvider = inventoryProvider;
 
   List<Sale> get sales => _sales;
   List<SaleItem> get currentSaleItems => _currentSaleItems;
@@ -112,16 +113,20 @@ class SalesProvider with ChangeNotifier {
         onlineSales = result.items;
         _lastDocument = result.lastDocument;
         _hasMoreData = result.items.length == _pageSize;
+      } else {
+        final localSalesData = await LocalDatabaseService.instance.getSales();
+        _sales = localSalesData.map((e) => Sale.fromMap(e)).toList();
+        _isLoading = false;
+        notifyListeners();
+        return;
       }
 
-      final offlineSales = await OfflineManager.instance.getPendingSales();
+      final pendingSales = await OfflineManager.instance.getPendingSales();
 
       final Map<String, Sale> mergedSalesMap = {
         for (var s in onlineSales) s.id!: s,
+        for (var s in pendingSales) s.id!: s,
       };
-      for (var s in offlineSales) {
-        mergedSalesMap[s.id!] = s;
-      }
 
       _sales = mergedSalesMap.values.toList();
       _sales.sort((a, b) => b.createdAt.compareTo(a.createdAt));
@@ -402,13 +407,13 @@ class SalesProvider with ChangeNotifier {
 
         final List<Map<String, dynamic>> saleItems = [];
         for (final item in _currentSaleItems) {
-          saleItems.add(item.toMap());
+          saleItems.add(item.copyWith(saleId: saleId).toMap());
         }
 
         await OfflineManager.instance.queueOperation(
           OfflineOperation(
             id: offlineSale.id!,
-            type: OperationType.insertSale,
+            type: OperationType.createSaleTransaction,
             collectionName: 'sales',
             documentId: offlineSale.id,
             data: {
@@ -419,8 +424,13 @@ class SalesProvider with ChangeNotifier {
           ),
         );
 
-        for (final product in productsInSale) {
-          await _inventoryProvider.reduceStock(product.id!, 1, offline: true);
+        // Reduce stock locally
+        for (final item in _currentSaleItems) {
+          await _inventoryProvider.reduceStock(
+            item.productId,
+            item.quantity,
+            offline: true,
+          );
         }
 
         final List<ReceiptItem> receiptItems = [];

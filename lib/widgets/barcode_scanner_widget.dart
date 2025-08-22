@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:prostock/utils/error_logger.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../providers/inventory_provider.dart';
@@ -70,7 +71,12 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
       });
 
       await cameraController.start();
-    } catch (e) {
+    } catch (e, s) {
+      ErrorLogger.logError(
+        'Failed to initialize camera',
+        error: e,
+        stackTrace: s,
+      );
       setState(() {
         _errorMessage = 'Failed to initialize camera: $e';
         _isInitializing = false;
@@ -109,7 +115,12 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                     setState(() {
                       _isTorchOn = !_isTorchOn;
                     });
-                  } catch (e) {
+                  } catch (e, s) {
+                    ErrorLogger.logError(
+                      'Torch toggle error',
+                      error: e,
+                      stackTrace: s,
+                    );
                     // Handle error silently or show snackbar
                     print('Torch toggle error: $e');
                   }
@@ -133,7 +144,12 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                     setState(() {
                       _isBackCamera = !_isBackCamera;
                     });
-                  } catch (e) {
+                  } catch (e, s) {
+                    ErrorLogger.logError(
+                      'Camera switch error',
+                      error: e,
+                      stackTrace: s,
+                    );
                     // Handle error silently or show snackbar
                     print('Camera switch error: $e');
                   }
@@ -747,7 +763,12 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
   void dispose() {
     try {
       cameraController.dispose();
-    } catch (e) {
+    } catch (e, s) {
+      ErrorLogger.logError(
+        'Error disposing camera controller',
+        error: e,
+        stackTrace: s,
+      );
       // Handle disposal error silently
     }
     super.dispose();

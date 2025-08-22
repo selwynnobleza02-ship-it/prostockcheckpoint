@@ -5,6 +5,7 @@ class Sale {
   final String paymentMethod;
   final String status;
   final DateTime createdAt;
+  final int isSynced;
 
   Sale({
     this.id,
@@ -13,6 +14,7 @@ class Sale {
     required this.paymentMethod,
     required this.status,
     required this.createdAt,
+    this.isSynced = 0,
   }) {
     _validateSale();
   }
@@ -54,6 +56,7 @@ class Sale {
       'payment_method': paymentMethod,
       'status': status,
       'created_at': createdAt.toIso8601String(),
+      'is_synced': isSynced,
     };
   }
 
@@ -71,6 +74,7 @@ class Sale {
       createdAt: DateTime.parse(
         map['created_at'] ?? DateTime.now().toIso8601String(),
       ),
+      isSynced: map['is_synced'] ?? 0,
     );
   }
 
@@ -81,6 +85,7 @@ class Sale {
     String? paymentMethod,
     String? status,
     DateTime? createdAt,
+    int? isSynced,
   }) {
     return Sale(
       id: id ?? this.id,
@@ -89,6 +94,7 @@ class Sale {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      isSynced: isSynced ?? this.isSynced,
     );
   }
 }
@@ -154,6 +160,24 @@ class SaleItem {
       quantity: map['quantity'] ?? 0,
       unitPrice: (map['unit_price'] ?? 0).toDouble(),
       totalPrice: (map['total_price'] ?? 0).toDouble(),
+    );
+  }
+
+  SaleItem copyWith({
+    String? id,
+    String? saleId,
+    String? productId,
+    int? quantity,
+    double? unitPrice,
+    double? totalPrice,
+  }) {
+    return SaleItem(
+      id: id ?? this.id,
+      saleId: saleId ?? this.saleId,
+      productId: productId ?? this.productId,
+      quantity: quantity ?? this.quantity,
+      unitPrice: unitPrice ?? this.unitPrice,
+      totalPrice: totalPrice ?? this.totalPrice,
     );
   }
 }

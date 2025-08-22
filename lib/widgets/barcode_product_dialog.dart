@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/utils/error_logger.dart';
 import 'package:provider/provider.dart';
 import '../providers/inventory_provider.dart';
 import '../models/product.dart';
@@ -396,8 +397,13 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
             Navigator.pop(context, true);
           }
         });
-      }
-    } catch (e) {
+      } 
+    } catch (e, s) {
+      ErrorLogger.logError(
+        'Error adding product from barcode',
+        error: e,
+        stackTrace: s,
+      );
       if (mounted) {
         setState(() {
           _isLoading = false;

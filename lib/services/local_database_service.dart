@@ -19,7 +19,7 @@ class LocalDatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 6, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return await openDatabase(path, version: 7, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -45,6 +45,9 @@ class LocalDatabaseService {
           break;
         case 5:
           await db.execute('ALTER TABLE offline_operations ADD COLUMN operation_id TEXT');
+          break;
+        case 6:
+          await _createSalesTables(db);
           break;
       }
     }
@@ -78,5 +81,66 @@ class LocalDatabaseService {
         retry_count INTEGER DEFAULT 0
       )
       ''');
+    await db.execute('''
+      CREATE TABLE dead_letter_operations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        operation_id TEXT,
+        operation_type TEXT NOT NULL,
+        collection_name TEXT NOT NULL,
+        document_id TEXT,
+        data TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        error TEXT NOT NULL
+      )
+      ''');
+    await _createSalesTables(db);
+  }
+
+  Future<void> _createSalesTables(Database db) async {
+    await db.execute('''
+    CREATE TABLE sales (
+      id TEXT PRIMARY KEY,
+      customer_id TEXT,
+      total_amount REAL NOT NULL,
+      payment_method TEXT NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      is_synced INTEGER DEFAULT 0
+    )
+    ''');
+
+    await db.execute('''
+    CREATE TABLE sale_items (
+      id TEXT PRIMARY KEY,
+      sale_id TEXT NOT NULL,
+      product_id TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      unit_price REAL NOT NULL,
+      total_price REAL NOT NULL,
+      FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE
+    )
+    ''');
+  }
+
+  Future<void> insertSale(Map<String, dynamic> saleData) async {
+    final db = await instance.database;
+    await db.insert('sales', saleData,
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> insertSaleItem(Map<String, dynamic> saleItemData) async {
+    final db = await instance.database;
+    await db.insert('sale_items', saleItemData,
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Map<String, dynamic>>> getSales() async {
+    final db = await instance.database;
+    return await db.query('sales', orderBy: 'created_at DESC');
+  }
+
+  Future<List<Map<String, dynamic>>> getSaleItems(String saleId) async {
+    final db = await instance.database;
+    return await db.query('sale_items', where: 'sale_id = ?', whereArgs: [saleId]);
   }
 }
