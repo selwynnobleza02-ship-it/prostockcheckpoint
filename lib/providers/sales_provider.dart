@@ -97,41 +97,43 @@ class SalesProvider with ChangeNotifier {
 
     _isLoading = true;
     _error = null;
-    _hasMoreData = true;
-    _lastDocument = null;
+    if (refresh) {
+      _hasMoreData = true;
+      _lastDocument = null;
+    }
     notifyListeners();
 
     try {
+      // Fetch online sales if connected
       List<Sale> onlineSales = [];
       if (OfflineManager.instance.isOnline) {
         final result = await FirestoreService.instance.getSalesPaginated(
           limit: _pageSize,
-          lastDocument: null,
+          lastDocument: _lastDocument,
           startDate: startDate,
           endDate: endDate,
         );
         onlineSales = result.items;
         _lastDocument = result.lastDocument;
         _hasMoreData = result.items.length == _pageSize;
-      } else {
-        final localSalesData = await LocalDatabaseService.instance.getSales();
-        _sales = localSalesData.map((e) => Sale.fromMap(e)).toList();
-        _isLoading = false;
-        notifyListeners();
-        return;
       }
 
+      // Fetch local and pending sales
+      final localSalesData = await LocalDatabaseService.instance.getSales();
+      final localSales = localSalesData.map((e) => Sale.fromMap(e)).toList();
       final pendingSales = await OfflineManager.instance.getPendingSales();
 
+      // Merge all sales data
       final Map<String, Sale> mergedSalesMap = {
         for (var s in onlineSales) s.id!: s,
-        for (var s in pendingSales) s.id!: s,
+        for (var s in localSales) s.id!: s, // Local data can be overwritten by online data
+        for (var s in pendingSales) s.id!: s, // Pending data should be prioritized
       };
 
       _sales = mergedSalesMap.values.toList();
       _sales.sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
-      // Cache the data
+      // Cache the merged data
       _setCachedData(cacheKey, _sales);
     } catch (e) {
       _error = 'Failed to load sales: ${e.toString()}';

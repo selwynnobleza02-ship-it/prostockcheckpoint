@@ -29,12 +29,13 @@ class _ReportsScreenState extends State<ReportsScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
-  void _loadData() {
-    Provider.of<SalesProvider>(context, listen: false).loadSales(refresh: true);
-    Provider.of<CustomerProvider>(context, listen: false)
-        .loadCustomers(refresh: true);
-    Provider.of<InventoryProvider>(context, listen: false)
-        .loadProducts(refresh: true);
+  Future<void> _loadData({bool refresh = false}) async {
+    await Provider.of<SalesProvider>(context, listen: false)
+        .loadSales(refresh: refresh);
+    await Provider.of<CustomerProvider>(context, listen: false)
+        .loadCustomers(refresh: refresh);
+    await Provider.of<InventoryProvider>(context, listen: false)
+        .loadProducts(refresh: refresh);
   }
 
   @override
@@ -86,80 +87,84 @@ class _ReportsScreenState extends State<ReportsScreen>
             })
             .fold(0.0, (sum, sale) => sum + sale.totalAmount);
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Sales Summary Cards
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Today\'s Sales',
-                      CurrencyUtils.formatCurrency(todaySales),
-                      Icons.today,
-                      Colors.green,
+        return RefreshIndicator(
+          onRefresh: () => _loadData(refresh: true),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Sales Summary Cards
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildSummaryCard(
+                        'Today\'s Sales',
+                        CurrencyUtils.formatCurrency(todaySales),
+                        Icons.today,
+                        Colors.green,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Total Sales',
-                      CurrencyUtils.formatCurrency(totalSales),
-                      Icons.attach_money,
-                      Colors.blue,
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: _buildSummaryCard(
+                        'Total Sales',
+                        CurrencyUtils.formatCurrency(totalSales),
+                        Icons.attach_money,
+                        Colors.blue,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
+                  ],
+                ),
+                const SizedBox(height: 24),
 
-              // Recent Sales
-              const Text(
-                'Recent Sales',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
+                // Recent Sales
+                const Text(
+                  'Recent Sales',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 16),
 
-              if (provider.sales.isEmpty)
-                const Center(child: Text('No sales recorded yet'))
-              else
-                ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: provider.sales.take(10).length,
-                  itemBuilder: (context, index) {
-                    final sale = provider.sales[index];
-                    return Card(
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: Colors.green,
-                          child: Text(
-                            '₱',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                if (provider.sales.isEmpty)
+                  const Center(child: Text('No sales recorded yet'))
+                else
+                  ListView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: provider.sales.take(10).length,
+                    itemBuilder: (context, index) {
+                      final sale = provider.sales[index];
+                      return Card(
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.green,
+                            child: Text(
+                              '₱',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
-                        title: Text('Sale #${sale.id}'),
-                        subtitle: Text(
-                          '${sale.createdAt.day}/${sale.createdAt.month}/${sale.createdAt.year} - ${sale.paymentMethod}',
-                        ),
-                        trailing: Text(
-                          CurrencyUtils.formatCurrency(sale.totalAmount),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: Colors.green,
+                          title: Text('Sale #${sale.id}'),
+                          subtitle: Text(
+                            '${sale.createdAt.day}/${sale.createdAt.month}/${sale.createdAt.year} - ${sale.paymentMethod}',
                           ),
+                          trailing: Text(
+                            CurrencyUtils.formatCurrency(sale.totalAmount),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green,
+                            ),
+                          ),
+                          onTap: () => _showHistoricalReceipt(context, sale),
                         ),
-                        onTap: () => _showHistoricalReceipt(context, sale),
-                      ),
-                    );
-                  },
-                ),
-            ],
+                      );
+                    },
+                  ),
+              ],
+            ),
           ),
         );
       },

@@ -68,7 +68,7 @@ dev_dependencies:
   plugin_platform_interface: ^2.1.8
   fake_cloud_firestore: any
   firebase_auth_mocks: any
-  flutter_launcher_icons: ^0.13.1
+  flutter_launcher_icons: ^0.14.4
 
 flutter_icons:
   android: true
