@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:prostock/models/loss.dart';
 import '../models/product.dart';
 import '../models/customer.dart';
 import '../models/sale.dart';
@@ -55,6 +56,8 @@ class FirestoreService {
       _firestore.collection(AppConstants.stockMovementsCollection);
   CollectionReference get errorLogs =>
       _firestore.collection(AppConstants.errorLogsCollection);
+  CollectionReference get losses =>
+      _firestore.collection(AppConstants.lossesCollection);
 
   // Authentication
   User? get currentUser => _auth.currentUser;
@@ -212,6 +215,7 @@ class FirestoreService {
       AppConstants.saleItemsCollection,
       AppConstants.stockMovementsCollection,
       AppConstants.errorLogsCollection,
+      AppConstants.lossesCollection,
     ];
     if (!validCollections.contains(collection)) {
       throw ArgumentError('Unauthorized collection access: $collection');
@@ -1270,5 +1274,30 @@ class FirestoreService {
     }
 
     await batch.commit();
+  }
+
+  Future<void> insertLoss(Loss loss) async {
+    try {
+      final lossData = loss.toMap();
+      lossData.remove('id');
+
+      await addDocument(AppConstants.lossesCollection, lossData);
+    } catch (e) {
+      throw FirestoreException('Failed to insert loss: $e');
+    }
+  }
+
+  Future<List<Loss>> getLosses() async {
+    try {
+      final snapshot = await losses.orderBy('timestamp', descending: true).get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        return Loss.fromMap(data);
+      }).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to get losses: $e');
+    }
   }
 }

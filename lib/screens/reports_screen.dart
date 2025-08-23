@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/models/loss.dart';
 import 'package:provider/provider.dart';
 import '../providers/sales_provider.dart';
 import '../providers/inventory_provider.dart';
@@ -21,6 +22,7 @@ class ReportsScreen extends StatefulWidget {
 class _ReportsScreenState extends State<ReportsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  List<Loss> _losses = [];
 
   @override
   void initState() {
@@ -36,6 +38,10 @@ class _ReportsScreenState extends State<ReportsScreen>
         .loadCustomers(refresh: refresh);
     await Provider.of<InventoryProvider>(context, listen: false)
         .loadProducts(refresh: refresh);
+    final losses = await FirestoreService.instance.getLosses();
+    setState(() {
+      _losses = losses;
+    });
   }
 
   @override
@@ -61,7 +67,8 @@ class _ReportsScreenState extends State<ReportsScreen>
       ),
       body: TabBarView(
         controller: _tabController,
-        children: [
+        children:
+         [
           _buildSalesReport(),
           _buildInventoryReport(),
           _buildCustomersReport(),
@@ -383,7 +390,11 @@ class _ReportsScreenState extends State<ReportsScreen>
           0.0,
           (sum, product) => sum + (product.cost * product.stock),
         );
-        final totalProfit = totalRevenue - totalCost;
+        final totalLoss = _losses.fold(
+          0.0,
+          (sum, loss) => sum + loss.totalCost,
+        );
+        final totalProfit = totalRevenue - totalCost - totalLoss;
         final outstandingCredit = customers.customers.fold(
           0.0,
           (sum, c) => sum + c.currentBalance,

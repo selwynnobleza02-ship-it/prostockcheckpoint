@@ -456,6 +456,12 @@ class OfflineManager with ChangeNotifier {
           'docId': operation.documentId,
           'data': operation.data,
         }];
+      case OperationType.insertLoss:
+        return [{
+          'type': 'insert',
+          'collection': operation.collectionName,
+          'data': operation.data,
+        }];
     }
   }
 
@@ -567,6 +573,7 @@ enum OperationType {
   createSaleTransaction,
   insertCreditTransaction,
   updateCustomerBalance,
+  insertLoss,
 }
 
 /// Offline Operation Model - Serializable operation container

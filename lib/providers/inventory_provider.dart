@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/models/loss.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -462,6 +463,17 @@ class InventoryProvider with ChangeNotifier {
         return false;
       }
 
+      if (reason == 'Damage') {
+        final loss = Loss(
+          productId: productId,
+          quantity: quantity,
+          totalCost: product.cost * quantity,
+          reason: reason!,
+          timestamp: DateTime.now(),
+        );
+        await addLoss(loss);
+      }
+
       final newStock = product.stock - quantity;
       final updatedProduct = product.copyWith(
         stock: newStock,
@@ -517,6 +529,48 @@ class InventoryProvider with ChangeNotifier {
         context: 'InventoryProvider.reduceStock',
       );
       return false;
+    }
+  }
+
+  Future<void> addLoss(Loss loss) async {
+    try {
+      final db = await _localDatabaseService.database;
+      final lossId = const Uuid().v4();
+      final newLoss = Loss(
+        id: lossId,
+        productId: loss.productId,
+        quantity: loss.quantity,
+        totalCost: loss.totalCost,
+        reason: loss.reason,
+        timestamp: loss.timestamp,
+      );
+
+      await db.insert(
+        'losses',
+        newLoss.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      if (_offlineManager.isOnline) {
+        await FirestoreService.instance.insertLoss(newLoss);
+      } else {
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: newLoss.id!,
+            type: OperationType.insertLoss,
+            collectionName: 'losses',
+            documentId: newLoss.id,
+            data: newLoss.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error adding loss',
+        error: e,
+        context: 'InventoryProvider.addLoss',
+      );
     }
   }
 

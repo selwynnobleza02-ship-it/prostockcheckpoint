@@ -1,3 +1,4 @@
+import 'package:prostock/models/stock_update_result.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:prostock/utils/error_logger.dart';
@@ -516,25 +517,39 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     await cameraController.stop();
     if (!mounted) return;
 
-    final quantity = await _showStockUpdateDialog(
+    if (product.stock <= 0) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Out of Stock'),
+          content: Text('There is no more stock for ${product.name}.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      await cameraController.start();
+
+      return;
+    }
+
+    final result = await _showRemoveStockDialog(
       context: context,
       product: product,
-      title: 'Remove Stock: ${product.name}',
-      labelText: 'Quantity to Remove',
-      buttonText: 'Remove',
-      buttonColor: Colors.red,
-      validation: (qty) => qty > 0 && qty <= product.stock,
     );
 
-    if (quantity != null && quantity > 0) {
+    if (result != null && result.quantity > 0) {
       final inventoryProvider = Provider.of<InventoryProvider>(
         context,
         listen: false,
       );
       final success = await inventoryProvider.reduceStock(
         product.id!,
-        quantity,
-        reason: 'Stock removed via barcode scanner',
+        result.quantity,
+        reason: result.reason,
       );
 
       if (mounted) {
@@ -542,7 +557,9 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Removed $quantity units of ${product.name}'),
+              content: Text(
+                'Removed ${result.quantity} units of ${product.name}',
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -559,6 +576,86 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     } else {
       await cameraController.start();
     }
+  }
+
+  Future<StockUpdateResult?> _showRemoveStockDialog({
+    required BuildContext context,
+    required Product product,
+  }) async {
+    final quantityController = TextEditingController(text: '1');
+    String reason = 'Damage'; // Default reason
+
+    return await showDialog<StockUpdateResult>(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              title: Text('Remove Stock: ${product.name}'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('Current Stock: ${product.stock}'),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: quantityController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Quantity to Remove',
+                      border: OutlineInputBorder(),
+                    ),
+                    autofocus: true,
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    initialValue: reason,
+                    decoration: const InputDecoration(
+                      labelText: 'Reason for Removal',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: ['Damage', 'Miss stock']
+                        .map(
+                          (label) => DropdownMenuItem(
+                            value: label,
+                            child: Text(label),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          reason = value;
+                        });
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    final qty = int.tryParse(quantityController.text);
+                    if (qty != null && qty > 0 && qty <= product.stock) {
+                      Navigator.pop(
+                        context,
+                        StockUpdateResult(quantity: qty, reason: reason),
+                      );
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+                  child: const Text('Remove'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Future<int?> _showStockUpdateDialog({

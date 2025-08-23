@@ -19,7 +19,7 @@ class LocalDatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 7, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return await openDatabase(path, version: 8, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -48,6 +48,9 @@ class LocalDatabaseService {
           break;
         case 6:
           await _createSalesTables(db);
+          break;
+        case 7:
+          await _createLossesTable(db);
           break;
       }
     }
@@ -94,6 +97,7 @@ class LocalDatabaseService {
       )
       ''');
     await _createSalesTables(db);
+    await _createLossesTable(db);
   }
 
   Future<void> _createSalesTables(Database db) async {
@@ -120,6 +124,30 @@ class LocalDatabaseService {
       FOREIGN KEY (sale_id) REFERENCES sales (id) ON DELETE CASCADE
     )
     ''');
+  }
+
+  Future<void> _createLossesTable(Database db) async {
+    await db.execute('''
+    CREATE TABLE losses (
+      id TEXT PRIMARY KEY,
+      productId TEXT NOT NULL,
+      quantity INTEGER NOT NULL,
+      totalCost REAL NOT NULL,
+      reason TEXT NOT NULL,
+      timestamp TEXT NOT NULL
+    )
+    ''');
+  }
+
+  Future<void> insertLoss(Map<String, dynamic> lossData) async {
+    final db = await instance.database;
+    await db.insert('losses', lossData,
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<List<Map<String, dynamic>>> getLosses() async {
+    final db = await instance.database;
+    return await db.query('losses', orderBy: 'timestamp DESC');
   }
 
   Future<void> insertSale(Map<String, dynamic> saleData) async {
