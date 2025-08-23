@@ -263,7 +263,8 @@ class FirestoreService {
         _sanitizeData(value); // Recursively sanitize nested maps
       } else if (value is List) {
         // Handle lists that might contain maps or strings
-        for (int i = 0; i < value.length; i++) {
+        for (int i = 0; i < value.length;
+ i) {
           if (value[i] is String) {
             value[i] = const HtmlEscape().convert((value[i] as String).trim());
           } else if (value[i] is Map<String, dynamic>) {
@@ -303,7 +304,7 @@ class FirestoreService {
   bool isValidEmail(String email) {
     if (email.isEmpty) return false;
     final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,',
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
     );
     return emailRegex.hasMatch(email);
   }
@@ -316,16 +317,19 @@ class FirestoreService {
   }
 
   // Product operations
-  Future<String> insertProduct(Product product) async {
+  Future<void> insertProduct(Product product) async {
     try {
       if (!_isValidProduct(product)) {
         throw ArgumentError('Invalid product data');
       }
+      if (product.id == null || product.id!.isEmpty) {
+        throw ArgumentError('Product ID cannot be null or empty for insertion.');
+      }
 
       final productData = product.toMap();
-      productData.remove('id'); // Remove ID as Firestore generates it
 
-      return await addDocument(AppConstants.productsCollection, productData);
+      // Use the product\'s own ID to set the document, ensuring a single ID.
+      await products.doc(product.id).set(productData);
     } catch (e) {
       throw FirestoreException('Failed to insert product: $e');
     }
@@ -654,6 +658,7 @@ class FirestoreService {
         final saleRef = sales.doc();
         final saleData = sale.toMap();
         saleData.remove('id');
+        saleData['createdAt'] = Timestamp.fromDate(sale.createdAt); // Explicitly convert to Timestamp
         transaction.set(saleRef, saleData);
 
         for (int i = 0; i < products.length; i++) {
@@ -774,6 +779,7 @@ class FirestoreService {
       query = query.limit(limit);
 
       final snapshot = await query.get();
+      print('FirestoreService: Fetched ${snapshot.docs.length} sales documents.');
 
       final salesList = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;

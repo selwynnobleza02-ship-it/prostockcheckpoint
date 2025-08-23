@@ -451,6 +451,12 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     );
     final salesProvider = Provider.of<SalesProvider>(context, listen: false);
 
+    print('BarcodeScannerWidget: Scanned barcodeValue: $barcodeValue');
+    print('BarcodeScannerWidget: Products in inventory:');
+    for (var p in inventoryProvider.products) {
+      print('  - Product ID: ${p.id}, Barcode: ${p.barcode}, Name: ${p.name}');
+    }
+
     final existingProduct = inventoryProvider.products
         .where((product) => product.barcode == barcodeValue)
         .firstOrNull;
@@ -474,48 +480,15 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
 
   Future<void> _handleReceiveStock(Product product) async {
     await cameraController.stop();
-
     if (!mounted) return;
 
-    final quantityController = TextEditingController(text: '1');
-
-    final quantity = await showDialog<int>(
+    final quantity = await _showStockUpdateDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Receive Stock: ${product.name}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Current Stock: ${product.stock}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: quantityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Quantity to Receive',
-                border: OutlineInputBorder(),
-              ),
-              autofocus: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final qty = int.tryParse(quantityController.text);
-              if (qty != null && qty > 0) {
-                Navigator.pop(context, qty);
-              }
-            },
-            child: const Text('Receive'),
-          ),
-        ],
-      ),
+      product: product,
+      title: 'Receive Stock: ${product.name}',
+      labelText: 'Quantity to Receive',
+      buttonText: 'Receive',
+      validation: (qty) => qty > 0,
     );
 
     if (quantity != null && quantity > 0) {
@@ -541,49 +514,16 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
 
   Future<void> _handleRemoveStock(Product product) async {
     await cameraController.stop();
-
     if (!mounted) return;
 
-    final quantityController = TextEditingController(text: '1');
-
-    final quantity = await showDialog<int>(
+    final quantity = await _showStockUpdateDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Remove Stock: ${product.name}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Current Stock: ${product.stock}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: quantityController,
-              keyboardType: TextInputType.number,
-              decoration: const InputDecoration(
-                labelText: 'Quantity to Remove',
-                border: OutlineInputBorder(),
-              ),
-              autofocus: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final qty = int.tryParse(quantityController.text);
-              if (qty != null && qty > 0 && qty <= product.stock) {
-                Navigator.pop(context, qty);
-              }
-            },
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Remove'),
-          ),
-        ],
-      ),
+      product: product,
+      title: 'Remove Stock: ${product.name}',
+      labelText: 'Quantity to Remove',
+      buttonText: 'Remove',
+      buttonColor: Colors.red,
+      validation: (qty) => qty > 0 && qty <= product.stock,
     );
 
     if (quantity != null && quantity > 0) {
@@ -619,6 +559,60 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     } else {
       await cameraController.start();
     }
+  }
+
+  Future<int?> _showStockUpdateDialog({
+    required BuildContext context,
+    required Product product,
+    required String title,
+    required String labelText,
+    required String buttonText,
+    Color? buttonColor,
+    required bool Function(int) validation,
+  }) async {
+    final quantityController = TextEditingController(text: '1');
+
+    return await showDialog<int>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Current Stock: ${product.stock}'),
+            const SizedBox(height: 16),
+            TextField(
+              controller: quantityController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(
+                labelText: labelText,
+                border: const OutlineInputBorder(),
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final qty = int.tryParse(quantityController.text);
+              if (qty != null && validation(qty)) {
+                Navigator.pop(context, qty);
+              }
+            },
+            style: buttonColor != null
+                ? ElevatedButton.styleFrom(backgroundColor: buttonColor)
+                : null,
+            child: Text(buttonText),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _handleExistingProduct(

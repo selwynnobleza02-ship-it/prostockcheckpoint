@@ -116,12 +116,15 @@ class SalesProvider with ChangeNotifier {
         onlineSales = result.items;
         _lastDocument = result.lastDocument;
         _hasMoreData = result.items.length == _pageSize;
+        print('SalesProvider: Fetched ${onlineSales.length} online sales.');
       }
 
       // Fetch local and pending sales
       final localSalesData = await LocalDatabaseService.instance.getSales();
       final localSales = localSalesData.map((e) => Sale.fromMap(e)).toList();
       final pendingSales = await OfflineManager.instance.getPendingSales();
+      print('SalesProvider: Fetched ${localSales.length} local sales.');
+      print('SalesProvider: Fetched ${pendingSales.length} pending sales.');
 
       // Merge all sales data
       final Map<String, Sale> mergedSalesMap = {
@@ -132,6 +135,7 @@ class SalesProvider with ChangeNotifier {
 
       _sales = mergedSalesMap.values.toList();
       _sales.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      print('SalesProvider: Merged ${_sales.length} total sales.');
 
       // Cache the merged data
       _setCachedData(cacheKey, _sales);

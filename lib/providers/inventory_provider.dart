@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 import '../models/product.dart';
 import '../services/firestore_service.dart';
 import '../services/local_database_service.dart';
@@ -112,15 +113,25 @@ class InventoryProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final db = await _localDatabaseService.database;
-      final id = await db.insert('products', product.toMap());
+      // Generate a unique ID for the new product
+      final productId = const Uuid().v4();
+      final newProduct = product.copyWith(id: productId);
 
-      final newProduct = product.copyWith(id: id.toString());
+      final db = await _localDatabaseService.database;
+      // Insert into local DB with the generated ID
+      await db.insert(
+        'products',
+        newProduct.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
       _products.add(newProduct);
-      _reorderPoints[id.toString()] = (product.stock * 0.1).ceil().clamp(5, 50);
+      _reorderPoints[newProduct.id!] =
+          (newProduct.stock * 0.1).ceil().clamp(5, 50);
 
       if (_offlineManager.isOnline) {
-        await FirestoreService.instance.insertProduct(product);
+        // Insert into Firestore with the same generated ID
+        await FirestoreService.instance.insertProduct(newProduct);
       } else {
         // Queue the operation for later synchronization
         await _offlineManager.queueOperation(
@@ -129,7 +140,7 @@ class InventoryProvider with ChangeNotifier {
             type: OperationType.insertProduct,
             collectionName: 'products',
             documentId: newProduct.id,
-            data: product.toMap(),
+            data: newProduct.toMap(),
             timestamp: DateTime.now(),
           ),
         );
