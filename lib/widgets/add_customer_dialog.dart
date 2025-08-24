@@ -1,8 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:prostock/models/customer.dart';
+import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/utils/error_logger.dart';
 import 'package:provider/provider.dart';
-import '../providers/customer_provider.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 
 class AddCustomerDialog extends StatefulWidget {
   const AddCustomerDialog({super.key});
@@ -20,6 +24,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
   final _creditLimitController = TextEditingController(text: '0');
 
   bool _isLoading = false;
+  File? _imageFile;
 
   @override
   void dispose() {
@@ -29,6 +34,55 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     _addressController.dispose();
     _creditLimitController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      final pickedFile = await ImagePicker().pickImage(source: source);
+      if (pickedFile != null) {
+        setState(() {
+          _imageFile = File(pickedFile.path);
+        });
+      }
+    } catch (e, s) {
+      ErrorLogger.logError('Error picking image', error: e, stackTrace: s);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error picking image: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  void _showImageSourceActionSheet() {
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Wrap(
+          children: [
+            ListTile(
+              leading: const Icon(Icons.photo_library),
+              title: const Text('Gallery'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _pickImage(ImageSource.gallery);
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.camera_alt),
+              title: const Text('Camera'),
+              onTap: () {
+                Navigator.of(context).pop();
+                _pickImage(ImageSource.camera);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -43,6 +97,21 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                GestureDetector(
+                  onTap: _showImageSourceActionSheet,
+                  child: Container(
+                    width: double.infinity,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _imageFile != null
+                        ? Image.file(_imageFile!, fit: BoxFit.cover)
+                        : const Icon(Icons.add_a_photo, size: 50, color: Colors.grey),
+                  ),
+                ),
+                const SizedBox(height: 16),
                 // Customer Name
                 TextFormField(
                   controller: _nameController,
@@ -104,7 +173,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                   validator: (value) {
                     if (value != null && value.trim().isNotEmpty) {
                       if (!RegExp(
-                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}',
                       ).hasMatch(value.trim())) {
                         return 'Enter a valid email address';
                       }
@@ -234,6 +303,48 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     );
   }
 
+  Future<String?> _uploadImage(File imageFile) async {
+    try {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('customer_images')
+          .child('${DateTime.now().toIso8601String()}.jpg');
+      final uploadTask = storageRef.putFile(imageFile);
+      final snapshot = await uploadTask.whenComplete(() => {});
+      return await snapshot.ref.getDownloadURL();
+    } on FirebaseException catch (e, s) {
+      String message = 'An error occurred during image upload.';
+      if (e.code == 'object-not-found') {
+        message = 'The image could not be found.';
+      } else if (e.code == 'unauthorized') {
+        message = 'You do not have permission to upload images.';
+      } else if (e.code == 'canceled') {
+        message = 'Image upload was canceled.';
+      }
+      ErrorLogger.logError('Error uploading image', error: e, stackTrace: s);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return null;
+    } catch (e, s) {
+      ErrorLogger.logError('Error uploading image', error: e, stackTrace: s);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('An unknown error occurred during image upload.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return null;
+    }
+  }
+
   Future<void> _saveCustomer() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -242,6 +353,18 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     });
 
     try {
+      String? imageUrl;
+      if (_imageFile != null) {
+        imageUrl = await _uploadImage(_imageFile!);
+        if (imageUrl == null) {
+          // Handle upload failure
+          setState(() {
+            _isLoading = false;
+          });
+          return;
+        }
+      }
+
       // Safely parse credit limit
       final creditLimit = double.tryParse(_creditLimitController.text.trim());
       if (creditLimit == null) {
@@ -258,6 +381,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         phone: phone.isEmpty ? null : phone,
         email: email.isEmpty ? null : email,
         address: address.isEmpty ? null : address,
+        imageUrl: imageUrl,
         creditLimit: creditLimit,
         currentBalance: 0.0, // New customers start with zero balance
         createdAt: DateTime.now(),
@@ -321,17 +445,14 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         );
       }
     } catch (e, s) {
-      ErrorLogger.logError(
-        'Error adding customer',
-        error: e,
-        stackTrace: s,
-      );
+      ErrorLogger.logError('Error adding customer', error: e, stackTrace: s);
       if (mounted) {
         String errorMessage = 'Error adding customer';
 
         // Provide more specific error messages based on common issues
         if (e.toString().contains('already exists')) {
-          errorMessage = 'Customer with this name, phone, or email already exists.';
+          errorMessage =
+              'Customer with this name, phone, or email already exists.';
         } else if (e.toString().contains('network') ||
             e.toString().contains('connection')) {
           errorMessage = 'Network error. Please check your connection.';

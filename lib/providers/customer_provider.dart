@@ -144,6 +144,7 @@ class CustomerProvider with ChangeNotifier {
         phone: customer.phone,
         email: customer.email,
         address: customer.address,
+        imageUrl: customer.imageUrl,
         creditLimit: customer.creditLimit,
         currentBalance: customer.currentBalance,
         createdAt: customer.createdAt,

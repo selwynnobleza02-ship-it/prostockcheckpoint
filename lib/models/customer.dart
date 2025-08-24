@@ -4,6 +4,7 @@ class Customer {
   final String? phone;
   final String? email;
   final String? address;
+  final String? imageUrl;
   final double creditLimit;
   final double currentBalance;
   final DateTime createdAt;
@@ -15,6 +16,7 @@ class Customer {
     this.phone,
     this.email,
     this.address,
+    this.imageUrl,
     this.creditLimit = 0,
     this.currentBalance = 0,
     required this.createdAt,
@@ -49,15 +51,15 @@ class Customer {
 
   bool _isValidEmail(String email) {
     final emailRegex = RegExp(
-      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$',
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
     );
     return emailRegex.hasMatch(email);
   }
 
   bool _isValidPhoneNumber(String phone) {
     // Philippine phone number format validation
-    final phoneRegex = RegExp(r'^(\+63|0)[0-9]{10}$');
-    return phoneRegex.hasMatch(phone.replaceAll(RegExp(r'[\s\-$$$$]'), ''));
+    final phoneRegex = RegExp(r'^(\+63|0)[0-9]{10}');
+    return phoneRegex.hasMatch(phone.replaceAll(RegExp(r'[\s\-$]'), ''));
   }
 
   Map<String, dynamic> toMap() {
@@ -67,6 +69,7 @@ class Customer {
       'phone': phone,
       'email': email,
       'address': address,
+      'imageUrl': imageUrl,
       'credit_limit': creditLimit,
       'current_balance': currentBalance,
       'created_at': createdAt.toIso8601String(),
@@ -81,6 +84,7 @@ class Customer {
       phone: map['phone']?.toString(),
       email: map['email']?.toString(),
       address: map['address']?.toString(),
+      imageUrl: map['imageUrl']?.toString(),
       creditLimit: (map['credit_limit'] ?? 0).toDouble(),
       currentBalance: (map['current_balance'] ?? 0).toDouble(),
       createdAt: DateTime.parse(

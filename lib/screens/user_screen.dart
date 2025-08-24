@@ -83,6 +83,7 @@ class UserDashboard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -153,32 +154,36 @@ class UserDashboard extends StatelessWidget {
             ],
           ),
 
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildActionCard(
-                  context,
-                  'Receive Stock',
-                  'Scan items to add to inventory',
-                  Icons.add_box,
-                  Colors.green,
-                  () => _openBarcodeScanner(context, ScannerMode.receiveStock),
+          if (authProvider.isAdmin) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildActionCard(
+                    context,
+                    'Receive Stock',
+                    'Scan items to add to inventory',
+                    Icons.add_box,
+                    Colors.green,
+                    () =>
+                        _openBarcodeScanner(context, ScannerMode.receiveStock),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildActionCard(
-                  context,
-                  'Remove Stock',
-                  'Scan items to remove from inventory',
-                  Icons.remove_circle,
-                  Colors.red,
-                  () => _openBarcodeScanner(context, ScannerMode.removeStock),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildActionCard(
+                    context,
+                    'Remove Stock',
+                    'Scan items to remove from inventory',
+                    Icons.remove_circle,
+                    Colors.red,
+                    () =>
+                        _openBarcodeScanner(context, ScannerMode.removeStock),
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
 
           const SizedBox(height: 24),
 
@@ -424,6 +429,7 @@ class _StockManagementState extends State<StockManagement> {
 
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
     return Column(
       children: [
         // Header
@@ -445,40 +451,42 @@ class _StockManagementState extends State<StockManagement> {
                   setState(() => _searchQuery = value);
                 },
               ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () => _openBarcodeScanner(
-                        context,
-                        ScannerMode.receiveStock,
-                      ),
-                      icon: const Icon(Icons.add_box),
-                      label: const Text('Receive Stock'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      onPressed: () =>
-                          _openBarcodeScanner(context, ScannerMode.removeStock),
-                      icon: const Icon(Icons.remove_circle),
-                      label: const Text('Remove Stock'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.red,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 12),
+              if (authProvider.isAdmin) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openBarcodeScanner(
+                          context,
+                          ScannerMode.receiveStock,
+                        ),
+                        icon: const Icon(Icons.add_box),
+                        label: const Text('Receive Stock'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openBarcodeScanner(
+                            context, ScannerMode.removeStock),
+                        icon: const Icon(Icons.remove_circle),
+                        label: const Text('Remove Stock'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
@@ -490,17 +498,17 @@ class _StockManagementState extends State<StockManagement> {
               final products = _searchQuery.isEmpty
                   ? inventoryProvider.products
                   : inventoryProvider.products
-                        .where(
-                          (product) =>
-                              product.name.toLowerCase().contains(
-                                _searchQuery.toLowerCase(),
-                              ) ||
-                              (product.barcode?.toLowerCase().contains(
-                                    _searchQuery.toLowerCase(),
-                                  ) ??
-                                  false),
-                        )
-                        .toList();
+                      .where(
+                        (product) =>
+                            product.name.toLowerCase().contains(
+                              _searchQuery.toLowerCase(),
+                            ) ||
+                            (product.barcode?.toLowerCase().contains(
+                                  _searchQuery.toLowerCase(),
+                                ) ??
+                                false),
+                      )
+                      .toList();
 
               if (products.isEmpty) {
                 return const Center(
