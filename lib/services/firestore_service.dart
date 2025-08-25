@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:prostock/models/loss.dart';
 import '../models/product.dart';
+import '../models/price_history.dart';
 import '../models/customer.dart';
 import '../models/sale.dart';
 import '../models/credit_transaction.dart';
@@ -58,6 +59,8 @@ class FirestoreService {
       _firestore.collection(AppConstants.errorLogsCollection);
   CollectionReference get losses =>
       _firestore.collection(AppConstants.lossesCollection);
+  CollectionReference get priceHistory =>
+      _firestore.collection('priceHistory');
 
   // Authentication
   User? get currentUser => _auth.currentUser;
@@ -66,7 +69,7 @@ class FirestoreService {
   // Initialize Firestore with default data
   Future<void> initializeFirestore() async {
     try {
-      // Create initial admin user if it doesn\'t exist
+      // Create initial admin user if it doesn't exist
       final adminQuery = await users
           .where('username', isEqualTo: 'admin')
           .get();
@@ -81,7 +84,7 @@ class FirestoreService {
         });
       }
 
-      // Create initial regular user if it doesn\'t exist
+      // Create initial regular user if it doesn't exist
       final userQuery = await users.where('username', isEqualTo: 'user').get();
       if (userQuery.docs.isEmpty) {
         final hashedPassword = PasswordHelper.hashPassword('user123');
@@ -192,7 +195,7 @@ class FirestoreService {
         'details': details,
         'metadata': sanitizedMetadata,
         'timestamp': FieldValue.serverTimestamp(),
-        'ipAddress': 'hidden', // Don\'t log actual IP for privacy
+        'ipAddress': 'hidden', // Don't log actual IP for privacy
       });
     } catch (e) {
       throw FirestoreException('Failed to log activity: $e');
@@ -216,6 +219,7 @@ class FirestoreService {
       AppConstants.stockMovementsCollection,
       AppConstants.errorLogsCollection,
       AppConstants.lossesCollection,
+      'priceHistory',
     ];
     if (!validCollections.contains(collection)) {
       throw ArgumentError('Unauthorized collection access: $collection');
@@ -268,7 +272,7 @@ class FirestoreService {
       } else if (value is List) {
         // Handle lists that might contain maps or strings
         for (int i = 0; i < value.length;
- i) {
+i) {
           if (value[i] is String) {
             value[i] = const HtmlEscape().convert((value[i] as String).trim());
           } else if (value[i] is Map<String, dynamic>) {
@@ -332,10 +336,67 @@ class FirestoreService {
 
       final productData = product.toMap();
 
-      // Use the product\'s own ID to set the document, ensuring a single ID.
+      // Use the product's own ID to set the document, ensuring a single ID.
       await products.doc(product.id).set(productData);
     } catch (e) {
       throw FirestoreException('Failed to insert product: $e');
+    }
+  }
+
+  Future<void> addProductWithPriceHistory(Product product) async {
+    try {
+      if (!_isValidProduct(product)) {
+        throw ArgumentError('Invalid product data');
+      }
+      if (product.id == null || product.id!.isEmpty) {
+        throw ArgumentError('Product ID cannot be null or empty for insertion.');
+      }
+
+      final batch = _firestore.batch();
+
+      final productRef = products.doc(product.id);
+      batch.set(productRef, product.toMap());
+
+      final priceHistoryRef = priceHistory.doc();
+      final priceHistoryData = PriceHistory(
+        id: priceHistoryRef.id,
+        productId: product.id!,
+        price: product.price,
+        timestamp: DateTime.now(),
+      ).toMap();
+      batch.set(priceHistoryRef, priceHistoryData);
+
+      await batch.commit();
+    } catch (e) {
+      throw FirestoreException('Failed to insert product with price history: $e');
+    }
+  }
+
+  Future<void> updateProductWithPriceHistory(Product product, bool priceChanged) async {
+    try {
+      if (!_isValidProduct(product)) {
+        throw ArgumentError('Invalid product data');
+      }
+
+      final batch = _firestore.batch();
+
+      final productRef = products.doc(product.id);
+      batch.update(productRef, product.toMap());
+
+      if (priceChanged) {
+        final priceHistoryRef = priceHistory.doc();
+        final priceHistoryData = PriceHistory(
+          id: priceHistoryRef.id,
+          productId: product.id!,
+          price: product.price,
+          timestamp: DateTime.now(),
+        ).toMap();
+        batch.set(priceHistoryRef, priceHistoryData);
+      }
+
+      await batch.commit();
+    } catch (e) {
+      throw FirestoreException('Failed to update product with price history: $e');
     }
   }
 
@@ -736,6 +797,23 @@ class FirestoreService {
       }).toList();
     } catch (e) {
       throw FirestoreException('Failed to get all sales: $e');
+    }
+  }
+
+  Future<List<Sale>> getSalesInDateRange(DateTime startDate, DateTime endDate) async {
+    try {
+      final snapshot = await sales
+          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
+          .get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        return Sale.fromMap(data);
+      }).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to get sales in date range: $e');
     }
   }
 
@@ -1298,6 +1376,21 @@ class FirestoreService {
       }).toList();
     } catch (e) {
       throw FirestoreException('Failed to get losses: $e');
+    }
+  }
+
+  Future<List<PriceHistory>> getPriceHistory(String productId) async {
+    try {
+      final snapshot = await priceHistory
+          .where('productId', isEqualTo: productId)
+          .orderBy('timestamp', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        return PriceHistory.fromFirestore(doc);
+      }).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to get price history: $e');
     }
   }
 }

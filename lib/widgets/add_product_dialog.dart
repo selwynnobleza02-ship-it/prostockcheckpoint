@@ -6,7 +6,8 @@ import '../models/product.dart';
 import '../utils/constants.dart';
 
 class AddProductDialog extends StatefulWidget {
-  const AddProductDialog({super.key});
+  final Product? product;
+  const AddProductDialog({super.key, this.product});
 
   @override
   State<AddProductDialog> createState() => _AddProductDialogState();
@@ -34,6 +35,22 @@ class _AddProductDialogState extends State<AddProductDialog> {
     'Office Supplies',
   ];
 
+  bool get _isEditing => widget.product != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditing) {
+      final product = widget.product!;
+      _nameController.text = product.name;
+      _barcodeController.text = product.barcode ?? '';
+      _costController.text = product.cost.toString();
+      _stockController.text = product.stock.toString();
+      _minStockController.text = product.minStock.toString();
+      _selectedCategory = product.category!;
+    }
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -47,7 +64,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Add New Product'),
+      title: Text(_isEditing ? 'Edit Product' : 'Add New Product'),
       content: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
         child: Form(
@@ -76,6 +93,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
                 // Barcode (Optional)
                 TextFormField(
                   controller: _barcodeController,
+                  readOnly: _isEditing,
                   decoration: const InputDecoration(
                     labelText: 'Barcode (Optional)',
                     border: OutlineInputBorder(),
@@ -109,17 +127,20 @@ class _AddProductDialogState extends State<AddProductDialog> {
                       child: Text(category),
                     );
                   }).toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedCategory = value!;
-                    });
-                  },
+                  onChanged: _isEditing
+                      ? null
+                      : (value) {
+                          setState(() {
+                            _selectedCategory = value!;
+                          });
+                        },
                 ),
                 const SizedBox(height: 16),
 
                 // Cost Row
                 TextFormField(
                   controller: _costController,
+                  readOnly: _isEditing,
                   keyboardType: const TextInputType.numberWithOptions(
                     decimal: true,
                   ),
@@ -151,6 +172,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
                     Expanded(
                       child: TextFormField(
                         controller: _stockController,
+                        readOnly: _isEditing,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           labelText: 'Initial Stock *',
@@ -174,6 +196,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
                     Expanded(
                       child: TextFormField(
                         controller: _minStockController,
+                        readOnly: _isEditing,
                         keyboardType: TextInputType.number,
                         decoration: const InputDecoration(
                           labelText: 'Min Stock Alert',
@@ -217,7 +240,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Add Product'),
+              : Text(_isEditing ? 'Save Changes' : 'Add Product'),
         ),
       ],
     );
@@ -279,116 +302,67 @@ class _AddProductDialogState extends State<AddProductDialog> {
     });
 
     try {
-      // Safely parse the values using tryParse to avoid FormatException
-      final cost = double.tryParse(_costController.text.trim());
-      final stock = int.tryParse(_stockController.text.trim());
+      final inventoryProvider = Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      );
+      final cost = double.parse(_costController.text.trim());
+      final stock = int.parse(_stockController.text.trim());
       final minStock = int.tryParse(_minStockController.text.trim()) ?? 5;
-
-      // Double-check parsed values (should be caught by validation, but just in case)
-      if (cost == null || stock == null) {
-        throw const FormatException('Invalid number format');
-      }
-
-      // Handle barcode - can be null or empty
       final barcode = _barcodeController.text.trim();
       final finalBarcode = barcode.isEmpty ? null : barcode;
 
-      final product = Product(
-        name: _nameController.text.trim(),
-        barcode: finalBarcode,
-        cost: cost,
-        stock: stock,
-        minStock: minStock,
-        category: _selectedCategory,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      );
-
-      // Call addProduct - assumes it returns void and throws on error
-      final newProduct = await Provider.of<InventoryProvider>(
-        context,
-        listen: false,
-      ).addProduct(product);
-
-      // If we reach here, the product was added successfully
-      if (mounted) {
-        Navigator.pop(context, newProduct);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Product "${product.name}" added successfully!'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'View',
-              textColor: Colors.white,
-              onPressed: () {
-                // Navigate to inventory screen
-                // You can add navigation logic here
-              },
+      if (_isEditing) {
+        // Update existing product
+        final updatedProduct = widget.product!.copyWith(
+          name: _nameController.text.trim(),
+          barcode: finalBarcode,
+          cost: cost,
+          stock: stock,
+          minStock: minStock,
+          category: _selectedCategory,
+          updatedAt: DateTime.now(),
+        );
+        await inventoryProvider.updateProduct(updatedProduct);
+        if (mounted) {
+          Navigator.pop(context, updatedProduct);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Product "${updatedProduct.name}" updated!'),
+              backgroundColor: Colors.green,
             ),
-          ),
+          );
+        }
+      } else {
+        // Add new product
+        final product = Product(
+          name: _nameController.text.trim(),
+          barcode: finalBarcode,
+          cost: cost,
+          stock: stock,
+          minStock: minStock,
+          category: _selectedCategory,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
         );
-      }
-    } on FormatException catch (e, s) {
-      ErrorLogger.logError(
-        'Invalid number format in add product dialog',
-        error: e,
-        stackTrace: s,
-      );
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Invalid number format. Please check your inputs.'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 3),
-          ),
-        );
-      }
-    } on ArgumentError catch (e, s) {
-      ErrorLogger.logError(
-        'Invalid argument in add product dialog',
-        error: e,
-        stackTrace: s,
-      );
-      // Catch ArgumentError from model validation
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Input Error: ${e.message}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
+        final newProduct = await inventoryProvider.addProduct(product);
+        if (mounted) {
+          Navigator.pop(context, newProduct);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Product "${product.name}" added successfully!'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
       }
     } catch (e, s) {
-      ErrorLogger.logError(
-        'Error adding product',
-        error: e,
-        stackTrace: s,
-      );
+      ErrorLogger.logError('Error saving product', error: e, stackTrace: s);
       if (mounted) {
-        String errorMessage = 'Error adding product';
-
-        // Provide more specific error messages based on common issues
-        if (e.toString().contains('already exists')) {
-          errorMessage = 'Product with this name or barcode already exists.';
-        } else if (e.toString().contains('network') ||
-            e.toString().contains('connection')) {
-          errorMessage = 'Network error. Please check your connection.';
-        } else {
-          errorMessage = 'An unexpected error occurred: ${e.toString()}';
-        }
-
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(errorMessage),
+            content: Text('Error saving product: ${e.toString()}'),
             backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Retry',
-              textColor: Colors.white,
-              onPressed: _saveProduct,
-            ),
           ),
         );
       }

@@ -257,15 +257,18 @@ class OfflineManager with ChangeNotifier {
     notifyListeners();
 
     const int batchSize = 50;
-    final List<OfflineOperation> operationsToSync = List.from(_pendingOperations);
+    final List<OfflineOperation> operationsToSync = List.from(
+      _pendingOperations,
+    );
 
     try {
       for (int i = 0; i < operationsToSync.length; i += batchSize) {
         final List<OfflineOperation> batch = operationsToSync.sublist(
-            i,
-            i + batchSize > operationsToSync.length
-                ? operationsToSync.length
-                : i + batchSize);
+          i,
+          i + batchSize > operationsToSync.length
+              ? operationsToSync.length
+              : i + batchSize,
+        );
         final List<Map<String, dynamic>> batchOperations = [];
         final List<int> successfulOperationIds = [];
         final List<OfflineOperation> failedOperations = [];
@@ -345,7 +348,10 @@ class OfflineManager with ChangeNotifier {
     }
   }
 
-  Future<void> _moveToDeadLetterQueue(OfflineOperation operation, String error) async {
+  Future<void> _moveToDeadLetterQueue(
+    OfflineOperation operation,
+    String error,
+  ) async {
     final db = await _localDatabaseService.database;
     await db.insert('dead_letter_operations', {
       'operation_id': operation.id,
@@ -372,31 +378,39 @@ class OfflineManager with ChangeNotifier {
   List<Map<String, dynamic>> _getBatchOperations(OfflineOperation operation) {
     switch (operation.type) {
       case OperationType.insertProduct:
-        return [{
-          'type': 'insert',
-          'collection': operation.collectionName,
-          'data': operation.data,
-        }];
+        return [
+          {
+            'type': 'insert',
+            'collection': operation.collectionName,
+            'data': operation.data,
+          },
+        ];
       case OperationType.updateProduct:
-        return [{
-          'type': 'update',
-          'collection': operation.collectionName,
-          'docId': operation.documentId,
-          'data': operation.data,
-        }];
+        return [
+          {
+            'type': 'update',
+            'collection': operation.collectionName,
+            'docId': operation.documentId,
+            'data': operation.data,
+          },
+        ];
       case OperationType.insertCustomer:
-        return [{
-          'type': 'insert',
-          'collection': operation.collectionName,
-          'data': operation.data,
-        }];
+        return [
+          {
+            'type': 'insert',
+            'collection': operation.collectionName,
+            'data': operation.data,
+          },
+        ];
       case OperationType.updateCustomer:
-        return [{
-          'type': 'update',
-          'collection': operation.collectionName,
-          'docId': operation.documentId,
-          'data': operation.data,
-        }];
+        return [
+          {
+            'type': 'update',
+            'collection': operation.collectionName,
+            'docId': operation.documentId,
+            'data': operation.data,
+          },
+        ];
       case OperationType.createSaleTransaction:
         final saleMap = operation.data['sale'] as Map<String, dynamic>;
         final sale = Sale.fromMap(saleMap);
@@ -405,7 +419,9 @@ class OfflineManager with ChangeNotifier {
             .toList();
 
         // Also save to local DB when syncing
-        unawaited(_localDatabaseService.insertSale(sale.copyWith(isSynced: 1).toMap()));
+        unawaited(
+          _localDatabaseService.insertSale(sale.copyWith(isSynced: 1).toMap()),
+        );
         for (final item in saleItems) {
           unawaited(_localDatabaseService.insertSaleItem(item.toMap()));
         }
@@ -436,32 +452,39 @@ class OfflineManager with ChangeNotifier {
             'type': 'update',
             'collection': 'products',
             'docId': item.productId,
-            'data': {
-              'stock': FieldValue.increment(-item.quantity),
-            },
+            'data': {'stock': FieldValue.increment(-item.quantity)},
           });
         }
 
         return operations;
       case OperationType.insertCreditTransaction:
-        return [{
-          'type': 'insert',
-          'collection': operation.collectionName,
-          'data': operation.data,
-        }];
+        return [
+          {
+            'type': 'insert',
+            'collection': operation.collectionName,
+            'data': operation.data,
+          },
+        ];
       case OperationType.updateCustomerBalance:
-        return [{
-          'type': 'update',
-          'collection': operation.collectionName,
-          'docId': operation.documentId,
-          'data': operation.data,
-        }];
+        return [
+          {
+            'type': 'update',
+            'collection': operation.collectionName,
+            'docId': operation.documentId,
+            'data': operation.data,
+          },
+        ];
       case OperationType.insertLoss:
-        return [{
-          'type': 'insert',
-          'collection': operation.collectionName,
-          'data': operation.data,
-        }];
+        return [
+          {
+            'type': 'insert',
+            'collection': operation.collectionName,
+            'data': operation.data,
+          },
+        ];
+      case OperationType.insertPriceHistory:
+        // TODO: Handle this case.
+        throw UnimplementedError();
     }
   }
 
@@ -574,6 +597,7 @@ enum OperationType {
   insertCreditTransaction,
   updateCustomerBalance,
   insertLoss,
+  insertPriceHistory,
 }
 
 /// Offline Operation Model - Serializable operation container

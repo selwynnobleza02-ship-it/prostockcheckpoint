@@ -8,6 +8,7 @@ import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
 import '../models/product.dart';
 import 'barcode_product_dialog.dart';
+import 'receive_stock_dialog.dart';
 
 enum ScannerMode {
   normal, // Default mode for sales/finding products
@@ -483,27 +484,17 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     await cameraController.stop();
     if (!mounted) return;
 
-    final quantity = await _showStockUpdateDialog(
+    final result = await showDialog<bool>(
       context: context,
-      product: product,
-      title: 'Receive Stock: ${product.name}',
-      labelText: 'Quantity to Receive',
-      buttonText: 'Receive',
-      validation: (qty) => qty > 0,
+      builder: (context) => ReceiveStockDialog(product: product),
     );
 
-    if (quantity != null && quantity > 0) {
-      final inventoryProvider = Provider.of<InventoryProvider>(
-        context,
-        listen: false,
-      );
-      await inventoryProvider.receiveStock(product.id!, quantity);
-
+    if (result == true) {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Received $quantity units of ${product.name}'),
+            content: Text('Stock received for ${product.name}'),
             backgroundColor: Colors.green,
           ),
         );
@@ -655,60 +646,6 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
           },
         );
       },
-    );
-  }
-
-  Future<int?> _showStockUpdateDialog({
-    required BuildContext context,
-    required Product product,
-    required String title,
-    required String labelText,
-    required String buttonText,
-    Color? buttonColor,
-    required bool Function(int) validation,
-  }) async {
-    final quantityController = TextEditingController(text: '1');
-
-    return await showDialog<int>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Current Stock: ${product.stock}'),
-            const SizedBox(height: 16),
-            TextField(
-              controller: quantityController,
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: labelText,
-                border: const OutlineInputBorder(),
-              ),
-              autofocus: true,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final qty = int.tryParse(quantityController.text);
-              if (qty != null && validation(qty)) {
-                Navigator.pop(context, qty);
-              }
-            },
-            style: buttonColor != null
-                ? ElevatedButton.styleFrom(backgroundColor: buttonColor)
-                : null,
-            child: Text(buttonText),
-          ),
-        ],
-      ),
     );
   }
 

@@ -5,6 +5,7 @@ import '../providers/credit_provider.dart';
 import '../models/customer.dart';
 import '../widgets/add_customer_dialog.dart';
 import '../utils/currency_utils.dart';
+import 'dart:async'; // Import for Timer
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key});
@@ -14,6 +15,8 @@ class CustomersScreen extends StatefulWidget {
 }
 
 class _CustomersScreenState extends State<CustomersScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
   String _searchQuery = '';
   final ScrollController _scrollController = ScrollController();
 
@@ -29,15 +32,46 @@ class _CustomersScreenState extends State<CustomersScreen> {
       if (_scrollController.position.pixels ==
           _scrollController.position.maxScrollExtent) {
         // User has scrolled to the end, load more data
-        Provider.of<CustomerProvider>(context, listen: false).loadMoreCustomers();
+        Provider.of<CustomerProvider>(
+          context,
+          listen: false,
+        ).loadMoreCustomers();
       }
     });
+
+    _searchController.addListener(_onSearchChanged);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      // Only trigger search if query has changed to avoid unnecessary calls
+      if (_searchQuery != _searchController.text.toLowerCase()) {
+        setState(() {
+          _searchQuery = _searchController.text.toLowerCase();
+        });
+        Provider.of<CustomerProvider>(
+          context,
+          listen: false,
+        ).loadCustomers(searchQuery: _searchQuery);
+      }
+    });
+  }
+
+  Future<void> _refreshCustomers() async {
+    await Provider.of<CustomerProvider>(
+      context,
+      listen: false,
+    ).loadCustomers(refresh: true, searchQuery: _searchQuery);
   }
 
   @override
@@ -59,16 +93,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
           Padding(
             padding: const EdgeInsets.all(16),
             child: TextField(
+              controller: _searchController,
               decoration: const InputDecoration(
                 hintText: 'Search customers...',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
-              onChanged: (value) {
-                // Update search query and trigger data fetch
-                _searchQuery = value.toLowerCase();
-                Provider.of<CustomerProvider>(context, listen: false).loadCustomers(searchQuery: _searchQuery);
-              },
+              // onChanged is now handled by the listener on _searchController
             ),
           ),
           Expanded(
@@ -76,6 +107,18 @@ class _CustomersScreenState extends State<CustomersScreen> {
               builder: (context, provider, child) {
                 if (provider.isLoading && provider.customers.isEmpty) {
                   return const Center(child: CircularProgressIndicator());
+                }
+
+                if (provider.error != null) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(provider.error!),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    provider.clearError(); // Clear the error after showing it
+                  });
                 }
 
                 if (provider.customers.isEmpty && !provider.isLoading) {
@@ -103,112 +146,125 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   );
                 }
 
-                return ListView.builder(
-                  controller: _scrollController,
-                  itemCount: provider.customers.length + (provider.hasMoreData ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == provider.customers.length) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-                    final customer = provider.customers[index];
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 4,
-                      ),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: customer.hasOverdueBalance
-                              ? Colors.red
-                              : customer.currentBalance > 0
-                              ? Colors.orange
-                              : Colors.green,
-                          child: Text(
-                            customer.name.substring(0, 1).toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
+                return RefreshIndicator(
+                  onRefresh: _refreshCustomers,
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    itemCount:
+                        provider.customers.length +
+                        (provider.hasMoreData ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == provider.customers.length) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final customer = provider.customers[index];
+                      return Card(
+                        margin: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 4,
+                        ),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: customer.hasOverdueBalance
+                                ? Colors.red
+                                : customer.currentBalance > 0
+                                ? Colors.orange
+                                : Colors.green,
+                            child: Text(
+                              customer.name.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
-                        ),
-                        title: Text(customer.name),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            if (customer.phone != null)
-                              Text('Phone: ${customer.phone}'),
-                            if (customer.email != null)
-                              Text('Email: ${customer.email}'),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    'Credit: ${CurrencyUtils.formatCurrency(customer.creditLimit)}',
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-                                Expanded(
-                                  child: Text(
-                                    'Balance: ${CurrencyUtils.formatCurrency(customer.currentBalance)}',
-                                    style: TextStyle(
-                                      color: customer.hasOverdueBalance
-                                          ? Colors.red
-                                          : customer.currentBalance > 0
-                                          ? Colors.orange
-                                          : Colors.green,
-                                      fontWeight: FontWeight.bold,
+                          title: Text(customer.name),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (customer.phone != null)
+                                Text('Phone: ${customer.phone}'),
+                              if (customer.email != null)
+                                Text('Email: ${customer.email}'),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      'Credit: ${CurrencyUtils.formatCurrency(customer.creditLimit)}',
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            if (customer.hasOverdueBalance)
-                              const Text(
-                                'OVERDUE BALANCE!',
-                                style: TextStyle(
-                                  color: Colors.red,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 12,
-                                ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Text(
+                                      'Balance: ${CurrencyUtils.formatCurrency(customer.currentBalance)}',
+                                      style: TextStyle(
+                                        color: customer.hasOverdueBalance
+                                            ? Colors.red
+                                            : customer.currentBalance > 0
+                                            ? Colors.orange
+                                            : Colors.green,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                          ],
+                              if (customer.hasOverdueBalance)
+                                const Text(
+                                  'OVERDUE BALANCE!',
+                                  style: TextStyle(
+                                    color: Colors.red,
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          trailing: PopupMenuButton(
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'view',
+                                child: Text('View Details'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Text('Edit'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'credit',
+                                child: Text('Manage Credit'),
+                              ),
+                              const PopupMenuItem(
+                                value: 'history',
+                                child: Text('Transaction History'),
+                              ),
+                            ],
+                            onSelected: (value) {
+                              switch (value) {
+                                case 'view':
+                                  _showCustomerDetails(customer);
+                                  break;
+                                case 'edit':
+                                  showDialog(
+                                    context: context,
+                                    builder: (context) => AddCustomerDialog(
+                                      customer: customer,
+                                    ), // Pass existing customer for editing
+                                  );
+                                  break;
+                                case 'credit':
+                                  _showCreditManagement(customer);
+                                  break;
+                                case 'history':
+                                  _showTransactionHistory(customer);
+                                  break;
+                              }
+                            },
+                          ),
                         ),
-                        trailing: PopupMenuButton(
-                          itemBuilder: (context) => [
-                            const PopupMenuItem(
-                              value: 'view',
-                              child: Text('View Details'),
-                            ),
-                            const PopupMenuItem(
-                              value: 'edit',
-                              child: Text('Edit'),
-                            ),
-                            const PopupMenuItem(
-                              value: 'credit',
-                              child: Text('Manage Credit'),
-                            ),
-                            const PopupMenuItem(
-                              value: 'history',
-                              child: Text('Transaction History'),
-                            ),
-                          ],
-                          onSelected: (value) {
-                            switch (value) {
-                              case 'view':
-                                _showCustomerDetails(customer);
-                                break;
-                              case 'credit':
-                                _showCreditManagement(customer);
-                                break;
-                              case 'history':
-                                _showTransactionHistory(customer);
-                                break;
-                            }
-                          },
-                        ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 );
               },
             ),
@@ -342,9 +398,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       const Text('Credit Limit:'),
-                      Text(
-                        CurrencyUtils.formatCurrency(customer.creditLimit),
-                      ),
+                      Text(CurrencyUtils.formatCurrency(customer.creditLimit)),
                     ],
                   ),
                   Row(
@@ -352,9 +406,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     children: [
                       const Text('Current Balance:'),
                       Text(
-                        CurrencyUtils.formatCurrency(
-                          customer.currentBalance,
-                        ),
+                        CurrencyUtils.formatCurrency(customer.currentBalance),
                         style: TextStyle(
                           color: customer.currentBalance > 0
                               ? Colors.red
@@ -369,9 +421,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     children: [
                       const Text('Available Credit:'),
                       Text(
-                        CurrencyUtils.formatCurrency(
-                          customer.availableCredit,
-                        ),
+                        CurrencyUtils.formatCurrency(customer.availableCredit),
                       ),
                     ],
                   ),

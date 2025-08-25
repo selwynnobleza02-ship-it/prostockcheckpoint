@@ -71,38 +71,23 @@ class RetailCreditApp extends StatefulWidget {
 }
 
 class _RetailCreditAppState extends State<RetailCreditApp> {
-
-  @override
-  void initState() {
-    super.initState();
-  }
-
   @override
   Widget build(BuildContext context) {
-    return Builder(
-      builder: (context) {
-        return MaterialApp(
-          title: 'Retail Credit Manager',
-          theme: ThemeData(
-            primarySwatch: Colors.blue,
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          ),
-          initialRoute: '/splash', // Changed initial route to SplashScreen
-          routes: {
-            '/splash': (context) => const SplashScreen(), // Added SplashScreen route
-            '/admin': (context) => const AdminScreen(),
-            '/login': (context) => const LoginScreen(),
-            '/signup': (context) => const SignupScreen(),
-            '/user': (context) => const UserScreen(),
-          },
-        );
+    return MaterialApp(
+      title: 'Retail Credit Manager',
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        useMaterial3: true,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+      ),
+      initialRoute: '/splash', // Changed initial route to SplashScreen
+      routes: {
+        '/splash': (context) => const SplashScreen(), // Added SplashScreen route
+        '/admin': (context) => const AdminScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/signup': (context) => const SignupScreen(),
+        '/user': (context) => const UserScreen(),
       },
     );
-  }
-
-  @override
-  void dispose() {
-    super.dispose();
   }
 }

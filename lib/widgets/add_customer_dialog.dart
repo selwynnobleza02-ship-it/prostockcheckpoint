@@ -9,7 +9,8 @@ import 'package:provider/provider.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
 class AddCustomerDialog extends StatefulWidget {
-  const AddCustomerDialog({super.key});
+  final Customer? customer;
+  const AddCustomerDialog({super.key, this.customer});
 
   @override
   State<AddCustomerDialog> createState() => _AddCustomerDialogState();
@@ -25,6 +26,23 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
 
   bool _isLoading = false;
   File? _imageFile;
+  String? _networkImageUrl;
+
+  bool get _isEditMode => widget.customer != null;
+
+  @override
+  void initState() {
+    super.initState();
+    if (_isEditMode) {
+      final customer = widget.customer!;
+      _nameController.text = customer.name;
+      _phoneController.text = customer.phone ?? '';
+      _emailController.text = customer.email ?? '';
+      _addressController.text = customer.address ?? '';
+      _creditLimitController.text = customer.creditLimit.toString();
+      _networkImageUrl = customer.imageUrl;
+    }
+  }
 
   @override
   void dispose() {
@@ -88,7 +106,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Add New Customer'),
+      title: Text(_isEditMode ? 'Edit Customer' : 'Add New Customer'),
       content: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
         child: Form(
@@ -108,7 +126,13 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                     ),
                     child: _imageFile != null
                         ? Image.file(_imageFile!, fit: BoxFit.cover)
-                        : const Icon(Icons.add_a_photo, size: 50, color: Colors.grey),
+                        : _networkImageUrl != null
+                            ? Image.network(_networkImageUrl!, fit: BoxFit.cover)
+                            : const Icon(
+                                Icons.add_a_photo,
+                                size: 50,
+                                color: Colors.grey,
+                              ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -148,7 +172,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                     if (value != null && value.trim().isNotEmpty) {
                       // Basic Philippine mobile number validation
                       final cleanNumber = value.trim().replaceAll(
-                        RegExp(r'[^\d]'),
+                        RegExp(r'[^\]'),
                         '',
                       );
                       if (cleanNumber.length < 10 || cleanNumber.length > 11) {
@@ -207,7 +231,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                   decoration: const InputDecoration(
                     labelText: 'Credit Limit',
                     border: OutlineInputBorder(),
-                    prefixText: '₱ ', // Philippine Peso symbol
+                    prefixText: '₱ ',
                     prefixIcon: Icon(Icons.credit_card),
                     helperText: 'Maximum credit amount allowed',
                   ),
@@ -247,15 +271,14 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                   height: 16,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Add Customer'),
+              : Text(_isEditMode ? 'Save Changes' : 'Add Customer'),
         ),
       ],
     );
   }
 
   Widget _buildCreditInfoCard() {
-    final creditLimit =
-        double.tryParse(_creditLimitController.text.trim()) ?? 0;
+    final creditLimit = double.tryParse(_creditLimitController.text.trim()) ?? 0;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -324,10 +347,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
       ErrorLogger.logError('Error uploading image', error: e, stackTrace: s);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
         );
       }
       return null;
@@ -353,7 +373,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     });
 
     try {
-      String? imageUrl;
+      String? imageUrl = _networkImageUrl;
       if (_imageFile != null) {
         imageUrl = await _uploadImage(_imageFile!);
         if (imageUrl == null) {
@@ -376,42 +396,49 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
       final email = _emailController.text.trim();
       final address = _addressController.text.trim();
 
-      final customer = Customer(
+      final customerData = Customer(
+        id: _isEditMode ? widget.customer!.id : null,
         name: _nameController.text.trim(),
         phone: phone.isEmpty ? null : phone,
         email: email.isEmpty ? null : email,
         address: address.isEmpty ? null : address,
         imageUrl: imageUrl,
         creditLimit: creditLimit,
-        currentBalance: 0.0, // New customers start with zero balance
-        createdAt: DateTime.now(),
+        currentBalance: _isEditMode ? widget.customer!.currentBalance : 0.0,
+        createdAt: _isEditMode ? widget.customer!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
-      // Call addCustomer - assumes it returns void and throws on error
-      await Provider.of<CustomerProvider>(
-        context,
-        listen: false,
-      ).addCustomer(customer);
+      final provider = Provider.of<CustomerProvider>(context, listen: false);
+      bool success = false;
+      if (_isEditMode) {
+        success = await provider.updateCustomer(customerData);
+      } else {
+        success = await provider.addCustomer(customerData);
+      }
 
-      // If we reach here, the customer was added successfully
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Customer "${customer.name}" added successfully!'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-            action: SnackBarAction(
-              label: 'View',
-              textColor: Colors.white,
-              onPressed: () {
-                // Navigate to customer screen
-                // You can add navigation logic here
-              },
+      if (success) {
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Customer "${customerData.name}" ${_isEditMode ? 'updated' : 'added'} successfully!'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
             ),
-          ),
-        );
+          );
+        }
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Failed to ${_isEditMode ? 'update' : 'add'} customer. ${provider.error ?? ''}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     } on FormatException catch (e, s) {
       ErrorLogger.logError(
@@ -445,14 +472,12 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         );
       }
     } catch (e, s) {
-      ErrorLogger.logError('Error adding customer', error: e, stackTrace: s);
+      ErrorLogger.logError('Error saving customer', error: e, stackTrace: s);
       if (mounted) {
-        String errorMessage = 'Error adding customer';
+        String errorMessage = 'Error saving customer';
 
-        // Provide more specific error messages based on common issues
         if (e.toString().contains('already exists')) {
-          errorMessage =
-              'Customer with this name, phone, or email already exists.';
+          errorMessage = 'Customer with this name, phone, or email already exists.';
         } else if (e.toString().contains('network') ||
             e.toString().contains('connection')) {
           errorMessage = 'Network error. Please check your connection.';

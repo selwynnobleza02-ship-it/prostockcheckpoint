@@ -8,6 +8,7 @@ import '../widgets/barcode_scanner_widget.dart';
 import '../models/product.dart';
 import '../utils/currency_utils.dart';
 import '../widgets/receipt_dialog.dart'; // Added import for receipt dialog
+import 'dart:async'; // Import for Timer
 
 class POSScreen extends StatefulWidget {
   const POSScreen({super.key});
@@ -19,6 +20,37 @@ class POSScreen extends StatefulWidget {
 class _POSScreenState extends State<POSScreen> {
   Customer? _selectedCustomer;
   String _paymentMethod = 'cash';
+  final TextEditingController _productSearchController =
+      TextEditingController();
+  Timer? _productSearchDebounce;
+  bool _isProcessingSale = false; // New state for checkout loading
+
+  @override
+  void initState() {
+    super.initState();
+    _productSearchController.addListener(_onProductSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _productSearchController.removeListener(_onProductSearchChanged);
+    _productSearchController.dispose();
+    _productSearchDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onProductSearchChanged() {
+    if (_productSearchDebounce?.isActive ?? false) {
+      _productSearchDebounce!.cancel();
+    }
+    _productSearchDebounce = Timer(const Duration(milliseconds: 300), () {
+      // Trigger product search in InventoryProvider
+      Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      ).loadProducts(searchQuery: _productSearchController.text.toLowerCase());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -77,20 +109,40 @@ class _POSScreenState extends State<POSScreen> {
         Padding(
           padding: const EdgeInsets.all(16),
           child: TextField(
+            controller: _productSearchController,
             decoration: const InputDecoration(
               hintText: 'Search products...',
               prefixIcon: Icon(Icons.search),
               border: OutlineInputBorder(),
               isDense: true, // Added dense to reduce height
             ),
-            onChanged: (value) {
-              // Implement product search
-            },
+            // onChanged is now handled by the listener on _productSearchController
           ),
         ),
         Expanded(
           child: Consumer<InventoryProvider>(
             builder: (context, provider, child) {
+              if (provider.isLoading) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (provider.error != null) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(provider.error!),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                  provider.clearError(); // Clear the error after showing it
+                });
+              }
+
+              final productsToDisplay = provider.products;
+
+              if (productsToDisplay.isEmpty) {
+                return const Center(child: Text('No products found'));
+              }
+
               return GridView.builder(
                 padding: const EdgeInsets.all(16),
                 gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
@@ -103,9 +155,9 @@ class _POSScreenState extends State<POSScreen> {
                       ? 0.8
                       : 1.2, // Responsive aspect ratio
                 ),
-                itemCount: provider.products.length,
+                itemCount: productsToDisplay.length,
                 itemBuilder: (context, index) {
-                  final product = provider.products[index];
+                  final product = productsToDisplay[index];
                   return Card(
                     child: InkWell(
                       onTap: () {
@@ -401,41 +453,63 @@ class _POSScreenState extends State<POSScreen> {
                         Expanded(
                           flex: 2,
                           child: ElevatedButton(
-                            onPressed: provider.currentSaleItems.isEmpty
+                            onPressed:
+                                provider.currentSaleItems.isEmpty ||
+                                    _isProcessingSale // Disable if processing
                                 ? null
                                 : () async {
-                                    final receipt = await provider.completeSale(
-                                      customerId: _selectedCustomer?.id,
-                                      paymentMethod: _paymentMethod,
-                                    );
+                                    setState(() {
+                                      _isProcessingSale = true;
+                                    });
+                                    try {
+                                      final receipt = await provider
+                                          .completeSale(
+                                            customerId: _selectedCustomer?.id,
+                                            paymentMethod: _paymentMethod,
+                                          );
 
-                                    if (receipt != null && mounted) {
-                                      showDialog(
-                                        context: context,
-                                        barrierDismissible: false,
-                                        builder: (context) =>
-                                            ReceiptDialog(receipt: receipt),
-                                      );
-                                    } else if (mounted) {
-                                      ScaffoldMessenger.of(
-                                        context,
-                                      ).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            provider.error ?? 'Sale failed',
+                                      if (receipt != null && mounted) {
+                                        showDialog(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (context) =>
+                                              ReceiptDialog(receipt: receipt),
+                                        );
+                                      } else if (mounted) {
+                                        ScaffoldMessenger.of(
+                                          context,
+                                        ).showSnackBar(
+                                          SnackBar(
+                                            content: Text(
+                                              provider.error ?? 'Sale failed',
+                                            ),
+                                            backgroundColor: Colors.red,
                                           ),
-                                          backgroundColor: Colors.red,
-                                        ),
-                                      );
+                                        );
+                                      }
+                                    } finally {
+                                      setState(() {
+                                        _isProcessingSale = false;
+                                      });
                                     }
                                   },
                             style: ElevatedButton.styleFrom(
                               padding: const EdgeInsets.symmetric(vertical: 8),
                             ),
-                            child: const Text(
-                              'Checkout',
-                              style: TextStyle(fontSize: 12),
-                            ),
+                            child:
+                                _isProcessingSale // Show loading indicator if processing
+                                ? const SizedBox(
+                                    width: 20,
+                                    height: 20,
+                                    child: CircularProgressIndicator(
+                                      color: Colors.white,
+                                      strokeWidth: 2,
+                                    ),
+                                  )
+                                : const Text(
+                                    'Checkout',
+                                    style: TextStyle(fontSize: 12),
+                                  ),
                           ),
                         ),
                       ],

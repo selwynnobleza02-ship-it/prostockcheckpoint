@@ -10,6 +10,7 @@ class AppConstants {
   static const String stockMovementsCollection = 'stock_movements';
   static const String errorLogsCollection = 'error_logs';
   static const String lossesCollection = 'losses';
+  static const String priceHistoryCollection = 'price_history';
 
   // Tax rate
   static const double taxRate = 0.12;

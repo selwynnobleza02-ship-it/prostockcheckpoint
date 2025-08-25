@@ -15,6 +15,15 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  bool _isLoading = false; // New state for loading indicator
+  bool _isPasswordVisible = false; // New state for password visibility
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,14 +64,24 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 20),
                 TextFormField(
                   controller: _passwordController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Password',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.lock),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.lock),
                     filled: true,
                     fillColor: Colors.white70,
+                    suffixIcon: IconButton(
+                      icon: Icon(
+                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                      ),
+                      onPressed: () {
+                        setState(() {
+                          _isPasswordVisible = !_isPasswordVisible;
+                        });
+                      },
+                    ),
                   ),
-                  obscureText: true,
+                  obscureText: !_isPasswordVisible,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your password';
@@ -74,30 +93,44 @@ class _LoginScreenState extends State<LoginScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: () async {
-                      if (_formKey.currentState!.validate()) {
-                        final authProvider = context.read<AuthProvider>();
-                        final success = await authProvider.login(
-                          _emailController.text,
-                          _passwordController.text,
-                        );
-                        if (success) {
-                          if (!mounted) return; // Check if the widget is still mounted
-                          final userRole = authProvider.userRole;
-                          if (userRole == UserRole.admin) {
-                            Navigator.of(
-                              context,
-                            ).pushReplacementNamed('/admin');
-                          } else {
-                            Navigator.of(context).pushReplacementNamed('/user');
-                          }
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Login failed')),
-                          );
-                        }
-                      }
-                    },
+                    onPressed: _isLoading // Disable button when loading
+                        ? null
+                        : () async {
+                            if (_formKey.currentState!.validate()) {
+                              setState(() {
+                                _isLoading = true;
+                              });
+                              try {
+                                final authProvider = context.read<AuthProvider>();
+                                final success = await authProvider.login(
+                                  _emailController.text,
+                                  _passwordController.text,
+                                );
+                                if (success) {
+                                  if (!mounted) return; // Check if the widget is still mounted
+                                  final userRole = authProvider.userRole;
+                                  if (userRole == UserRole.admin) {
+                                    Navigator.of(
+                                      context,
+                                    ).pushReplacementNamed('/admin');
+                                  } else {
+                                    Navigator.of(context).pushReplacementNamed('/user');
+                                  }
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(authProvider.error ?? 'Login failed'), // Show specific error
+                                      backgroundColor: Colors.red,
+                                    ),
+                                  );
+                                }
+                              } finally {
+                                setState(() {
+                                  _isLoading = false;
+                                });
+                              }
+                            }
+                          },
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
@@ -106,7 +139,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       backgroundColor: Colors.blueAccent,
                       foregroundColor: Colors.white,
                     ),
-                    child: const Text('Login', style: TextStyle(fontSize: 18)),
+                    child: _isLoading // Show loading indicator
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Text('Login', style: TextStyle(fontSize: 18)),
                   ),
                 ),
                 const SizedBox(height: 10),

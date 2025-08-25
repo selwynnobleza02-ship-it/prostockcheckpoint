@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
+import 'package:prostock/models/price_history.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -114,12 +115,10 @@ class InventoryProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      // Generate a unique ID for the new product
       final productId = const Uuid().v4();
       final newProduct = product.copyWith(id: productId);
 
       final db = await _localDatabaseService.database;
-      // Insert into local DB with the generated ID
       await db.insert(
         'products',
         newProduct.toMap(),
@@ -131,10 +130,9 @@ class InventoryProvider with ChangeNotifier {
           (newProduct.stock * 0.1).ceil().clamp(5, 50);
 
       if (_offlineManager.isOnline) {
-        // Insert into Firestore with the same generated ID
-        await FirestoreService.instance.insertProduct(newProduct);
+        await FirestoreService.instance.addProductWithPriceHistory(newProduct);
       } else {
-        // Queue the operation for later synchronization
+        // Queue operations for later synchronization
         await _offlineManager.queueOperation(
           OfflineOperation(
             id: newProduct.id!,
@@ -142,6 +140,23 @@ class InventoryProvider with ChangeNotifier {
             collectionName: 'products',
             documentId: newProduct.id,
             data: newProduct.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+        // Also queue the price history
+        final priceHistory = PriceHistory(
+          id: const Uuid().v4(),
+          productId: newProduct.id!,
+          price: newProduct.price,
+          timestamp: DateTime.now(),
+        );
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: priceHistory.id,
+            type: OperationType.insertPriceHistory,
+            collectionName: 'priceHistory',
+            documentId: priceHistory.id,
+            data: priceHistory.toMap(),
             timestamp: DateTime.now(),
           ),
         );
@@ -166,42 +181,40 @@ class InventoryProvider with ChangeNotifier {
   Future<bool> updateProduct(Product product) async {
     try {
       final db = await _localDatabaseService.database;
+      final originalProductIndex = _products.indexWhere((p) => p.id == product.id);
+      Product? originalProduct = originalProductIndex != -1 ? _products[originalProductIndex] : null;
 
       if (_offlineManager.isOnline) {
         final existingProduct = await FirestoreService.instance.getProductById(
           product.id!,
         );
+        
+        Product productToUpdate;
         if (existingProduct != null &&
             existingProduct.version > product.version) {
           // Conflict detected
-          final mergedProduct = _mergeProducts(existingProduct, product);
-          await FirestoreService.instance.updateProduct(mergedProduct);
-          await db.update(
-            'products',
-            mergedProduct.toMap(),
-            where: 'id = ?',
-            whereArgs: [mergedProduct.id],
-          );
-          final index = _products.indexWhere((p) => p.id == mergedProduct.id);
-          if (index != -1) {
-            _products[index] = mergedProduct;
-            notifyListeners();
-          }
+          productToUpdate = _mergeProducts(existingProduct, product);
         } else {
-          final updatedProduct = product.copyWith(version: product.version + 1);
-          await FirestoreService.instance.updateProduct(updatedProduct);
-          await db.update(
-            'products',
-            updatedProduct.toMap(),
-            where: 'id = ?',
-            whereArgs: [updatedProduct.id],
-          );
-          final index = _products.indexWhere((p) => p.id == updatedProduct.id);
-          if (index != -1) {
-            _products[index] = updatedProduct;
-            notifyListeners();
-          }
+          productToUpdate = product.copyWith(version: product.version + 1);
         }
+
+        // Check if the price has changed
+        final bool priceChanged = originalProduct != null && originalProduct.price != productToUpdate.price;
+
+        await FirestoreService.instance.updateProductWithPriceHistory(productToUpdate, priceChanged);
+
+        await db.update(
+          'products',
+          productToUpdate.toMap(),
+          where: 'id = ?',
+          whereArgs: [productToUpdate.id],
+        );
+        final index = _products.indexWhere((p) => p.id == productToUpdate.id);
+        if (index != -1) {
+          _products[index] = productToUpdate;
+          notifyListeners();
+        }
+
       } else {
         final updatedProduct = product.copyWith(version: product.version + 1);
         await db.update(
@@ -220,6 +233,27 @@ class InventoryProvider with ChangeNotifier {
             timestamp: DateTime.now(),
           ),
         );
+
+        // Queue price history if price changed
+        if (originalProduct != null && originalProduct.price != updatedProduct.price) {
+            final priceHistory = PriceHistory(
+                id: const Uuid().v4(),
+                productId: updatedProduct.id!,
+                price: updatedProduct.price,
+                timestamp: DateTime.now(),
+            );
+            await _offlineManager.queueOperation(
+                OfflineOperation(
+                    id: priceHistory.id,
+                    type: OperationType.insertPriceHistory,
+                    collectionName: 'priceHistory',
+                    documentId: priceHistory.id,
+                    data: priceHistory.toMap(),
+                    timestamp: DateTime.now(),
+                ),
+            );
+        }
+
         final index = _products.indexWhere((p) => p.id == updatedProduct.id);
         if (index != -1) {
           _products[index] = updatedProduct;

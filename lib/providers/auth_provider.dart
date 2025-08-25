@@ -24,6 +24,9 @@ class AuthProvider with ChangeNotifier {
   UserRole? get userRole => _currentUser?.role;
   bool get isAdmin => _currentUser?.role == UserRole.admin;
 
+  String? _error;
+  String? get error => _error;
+
   AuthProvider() {
     _firebaseAuth.authStateChanges().listen(_onAuthStateChanged);
   }
@@ -99,8 +102,10 @@ class AuthProvider with ChangeNotifier {
           return true;
         }
       }
+      _error = 'Login failed. Please check your credentials.';
       return false;
     } on FirebaseAuthException catch (e) {
+      _error = e.message;
       ErrorLogger.logError(
         'Error during login',
         error: e,
@@ -280,9 +285,11 @@ class AuthProvider with ChangeNotifier {
         if (newUser.id != null) {
           await _firestoreService.deleteUser(newUser.id!);
         }
+        _error = e.toString();
         rethrow; // Re-throw the exception to be caught by the outer catch block
       }
     } catch (e) {
+      _error = e.toString();
       ErrorLogger.logError(
         'Error creating user',
         error: e,

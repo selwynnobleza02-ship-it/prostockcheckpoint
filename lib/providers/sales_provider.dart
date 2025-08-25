@@ -152,6 +152,9 @@ class SalesProvider with ChangeNotifier {
     }
   }
 
+  
+
+
   /// Infinite scroll pagination implementation
   /// Maintains cursor position and prevents duplicate loading
   Future<void> loadMoreSales({DateTime? startDate, DateTime? endDate}) async {
@@ -273,26 +276,68 @@ class SalesProvider with ChangeNotifier {
     }
   }
 
+  void updateItemQuantity(int index, int newQuantity) {
+    if (index < 0 || index >= _currentSaleItems.length) {
+      _error = 'Invalid item index';
+      notifyListeners();
+      return;
+    }
+
+    if (newQuantity < 0) {
+      _error = 'Quantity cannot be negative';
+      notifyListeners();
+      return;
+    }
+
+    final currentItem = _currentSaleItems[index];
+    final product = _inventoryProvider.getProductById(currentItem.productId);
+
+    if (product == null) {
+      _error = 'Product not found';
+      notifyListeners();
+      return;
+    }
+
+    if (newQuantity == 0) {
+      _currentSaleItems.removeAt(index);
+    } else {
+      // Check available stock before updating
+      final availableStock = _inventoryProvider.getAvailableStock(product.id!); // Assuming getAvailableStock exists
+      if (newQuantity > availableStock) {
+        _error = 'Insufficient stock for ${product.name}. Available: $availableStock';
+        notifyListeners();
+        return;
+      }
+
+      _currentSaleItems[index] = currentItem.copyWith(
+        quantity: newQuantity,
+        totalPrice: product.price * newQuantity,
+      );
+    }
+    _error = null;
+    notifyListeners();
+  }
+
   /// Complete Sale Transaction - Core Business Logic
   ///
   /// TRANSACTION FLOW:
   /// 1. Pre-validation: Verify cart contents and stock availability
-  /// 2. Stock Validation: Check real-time inventory levels for all items
-  /// 3. Sale Creation: Generate sale record with unique ID
-  /// 4. Item Processing: Create individual sale item records
-  /// 5. Inventory Updates: Reduce stock levels through InventoryProvider
-  /// 6. Receipt Generation: Create formatted receipt for customer
-  /// 7. Cleanup: Clear cart and refresh sales data
-  ///
-  /// ATOMICITY GUARANTEE:
-  /// - All operations must succeed or entire transaction rolls back
-  /// - Stock levels are validated immediately before deduction
-  /// - Failed stock updates prevent sale completion
-  ///
-  /// ERROR HANDLING:
-  /// - Comprehensive validation at each step
-  /// - Detailed error messages for troubleshooting
-  /// - Automatic cleanup on failure
+/// 2. Stock Validation: Check real-time inventory levels for all items
+/// 3. Sale Creation: Generate sale record with unique ID
+/// 4. Item Processing: Create individual sale item records
+/// 5. Inventory Updates: Reduce stock levels through InventoryProvider
+/// 6. Receipt Generation: Create formatted receipt for customer
+/// 7. Cleanup: Clear cart and refresh sales data
+///
+/// ATOMICITY GUARANTEE:
+/// - All operations must succeed or entire transaction rolls back
+/// - Stock levels are validated immediately before deduction
+/// - Failed stock updates prevent sale completion
+///
+/// ERROR HANDLING:
+/// - Comprehensive validation at each step
+/// - Detailed error messages for troubleshooting
+/// - Automatic cleanup on failure
   Future<Receipt?> completeSale({
     String? customerId,
     required String paymentMethod,
