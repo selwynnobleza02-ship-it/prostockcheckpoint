@@ -66,7 +66,7 @@ void main() {
         id: '1',
         name: 'Test Product',
         barcode: '1234567890',
-        price: 10.0,
+
         cost: 5.0,
         stock: 100,
         createdAt: DateTime.now(),
@@ -127,7 +127,8 @@ void main() {
     testWidgets('Barcode scanning to product addition flow', (
       WidgetTester tester,
     ) async {
-      final connectivityProvider = ConnectivityProvider(); // New ConnectivityProvider for this test
+      final connectivityProvider =
+          ConnectivityProvider(); // New ConnectivityProvider for this test
       final inventoryProvider = InventoryProvider(connectivityProvider);
 
       await tester.pumpWidget(
@@ -149,7 +150,7 @@ void main() {
                       final newProduct = Product(
                         name: 'Scanned Product',
                         barcode: '9876543210',
-                        price: 25.0,
+
                         cost: 15.0,
                         stock: 50,
                         createdAt: DateTime.now(),
@@ -252,7 +253,8 @@ void main() {
     });
 
     testWidgets('Error handling in providers', (WidgetTester tester) async {
-      final connectivityProvider = ConnectivityProvider(); // New ConnectivityProvider for this test
+      final connectivityProvider =
+          ConnectivityProvider(); // New ConnectivityProvider for this test
       final inventoryProvider = InventoryProvider(connectivityProvider);
 
       await tester.pumpWidget(

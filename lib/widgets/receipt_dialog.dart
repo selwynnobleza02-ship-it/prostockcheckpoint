@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/services/printing_service.dart';
 import '../models/receipt.dart';
 import '../utils/currency_utils.dart';
 
@@ -174,18 +175,14 @@ class ReceiptDialog extends StatelessWidget {
                             ),
                             Expanded(
                               child: Text(
-                                CurrencyUtils.formatCurrency(
-                                  item.unitPrice,
-                                ),
+                                CurrencyUtils.formatCurrency(item.unitPrice),
                                 style: const TextStyle(fontSize: 11),
                                 textAlign: TextAlign.right,
                               ),
                             ),
                             Expanded(
                               child: Text(
-                                CurrencyUtils.formatCurrency(
-                                  item.totalPrice,
-                                ),
+                                CurrencyUtils.formatCurrency(item.totalPrice),
                                 style: const TextStyle(fontSize: 11),
                                 textAlign: TextAlign.right,
                               ),
@@ -265,12 +262,25 @@ class ReceiptDialog extends StatelessWidget {
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Print functionality coming soon!'),
-                          backgroundColor: Colors.orange,
-                        ),
-                      );
+                      final printingService = PrintingService();
+                      if (printingService.isConnected) {
+                        printingService.printReceipt(receipt);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Sent to printer'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'No printer connected. Please set up a printer in settings.',
+                            ),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
                     },
                     icon: const Icon(Icons.print),
                     label: const Text('Print'),

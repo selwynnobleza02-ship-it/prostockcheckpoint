@@ -11,6 +11,9 @@ import '../widgets/receipt_dialog.dart';
 import '../models/receipt.dart';
 import '../models/sale.dart';
 import '../services/firestore_service.dart';
+import '../widgets/sales_over_time_chart.dart';
+import '../widgets/top_selling_products_chart.dart';
+import '../widgets/top_customers_list.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -23,24 +26,40 @@ class _ReportsScreenState extends State<ReportsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
   List<Loss> _losses = [];
+  List<SaleItem> _saleItems = [];
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 4, vsync: this);
+    _tabController = TabController(length: 5, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
   Future<void> _loadData({bool refresh = false}) async {
-    await Provider.of<SalesProvider>(context, listen: false)
-        .loadSales(refresh: refresh);
+    final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+    await salesProvider.loadSales(refresh: refresh);
     await Provider.of<CustomerProvider>(context, listen: false)
         .loadCustomers(refresh: refresh);
     await Provider.of<InventoryProvider>(context, listen: false)
         .loadProducts(refresh: refresh);
     final losses = await FirestoreService.instance.getLosses();
+
+    final List<SaleItem> allSaleItems = [];
+    for (final sale in salesProvider.sales) {
+      if (sale.id != null) {
+        if (sale.isSynced == 1) {
+          final items = await FirestoreService.instance.getSaleItemsBySaleId(sale.id!);
+          allSaleItems.addAll(items);
+        } else {
+          final localItems = await LocalDatabaseService.instance.getSaleItems(sale.id!);
+          allSaleItems.addAll(localItems.map((item) => SaleItem.fromMap(item)).toList());
+        }
+      }
+    }
+
     setState(() {
       _losses = losses;
+      _saleItems = allSaleItems;
     });
   }
 
@@ -62,19 +81,70 @@ class _ReportsScreenState extends State<ReportsScreen>
             Tab(text: 'Inventory'),
             Tab(text: 'Customers'),
             Tab(text: 'Financial'),
+            Tab(text: 'Analytics'),
           ],
         ),
       ),
       body: TabBarView(
         controller: _tabController,
-        children:
-         [
+        children: [
           _buildSalesReport(),
           _buildInventoryReport(),
           _buildCustomersReport(),
           _buildFinancialReport(),
+          _buildAnalyticsReport(),
         ],
       ),
+    );
+  }
+
+  Widget _buildAnalyticsReport() {
+    return Consumer3<SalesProvider, InventoryProvider, CustomerProvider>(
+      builder: (context, salesProvider, inventoryProvider, customerProvider, child) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Sales Over Time',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              if (salesProvider.sales.isEmpty)
+                const Center(child: Text('No sales data available.'))
+              else
+                SalesOverTimeChart(sales: salesProvider.sales),
+              const SizedBox(height: 24),
+              const Text(
+                'Top Selling Products',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              if (_saleItems.isEmpty || inventoryProvider.products.isEmpty)
+                const Center(child: Text('No product data available.'))
+              else
+                TopSellingProductsChart(
+                  saleItems: _saleItems,
+                  products: inventoryProvider.products,
+                ),
+              const SizedBox(height: 24),
+              const Text(
+                'Top Customers',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 16),
+              if (salesProvider.sales.isEmpty || customerProvider.customers.isEmpty)
+                const Center(child: Text('No customer data available.'))
+              else
+                TopCustomersList(
+                  sales: salesProvider.sales,
+                  customers: customerProvider.customers,
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 

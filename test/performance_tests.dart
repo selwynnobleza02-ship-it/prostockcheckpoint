@@ -20,7 +20,7 @@ void main() {
         (index) => Product(
           id: index.toString(),
           name: 'Product $index',
-          price: 10.0 + index,
+
           cost: 5.0 + index,
           stock: 100 + index,
           createdAt: DateTime.now(),
@@ -58,7 +58,7 @@ void main() {
         (index) => Product(
           id: index.toString(),
           name: 'Product $index',
-          price: 10.0,
+
           cost: 5.0,
           stock: 1000,
           createdAt: DateTime.now(),
@@ -121,7 +121,7 @@ void main() {
         (index) => Product(
           id: index.toString(),
           name: 'Product $index',
-          price: 10.0,
+
           cost: 5.0,
           stock: 100,
           createdAt: DateTime.now(),

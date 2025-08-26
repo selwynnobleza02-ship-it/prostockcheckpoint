@@ -1,4 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/providers/theme_provider.dart';
+import 'package:prostock/screens/change_password_screen.dart';
+import 'package:prostock/screens/printer_settings_screen.dart';
+import 'package:prostock/screens/settings_screen.dart';
 import 'package:prostock/utils/global_error_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -37,6 +41,7 @@ class MyApp extends StatelessWidget {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider.value(value: OfflineManager.instance),
         ChangeNotifierProvider(
           create: (context) {
@@ -73,20 +78,35 @@ class RetailCreditApp extends StatefulWidget {
 class _RetailCreditAppState extends State<RetailCreditApp> {
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Retail Credit Manager',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-      ),
-      initialRoute: '/splash', // Changed initial route to SplashScreen
-      routes: {
-        '/splash': (context) => const SplashScreen(), // Added SplashScreen route
-        '/admin': (context) => const AdminScreen(),
-        '/login': (context) => const LoginScreen(),
-        '/signup': (context) => const SignupScreen(),
-        '/user': (context) => const UserScreen(),
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp(
+          title: 'Retail Credit Manager',
+          theme: ThemeData(
+            primarySwatch: Colors.blue,
+            useMaterial3: true,
+            brightness: Brightness.light,
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.light),
+          ),
+          darkTheme: ThemeData(
+            primarySwatch: Colors.blue,
+            useMaterial3: true,
+            brightness: Brightness.dark,
+            colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark),
+          ),
+          themeMode: themeProvider.themeMode,
+          initialRoute: '/splash', // Changed initial route to SplashScreen
+          routes: {
+            '/splash': (context) => const SplashScreen(), // Added SplashScreen route
+            '/admin': (context) => const AdminScreen(),
+            '/login': (context) => const LoginScreen(),
+            '/signup': (context) => const SignupScreen(),
+            '/user': (context) => const UserScreen(),
+            '/settings': (context) => const SettingsScreen(),
+            '/change-password': (context) => const ChangePasswordScreen(),
+            '/printer-settings': (context) => const PrinterSettingsScreen(),
+          },
+        );
       },
     );
   }

@@ -1,0 +1,94 @@
+
+import 'package:flutter/material.dart';
+import 'package:prostock/providers/theme_provider.dart';
+import 'package:provider/provider.dart';
+import '../providers/auth_provider.dart';
+import 'change_password_screen.dart';
+import 'printer_settings_screen.dart';
+
+class SettingsScreen extends StatelessWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Settings'),
+      ),
+      body: ListView(
+        children: [
+          ListTile(
+            leading: const Icon(Icons.palette_outlined),
+            title: const Text('Appearance'),
+            onTap: () {
+              _showThemeDialog(context);
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.lock_outline),
+            title: const Text('Change Password'),
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ChangePasswordScreen()));
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.print_outlined),
+            title: const Text('Printer Settings'),
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const PrinterSettingsScreen()));
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.logout),
+            title: const Text('Logout'),
+            onTap: () async {
+              final authProvider = context.read<AuthProvider>();
+              await authProvider.logout();
+              if (context.mounted) {
+                Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showThemeDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: const Text('Select Theme'),
+          children: [
+            SimpleDialogOption(
+              onPressed: () {
+                Provider.of<ThemeProvider>(context, listen: false)
+                    .setThemeMode(ThemeMode.light);
+                Navigator.of(context).pop();
+              },
+              child: const Text('Light'),
+            ),
+            SimpleDialogOption(
+              onPressed: () {
+                Provider.of<ThemeProvider>(context, listen: false)
+                    .setThemeMode(ThemeMode.dark);
+                Navigator.of(context).pop();
+              },
+              child: const Text('Dark'),
+            ),
+            SimpleDialogOption(
+              onPressed: () {
+                Provider.of<ThemeProvider>(context, listen: false)
+                    .setThemeMode(ThemeMode.system);
+                Navigator.of(context).pop();
+              },
+              child: const Text('System Default'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}

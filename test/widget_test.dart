@@ -57,7 +57,9 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => AuthProvider()),
-            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
+            ChangeNotifierProvider(
+              create: (_) => InventoryProvider(ConnectivityProvider()),
+            ),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -87,7 +89,9 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider(create: (_) => AuthProvider()),
-            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
+            ChangeNotifierProvider(
+              create: (_) => InventoryProvider(ConnectivityProvider()),
+            ),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -135,7 +139,9 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: authProvider),
-            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
+            ChangeNotifierProvider(
+              create: (_) => InventoryProvider(ConnectivityProvider()),
+            ),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -183,7 +189,9 @@ void main() {
         MultiProvider(
           providers: [
             ChangeNotifierProvider.value(value: authProvider),
-            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
+            ChangeNotifierProvider(
+              create: (_) => InventoryProvider(ConnectivityProvider()),
+            ),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -221,7 +229,9 @@ void main() {
       await tester.pumpWidget(
         MultiProvider(
           providers: [
-            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
+            ChangeNotifierProvider(
+              create: (_) => InventoryProvider(ConnectivityProvider()),
+            ),
             ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
               create: (context) => SalesProvider(
                 inventoryProvider: context.read<InventoryProvider>(),
@@ -364,7 +374,7 @@ void main() {
     test('Product model creates correctly', () {
       final product = Product(
         name: 'Test Product',
-        price: 10.99,
+
         cost: 5.50,
         stock: 100,
         createdAt: DateTime.now(),
@@ -381,7 +391,7 @@ void main() {
     test('Product low stock detection works', () {
       final product = Product(
         name: 'Low Stock Product',
-        price: 10.99,
+
         cost: 5.50,
         stock: 3,
         minStock: 5,
@@ -396,7 +406,7 @@ void main() {
       final product = Product(
         name: 'Barcode Product',
         barcode: '1234567890123',
-        price: 25.50,
+
         cost: 15.00,
         stock: 50,
         createdAt: DateTime.now(),
@@ -410,17 +420,14 @@ void main() {
     test('Product copyWith method works correctly', () {
       final originalProduct = Product(
         name: 'Original Product',
-        price: 10.00,
+
         cost: 5.00,
         stock: 20,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
 
-      final updatedProduct = originalProduct.copyWith(
-        name: 'Updated Product',
-        price: 15.00,
-      );
+      final updatedProduct = originalProduct.copyWith(name: 'Updated Product');
 
       expect(updatedProduct.name, 'Updated Product');
       expect(updatedProduct.price, 15.00);
@@ -470,10 +477,7 @@ void main() {
       expect(CurrencyUtils.formatCurrency(1234.56), equals('₱1,234.56'));
       expect(CurrencyUtils.formatCurrency(0.0), equals('₱0.00'));
       expect(CurrencyUtils.formatCurrencyWhole(1234.56), equals('₱1,235'));
-      expect(
-        CurrencyUtils.formatCurrency(1234567.89),
-        equals('₱1,234,567.89'),
-      );
+      expect(CurrencyUtils.formatCurrency(1234567.89), equals('₱1,234,567.89'));
     });
 
     test('Currency validation works', () {
@@ -500,41 +504,43 @@ void main() {
         expect(
           formatted.contains('\$'),
           isFalse,
-          reason: 'Amount $amount should not contain \$',
+          reason: 'Amount $amount should not contain "\$"',
         );
       }
     });
-  });
 
-  group('Error Handling Tests', () {
-    testWidgets('App handles provider errors gracefully', (
-      WidgetTester tester,
-    ) async {
-      // Create providers that might throw errors
-      final authProvider = AuthProvider();
+    group('Error Handling Tests', () {
+      testWidgets('App handles provider errors gracefully', (
+        WidgetTester tester,
+      ) async {
+        // Create providers that might throw errors
+        final authProvider = AuthProvider();
 
-      await tester.pumpWidget(
-        MultiProvider(
-          providers: [
-            ChangeNotifierProvider.value(value: authProvider),
-            ChangeNotifierProvider(create: (_) => InventoryProvider(ConnectivityProvider())),
-            ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
-              create: (context) => SalesProvider(
-                inventoryProvider: context.read<InventoryProvider>(),
+        await tester.pumpWidget(
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider.value(value: authProvider),
+              ChangeNotifierProvider(
+                create: (_) => InventoryProvider(ConnectivityProvider()),
               ),
-              update: (context, inventoryProvider, previousSalesProvider) =>
-                  previousSalesProvider ??
-                  SalesProvider(inventoryProvider: inventoryProvider),
-            ),
-            ChangeNotifierProvider(create: (_) => CustomerProvider()),
-            ChangeNotifierProvider(create: (_) => CreditProvider()),
-          ],
-          child: MaterialApp(home: LoginScreen()),
-        ),
-      );
+              ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
+                create: (context) => SalesProvider(
+                  inventoryProvider: context.read<InventoryProvider>(),
+                ),
+                update: (context, inventoryProvider, previousSalesProvider) =>
+                    previousSalesProvider ??
+                    SalesProvider(inventoryProvider: inventoryProvider),
+              ),
+              ChangeNotifierProvider(create: (_) => CustomerProvider()),
+              ChangeNotifierProvider(create: (_) => CreditProvider()),
+            ],
+            child: MaterialApp(home: LoginScreen()),
+          ),
+        );
 
-      // Verify no exceptions are thrown during widget build
-      expect(tester.takeException(), isNull);
-    });
+        // Verify no exceptions are thrown during widget build
+        expect(tester.takeException(), isNull);
+      });
+    }); // <- Make sure you have proper closing braces and semicolons
   });
 }

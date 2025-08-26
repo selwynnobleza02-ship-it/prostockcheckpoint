@@ -41,7 +41,7 @@ void main() {
         Product(
           id: '1',
           name: 'Test Product 1',
-          price: 10.0,
+
           cost: 5.0,
           stock: 100,
           createdAt: DateTime.now(),
@@ -50,7 +50,7 @@ void main() {
         Product(
           id: '2',
           name: 'Test Product 2',
-          price: 20.0,
+
           cost: 10.0,
           stock: 50,
           createdAt: DateTime.now(),
@@ -80,7 +80,7 @@ void main() {
       // Arrange
       final newProduct = Product(
         name: 'New Product',
-        price: 15.0,
+
         cost: 7.5,
         stock: 75,
         createdAt: DateTime.now(),
@@ -105,7 +105,7 @@ void main() {
       final product = Product(
         id: '1',
         name: 'Test Product',
-        price: 10.0,
+
         cost: 5.0,
         stock: 100,
         createdAt: DateTime.now(),
@@ -132,7 +132,7 @@ void main() {
       final product = Product(
         id: '1',
         name: 'Test Product',
-        price: 10.0,
+
         cost: 5.0,
         stock: 5,
         createdAt: DateTime.now(),
@@ -155,7 +155,7 @@ void main() {
         Product(
           id: '1',
           name: 'Normal Stock',
-          price: 10.0,
+
           cost: 5.0,
           stock: 100,
           minStock: 10,
@@ -165,7 +165,7 @@ void main() {
         Product(
           id: '2',
           name: 'Low Stock',
-          price: 20.0,
+
           cost: 10.0,
           stock: 5,
           minStock: 10,
@@ -201,7 +201,7 @@ void main() {
       final product = Product(
         id: '1',
         name: 'Test Product',
-        price: 10.0,
+
         cost: 5.0,
         stock: 100,
         createdAt: DateTime.now(),
@@ -223,7 +223,7 @@ void main() {
       final product = Product(
         id: '1',
         name: 'Test Product',
-        price: 10.0,
+
         cost: 5.0,
         stock: 100,
         createdAt: DateTime.now(),
@@ -245,7 +245,7 @@ void main() {
       final product = Product(
         id: '1',
         name: 'Test Product',
-        price: 10.0,
+
         cost: 5.0,
         stock: 100,
         createdAt: DateTime.now(),
@@ -267,7 +267,7 @@ void main() {
       final product = Product(
         id: '1',
         name: 'Test Product',
-        price: 10.0,
+
         cost: 5.0,
         stock: 100,
         createdAt: DateTime.now(),

@@ -1,0 +1,17 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+  package="com.peoplewareinnovations.bluetooth_thermal_printer">
+  
+    <!-- Lejet për Bluetooth tradicionale -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" android:maxSdkVersion="30" />
+    
+    <!-- Lejet e reja për Android 12+ (API 31+) -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    
+    <!-- Deklarimi i feature-ve Bluetooth -->
+    <uses-feature 
+        android:name="android.hardware.bluetooth" 
+        android:required="true" />
+</manifest>

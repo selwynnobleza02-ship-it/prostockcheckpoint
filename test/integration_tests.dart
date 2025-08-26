@@ -52,7 +52,7 @@ void main() {
         id: '1',
         name: 'Test Product',
         barcode: '1234567890',
-        price: 10.0,
+
         cost: 5.0,
         stock: 100,
         createdAt: DateTime.now(),
@@ -137,7 +137,7 @@ void main() {
                       final newProduct = Product(
                         name: 'Scanned Product',
                         barcode: '9876543210',
-                        price: 25.0,
+
                         cost: 15.0,
                         stock: 50,
                         createdAt: DateTime.now(),

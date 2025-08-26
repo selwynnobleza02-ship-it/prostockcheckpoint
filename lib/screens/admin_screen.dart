@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/screens/settings_screen.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/app_user.dart';
@@ -52,12 +53,9 @@ class _AdminScreenState extends State<AdminScreen> {
             },
           ),
           IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await authProvider.logout();
-              if (mounted) {
-                Navigator.of(context).pushReplacementNamed('/login');
-              }
+            icon: const Icon(Icons.settings),
+            onPressed: () {
+              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
             },
           ),
         ],
