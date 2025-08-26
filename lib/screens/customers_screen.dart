@@ -238,6 +238,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 value: 'history',
                                 child: Text('Transaction History'),
                               ),
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Text('Delete'),
+                              ),
                             ],
                             onSelected: (value) {
                               switch (value) {
@@ -257,6 +261,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                   break;
                                 case 'history':
                                   _showTransactionHistory(customer);
+                                  break;
+                                case 'delete':
+                                  _showDeleteConfirmation(customer);
                                   break;
                               }
                             },
@@ -456,10 +463,6 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   context,
                   listen: false,
                 );
-                final customerProvider = Provider.of<CustomerProvider>(
-                  context,
-                  listen: false,
-                );
 
                 final success = await creditProvider.recordPayment(
                   customer.id!,
@@ -468,9 +471,6 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 );
 
                 if (success) {
-                  // Refresh customer data
-                  await customerProvider.refreshCustomers();
-
                   if (mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -495,6 +495,47 @@ class _CustomersScreenState extends State<CustomersScreen> {
               }
             },
             child: const Text('Record Payment'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteConfirmation(Customer customer) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Customer'),
+        content: Text('Are you sure you want to delete ${customer.name}? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final provider = Provider.of<CustomerProvider>(context, listen: false);
+              final success = await provider.deleteCustomer(customer.id!);
+              if (mounted) {
+                Navigator.pop(context);
+                if (success) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Customer "${customer.name}" deleted successfully!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to delete customer. ${provider.error ?? ''}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: const Text('Delete'),
           ),
         ],
       ),

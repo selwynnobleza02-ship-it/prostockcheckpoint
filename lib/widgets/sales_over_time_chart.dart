@@ -37,30 +37,32 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
                   ),
 
                   /// Filter Buttons (Daily / Monthly / Yearly)
-                  ToggleButtons(
-                    isSelected: [
-                      _selectedFilter == "Daily",
-                      _selectedFilter == "Monthly",
-                      _selectedFilter == "Yearly",
-                    ],
-                    onPressed: (index) {
-                      setState(() {
-                        _selectedFilter = ["Daily", "Monthly", "Yearly"][index];
-                      });
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    selectedColor: Colors.white,
-                    fillColor: Colors.blue,
-                    color: Colors.blueGrey,
-                    constraints: const BoxConstraints(
-                      minHeight: 36,
-                      minWidth: 70,
+                  Flexible(
+                    child: ToggleButtons(
+                      isSelected: [
+                        _selectedFilter == "Daily",
+                        _selectedFilter == "Monthly",
+                        _selectedFilter == "Yearly",
+                      ],
+                      onPressed: (index) {
+                        setState(() {
+                          _selectedFilter = ["Daily", "Monthly", "Yearly"][index];
+                        });
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      selectedColor: Colors.white,
+                      fillColor: Colors.blue,
+                      color: Colors.blueGrey,
+                      constraints: const BoxConstraints(
+                        minHeight: 36,
+                        minWidth: 70,
+                      ),
+                      children: const [
+                        Text("Daily"),
+                        Text("Monthly"),
+                        Text("Yearly"),
+                      ],
                     ),
-                    children: const [
-                      Text("Daily"),
-                      Text("Monthly"),
-                      Text("Yearly"),
-                    ],
                   ),
                 ],
               ),

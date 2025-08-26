@@ -2,11 +2,15 @@ import 'package:flutter/material.dart';
 import '../models/credit_transaction.dart';
 import '../services/firestore_service.dart';
 import '../utils/error_logger.dart'; // Import ErrorLogger
+import 'customer_provider.dart';
 
 class CreditProvider with ChangeNotifier {
+  final CustomerProvider customerProvider;
   List<CreditTransaction> _transactions = [];
   bool _isLoading = false;
   String? _error;
+
+  CreditProvider({required this.customerProvider});
 
   List<CreditTransaction> get transactions => _transactions;
   bool get isLoading => _isLoading;
@@ -91,7 +95,8 @@ class CreditProvider with ChangeNotifier {
 
       await addCreditTransaction(transaction);
 
-      await FirestoreService.instance.updateCustomerBalance(customerId, -amount);
+      final newBalance = await FirestoreService.instance.updateCustomerBalance(customerId, -amount);
+      customerProvider.updateLocalCustomerBalance(customerId, newBalance);
 
       _isLoading = false;
       notifyListeners();
@@ -136,7 +141,8 @@ class CreditProvider with ChangeNotifier {
 
       await addCreditTransaction(transaction);
 
-      await FirestoreService.instance.updateCustomerBalance(customerId, amount);
+      final newBalance = await FirestoreService.instance.updateCustomerBalance(customerId, amount);
+      customerProvider.updateLocalCustomerBalance(customerId, newBalance);
 
       _isLoading = false;
       notifyListeners();

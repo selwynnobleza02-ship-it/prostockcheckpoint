@@ -1,7 +1,11 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/customer.dart';
+import '../services/cloudinary_service.dart';
 import '../services/firestore_service.dart';
+import '../utils/constants.dart';
 import '../utils/error_logger.dart';
 
 class CustomerProvider with ChangeNotifier {
@@ -131,7 +135,7 @@ class CustomerProvider with ChangeNotifier {
     _cacheTimestamps.clear();
   }
 
-  Future<bool> addCustomer(Customer customer) async {
+  Future<Customer?> addCustomer(Customer customer) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -145,6 +149,7 @@ class CustomerProvider with ChangeNotifier {
         email: customer.email,
         address: customer.address,
         imageUrl: customer.imageUrl,
+        localImagePath: customer.localImagePath,
         creditLimit: customer.creditLimit,
         currentBalance: customer.currentBalance,
         createdAt: customer.createdAt,
@@ -153,7 +158,7 @@ class CustomerProvider with ChangeNotifier {
       _customers.add(newCustomer);
       _isLoading = false;
       notifyListeners();
-      return true;
+      return newCustomer;
     } catch (e) {
       _error = 'Failed to add customer: ${e.toString()}';
       _isLoading = false;
@@ -163,16 +168,30 @@ class CustomerProvider with ChangeNotifier {
         error: e,
         context: 'CustomerProvider.addCustomer',
       );
-      return false;
+      return null;
     }
   }
 
-  Future<bool> updateCustomer(Customer customer) async {
+  Future<Customer?> updateCustomer(Customer customer) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
+      final oldCustomer = getCustomerById(customer.id!);
+      if (oldCustomer?.localImagePath != null && oldCustomer!.localImagePath! != customer.localImagePath) {
+        final imageFile = File(oldCustomer.localImagePath!);
+        if (await imageFile.exists()) {
+          await imageFile.delete();
+        }
+      }
+      if (oldCustomer?.imageUrl != null && oldCustomer!.imageUrl! != customer.imageUrl) {
+        final publicId = CloudinaryService.instance.getPublicIdFromUrl(oldCustomer.imageUrl!);
+        if (publicId != null) {
+          await CloudinaryService.instance.deleteImage(publicId);
+        }
+      }
+
       await FirestoreService.instance.updateCustomer(customer);
       final index = _customers.indexWhere((c) => c.id == customer.id);
       if (index != -1) {
@@ -180,7 +199,7 @@ class CustomerProvider with ChangeNotifier {
         _isLoading = false;
         notifyListeners();
       }
-      return true;
+      return customer;
     } catch (e) {
       _error = 'Failed to update customer: ${e.toString()}';
       _isLoading = false;
@@ -189,6 +208,37 @@ class CustomerProvider with ChangeNotifier {
         'Error updating customer',
         error: e,
         context: 'CustomerProvider.updateCustomer',
+      );
+      return null;
+    }
+  }
+
+  Future<bool> deleteCustomer(String customerId) async {
+    try {
+      final customer = getCustomerById(customerId);
+      if (customer?.localImagePath != null) {
+        final imageFile = File(customer!.localImagePath!);
+        if (await imageFile.exists()) {
+          await imageFile.delete();
+        }
+      }
+      if (customer?.imageUrl != null) {
+        final publicId = CloudinaryService.instance.getPublicIdFromUrl(customer!.imageUrl!);
+        if (publicId != null) {
+          await CloudinaryService.instance.deleteImage(publicId);
+        }
+      }
+      await FirestoreService.instance.deleteDocument(AppConstants.customersCollection, customerId);
+      _customers.removeWhere((c) => c.id == customerId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Failed to delete customer: ${e.toString()}';
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error deleting customer',
+        error: e,
+        context: 'CustomerProvider.deleteCustomer',
       );
       return false;
     }
@@ -214,6 +264,8 @@ class CustomerProvider with ChangeNotifier {
         phone: customer.phone,
         email: customer.email,
         address: customer.address,
+        imageUrl: customer.imageUrl,
+        localImagePath: customer.localImagePath,
         creditLimit: customer.creditLimit,
         currentBalance: newBalance,
         createdAt: customer.createdAt,
@@ -233,6 +285,27 @@ class CustomerProvider with ChangeNotifier {
         context: 'CustomerProvider.updateCustomerBalance',
       );
       return false;
+    }
+  }
+
+  void updateLocalCustomerBalance(String customerId, double newBalance) {
+    final index = _customers.indexWhere((c) => c.id == customerId);
+    if (index != -1) {
+      final oldCustomer = _customers[index];
+      _customers[index] = Customer(
+        id: oldCustomer.id,
+        name: oldCustomer.name,
+        phone: oldCustomer.phone,
+        email: oldCustomer.email,
+        address: oldCustomer.address,
+        imageUrl: oldCustomer.imageUrl,
+        localImagePath: oldCustomer.localImagePath,
+        creditLimit: oldCustomer.creditLimit,
+        currentBalance: newBalance,
+        createdAt: oldCustomer.createdAt,
+        updatedAt: DateTime.now(),
+      );
+      notifyListeners();
     }
   }
 

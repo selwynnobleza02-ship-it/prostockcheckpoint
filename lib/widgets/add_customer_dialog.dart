@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
+import 'package:prostock/services/cloudinary_service.dart';
 import 'package:prostock/utils/error_logger.dart';
 import 'package:provider/provider.dart';
-import 'package:firebase_storage/firebase_storage.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as path;
 
 class AddCustomerDialog extends StatefulWidget {
   final Customer? customer;
@@ -41,6 +43,9 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
       _addressController.text = customer.address ?? '';
       _creditLimitController.text = customer.creditLimit.toString();
       _networkImageUrl = customer.imageUrl;
+      if (customer.localImagePath != null) {
+        _imageFile = File(customer.localImagePath!);
+      }
     }
   }
 
@@ -58,8 +63,11 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     try {
       final pickedFile = await ImagePicker().pickImage(source: source);
       if (pickedFile != null) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final fileName = path.basename(pickedFile.path);
+        final savedImage = await File(pickedFile.path).copy('${appDir.path}/$fileName');
         setState(() {
-          _imageFile = File(pickedFile.path);
+          _imageFile = savedImage;
         });
       }
     } catch (e, s) {
@@ -126,13 +134,15 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                     ),
                     child: _imageFile != null
                         ? Image.file(_imageFile!, fit: BoxFit.cover)
-                        : _networkImageUrl != null
-                            ? Image.network(_networkImageUrl!, fit: BoxFit.cover)
-                            : const Icon(
-                                Icons.add_a_photo,
-                                size: 50,
-                                color: Colors.grey,
-                              ),
+                        : widget.customer?.localImagePath != null
+                            ? Image.file(File(widget.customer!.localImagePath!), fit: BoxFit.cover)
+                            : _networkImageUrl != null
+                                ? Image.network(_networkImageUrl!, fit: BoxFit.cover)
+                                : const Icon(
+                                    Icons.add_a_photo,
+                                    size: 50,
+                                    color: Colors.grey,
+                                  ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -172,7 +182,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                     if (value != null && value.trim().isNotEmpty) {
                       // Basic Philippine mobile number validation
                       final cleanNumber = value.trim().replaceAll(
-                        RegExp(r'[^\]'),
+                        RegExp(r'[^0-9]'),
                         '',
                       );
                       if (cleanNumber.length < 10 || cleanNumber.length > 11) {
@@ -328,29 +338,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
 
   Future<String?> _uploadImage(File imageFile) async {
     try {
-      final storageRef = FirebaseStorage.instance
-          .ref()
-          .child('customer_images')
-          .child('${DateTime.now().toIso8601String()}.jpg');
-      final uploadTask = storageRef.putFile(imageFile);
-      final snapshot = await uploadTask.whenComplete(() => {});
-      return await snapshot.ref.getDownloadURL();
-    } on FirebaseException catch (e, s) {
-      String message = 'An error occurred during image upload.';
-      if (e.code == 'object-not-found') {
-        message = 'The image could not be found.';
-      } else if (e.code == 'unauthorized') {
-        message = 'You do not have permission to upload images.';
-      } else if (e.code == 'canceled') {
-        message = 'Image upload was canceled.';
-      }
-      ErrorLogger.logError('Error uploading image', error: e, stackTrace: s);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
-        );
-      }
-      return null;
+      return await CloudinaryService.instance.uploadImage(imageFile);
     } catch (e, s) {
       ErrorLogger.logError('Error uploading image', error: e, stackTrace: s);
       if (mounted) {
@@ -403,6 +391,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         email: email.isEmpty ? null : email,
         address: address.isEmpty ? null : address,
         imageUrl: imageUrl,
+        localImagePath: _imageFile?.path,
         creditLimit: creditLimit,
         currentBalance: _isEditMode ? widget.customer!.currentBalance : 0.0,
         createdAt: _isEditMode ? widget.customer!.createdAt : DateTime.now(),
@@ -410,20 +399,27 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
       );
 
       final provider = Provider.of<CustomerProvider>(context, listen: false);
-      bool success = false;
+      Customer? result;
       if (_isEditMode) {
-        success = await provider.updateCustomer(customerData);
+        result = await provider.updateCustomer(customerData);
       } else {
-        success = await provider.addCustomer(customerData);
+        result = await provider.addCustomer(customerData);
       }
 
-      if (success) {
+      if (result != null) {
+        if (imageUrl != null) {
+          ErrorLogger.logError(
+            'INFO: Image uploaded for customer ${result.id}',
+            context: 'AddCustomerDialog._saveCustomer',
+            metadata: {'imageUrl': imageUrl},
+          );
+        }
         if (mounted) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                  'Customer "${customerData.name}" ${_isEditMode ? 'updated' : 'added'} successfully!'),
+                  'Customer "${result.name}" ${_isEditMode ? 'updated' : 'added'} successfully!'),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 3),
             ),

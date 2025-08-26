@@ -5,6 +5,7 @@ class Customer {
   final String? email;
   final String? address;
   final String? imageUrl;
+  final String? localImagePath;
   final double creditLimit;
   final double currentBalance;
   final DateTime createdAt;
@@ -17,6 +18,7 @@ class Customer {
     this.email,
     this.address,
     this.imageUrl,
+    this.localImagePath,
     this.creditLimit = 0,
     this.currentBalance = 0,
     required this.createdAt,
@@ -70,6 +72,7 @@ class Customer {
       'email': email,
       'address': address,
       'imageUrl': imageUrl,
+      'localImagePath': localImagePath,
       'credit_limit': creditLimit,
       'current_balance': currentBalance,
       'created_at': createdAt.toIso8601String(),
@@ -85,6 +88,7 @@ class Customer {
       email: map['email']?.toString(),
       address: map['address']?.toString(),
       imageUrl: map['imageUrl']?.toString(),
+      localImagePath: map['localImagePath']?.toString(),
       creditLimit: (map['credit_limit'] ?? 0).toDouble(),
       currentBalance: (map['current_balance'] ?? 0).toDouble(),
       createdAt: DateTime.parse(

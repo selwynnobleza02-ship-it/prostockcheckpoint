@@ -631,12 +631,12 @@ i) {
     }
   }
 
-  Future<void> updateCustomerBalance(
+  Future<double> updateCustomerBalance(
     String customerId,
     double amountChange,
   ) async {
     try {
-      await FirebaseFirestore.instance.runTransaction((transaction) async {
+      return await FirebaseFirestore.instance.runTransaction((transaction) async {
         final customerRef = customers.doc(customerId);
         final customerDoc = await transaction.get(customerRef);
 
@@ -652,6 +652,7 @@ i) {
           'currentBalance': newBalance,
           'updatedAt': FieldValue.serverTimestamp(),
         });
+        return newBalance;
       });
     } catch (e) {
       throw FirestoreException('Failed to update customer balance: $e');
@@ -910,8 +911,7 @@ i) {
         totalRevenue += (data['totalAmount'] ?? 0.0) as double;
 
         final paymentMethod = data['paymentMethod'] as String? ?? 'Unknown';
-        paymentMethods[paymentMethod] =
-            (paymentMethods[paymentMethod] ?? 0) + 1;
+        paymentMethods[paymentMethod] = (paymentMethods[paymentMethod] ?? 0) + 1;
       }
 
       return {

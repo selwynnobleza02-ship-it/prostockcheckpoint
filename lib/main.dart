@@ -61,7 +61,14 @@ class MyApp extends StatelessWidget {
               SalesProvider(inventoryProvider: inventoryProvider),
         ),
         ChangeNotifierProvider(create: (_) => CustomerProvider()),
-        ChangeNotifierProvider(create: (_) => CreditProvider()),
+        ChangeNotifierProxyProvider<CustomerProvider, CreditProvider>(
+          create: (context) => CreditProvider(
+            customerProvider: context.read<CustomerProvider>(),
+          ),
+          update: (context, customerProvider, previousCreditProvider) =>
+              previousCreditProvider ??
+              CreditProvider(customerProvider: customerProvider),
+        ),
       ],
       child: const RetailCreditApp(),
     );
