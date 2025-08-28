@@ -27,7 +27,7 @@ class CustomerProvider with ChangeNotifier {
   bool get hasMoreData => _hasMoreData;
 
   List<Customer> get overdueCustomers =>
-      _customers.where((customer) => customer.hasOverdueBalance).toList();
+      _customers.where((customer) => customer.hasUtang).toList();
 
   void clearError() {
     _error = null;
@@ -150,8 +150,7 @@ class CustomerProvider with ChangeNotifier {
         address: customer.address,
         imageUrl: customer.imageUrl,
         localImagePath: customer.localImagePath,
-        creditLimit: customer.creditLimit,
-        currentBalance: customer.currentBalance,
+        utangBalance: customer.utangBalance,
         createdAt: customer.createdAt,
         updatedAt: customer.updatedAt,
       );
@@ -244,8 +243,8 @@ class CustomerProvider with ChangeNotifier {
     }
   }
 
-  /// Updates a customer's balance and refreshes the local data
-  Future<bool> updateCustomerBalance(
+  /// Updates a customer's utang balance and refreshes the local data
+  Future<bool> updateCustomerUtang(
     String customerId,
     double newBalance,
   ) async {
@@ -266,8 +265,7 @@ class CustomerProvider with ChangeNotifier {
         address: customer.address,
         imageUrl: customer.imageUrl,
         localImagePath: customer.localImagePath,
-        creditLimit: customer.creditLimit,
-        currentBalance: newBalance,
+        utangBalance: newBalance,
         createdAt: customer.createdAt,
         updatedAt: DateTime.now(),
       );
@@ -277,18 +275,18 @@ class CustomerProvider with ChangeNotifier {
       notifyListeners();
       return true;
     } catch (e) {
-      _error = 'Failed to update customer balance: ${e.toString()}';
+      _error = 'Failed to update customer utang: ${e.toString()}';
       notifyListeners();
       ErrorLogger.logError(
-        'Error updating customer balance',
+        'Error updating customer utang',
         error: e,
-        context: 'CustomerProvider.updateCustomerBalance',
+        context: 'CustomerProvider.updateCustomerUtang',
       );
       return false;
     }
   }
 
-  void updateLocalCustomerBalance(String customerId, double newBalance) {
+  void updateLocalCustomerUtang(String customerId, double newBalance) {
     final index = _customers.indexWhere((c) => c.id == customerId);
     if (index != -1) {
       final oldCustomer = _customers[index];
@@ -300,8 +298,7 @@ class CustomerProvider with ChangeNotifier {
         address: oldCustomer.address,
         imageUrl: oldCustomer.imageUrl,
         localImagePath: oldCustomer.localImagePath,
-        creditLimit: oldCustomer.creditLimit,
-        currentBalance: newBalance,
+        utangBalance: newBalance,
         createdAt: oldCustomer.createdAt,
         updatedAt: DateTime.now(),
       );

@@ -202,7 +202,7 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
                 labelText: 'Cost Price *',
                 border: OutlineInputBorder(),
                 prefixText: '₱ ',
-                prefixIcon: Icon(Icons.money_off),
+                prefixIcon: Icon(Icons.local_mall),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
@@ -298,9 +298,7 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
                             'Selling Price',
                             style: TextStyle(fontWeight: FontWeight.bold),
                           ),
-                          Text(
-                            '₱${price.toStringAsFixed(2)}',
-                          ),
+                          Text('₱${price.toStringAsFixed(2)}'),
                           const SizedBox(height: 8),
                           const Text(
                             'Profit Margin',
@@ -397,7 +395,7 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
             Navigator.pop(context, true);
           }
         });
-      } 
+      }
     } catch (e, s) {
       ErrorLogger.logError(
         'Error adding product from barcode',

@@ -27,54 +27,6 @@ class AuthProvider with ChangeNotifier {
   String? _error;
   String? get error => _error;
 
-  AuthProvider() {
-    _firebaseAuth.authStateChanges().listen(_onAuthStateChanged);
-  }
-
-  void _onAuthStateChanged(User? firebaseUser) async {
-    _firebaseUser = firebaseUser;
-
-    if (firebaseUser != null) {
-      // User is signed in, get user data from Firestore
-      try {
-        final userData = await _firestoreService.getUserByEmail(
-          firebaseUser.email!,
-        );
-
-        if (userData != null) {
-          _currentUser = userData;
-          _isAuthenticated = true;
-
-          // Save to SharedPreferences
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setBool('isAuthenticated', true);
-          await prefs.setString('userId', userData.id.toString());
-          await prefs.setString('username', userData.username);
-          await prefs.setString('userRole', userData.role.name);
-        }
-      } catch (e) {
-        ErrorLogger.logError(
-          'Error getting user data',
-          error: e,
-          context: 'AuthProvider._onAuthStateChanged',
-        ); // Replaced print with ErrorLogger
-      }
-    } else {
-      // User is signed out
-      _currentUser = null;
-      _isAuthenticated = false;
-
-      // Clear SharedPreferences
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('isAuthenticated');
-      await prefs.remove('userId');
-      await prefs.remove('username');
-      await prefs.remove('userRole');
-    }
-
-    notifyListeners();
-  }
-
   Future<bool> login(String email, String password) async {
     try {
       final credential = await _firebaseAuth.signInWithEmailAndPassword(
@@ -239,13 +191,12 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> createUser(
+  Future<void> createUser(
     String username,
     String email,
     String password,
     UserRole role,
   ) async {
-
     AppUser? newUser;
     try {
       // Check if username already exists
@@ -277,25 +228,24 @@ class AuthProvider with ChangeNotifier {
 
         if (credential.user != null) {
           await credential.user!.updateDisplayName(username);
-          return true;
+          await logActivity('CREATE_USER', details: 'User $username created');
+        } else {
+          throw Exception('Failed to create Firebase Auth user');
         }
-        return false;
       } catch (e) {
         // If Firebase Auth creation fails, delete the Firestore user
         if (newUser.id != null) {
           await _firestoreService.deleteUser(newUser.id!);
         }
-        _error = e.toString();
         rethrow; // Re-throw the exception to be caught by the outer catch block
       }
     } catch (e) {
-      _error = e.toString();
       ErrorLogger.logError(
         'Error creating user',
         error: e,
         context: 'AuthProvider.createUser',
       ); // Replaced print with ErrorLogger
-      return false;
+      rethrow;
     }
   }
 

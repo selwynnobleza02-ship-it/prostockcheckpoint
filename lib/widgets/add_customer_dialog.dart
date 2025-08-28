@@ -8,7 +8,7 @@ import 'package:prostock/services/cloudinary_service.dart';
 import 'package:prostock/utils/error_logger.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as p;
 
 class AddCustomerDialog extends StatefulWidget {
   final Customer? customer;
@@ -24,7 +24,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
-  final _creditLimitController = TextEditingController(text: '0');
 
   bool _isLoading = false;
   File? _imageFile;
@@ -41,7 +40,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
       _phoneController.text = customer.phone ?? '';
       _emailController.text = customer.email ?? '';
       _addressController.text = customer.address ?? '';
-      _creditLimitController.text = customer.creditLimit.toString();
       _networkImageUrl = customer.imageUrl;
       if (customer.localImagePath != null) {
         _imageFile = File(customer.localImagePath!);
@@ -55,7 +53,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     _phoneController.dispose();
     _emailController.dispose();
     _addressController.dispose();
-    _creditLimitController.dispose();
     super.dispose();
   }
 
@@ -64,8 +61,10 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
       final pickedFile = await ImagePicker().pickImage(source: source);
       if (pickedFile != null) {
         final appDir = await getApplicationDocumentsDirectory();
-        final fileName = path.basename(pickedFile.path);
-        final savedImage = await File(pickedFile.path).copy('${appDir.path}/$fileName');
+        final fileName = p.basename(pickedFile.path);
+        final savedImage = await File(
+          pickedFile.path,
+        ).copy('${appDir.path}/$fileName');
         setState(() {
           _imageFile = savedImage;
         });
@@ -135,14 +134,17 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                     child: _imageFile != null
                         ? Image.file(_imageFile!, fit: BoxFit.cover)
                         : widget.customer?.localImagePath != null
-                            ? Image.file(File(widget.customer!.localImagePath!), fit: BoxFit.cover)
-                            : _networkImageUrl != null
-                                ? Image.network(_networkImageUrl!, fit: BoxFit.cover)
-                                : const Icon(
-                                    Icons.add_a_photo,
-                                    size: 50,
-                                    color: Colors.grey,
-                                  ),
+                        ? Image.file(
+                            File(widget.customer!.localImagePath!),
+                            fit: BoxFit.cover,
+                          )
+                        : _networkImageUrl != null
+                        ? Image.network(_networkImageUrl!, fit: BoxFit.cover)
+                        : const Icon(
+                            Icons.add_a_photo,
+                            size: 50,
+                            color: Colors.grey,
+                          ),
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -230,39 +232,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                     alignLabelWithHint: true,
                   ),
                 ),
-                const SizedBox(height: 16),
-
-                // Credit Limit
-                TextFormField(
-                  controller: _creditLimitController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  decoration: const InputDecoration(
-                    labelText: 'Credit Limit',
-                    border: OutlineInputBorder(),
-                    prefixText: '₱ ',
-                    prefixIcon: Icon(Icons.credit_card),
-                    helperText: 'Maximum credit amount allowed',
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Enter credit limit (0 for no credit)';
-                    }
-                    final creditLimit = double.tryParse(value.trim());
-                    if (creditLimit == null || creditLimit < 0) {
-                      return 'Enter valid credit limit';
-                    }
-                    if (creditLimit > 1000000) {
-                      return 'Credit limit seems too high';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Credit Info Card
-                _buildCreditInfoCard(),
               ],
             ),
           ),
@@ -284,55 +253,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
               : Text(_isEditMode ? 'Save Changes' : 'Add Customer'),
         ),
       ],
-    );
-  }
-
-  Widget _buildCreditInfoCard() {
-    final creditLimit = double.tryParse(_creditLimitController.text.trim()) ?? 0;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: creditLimit > 0 ? Colors.orange.shade50 : Colors.blue.shade50,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(
-          color: creditLimit > 0
-              ? Colors.orange.shade200
-              : Colors.blue.shade200,
-        ),
-      ),
-      child: Row(
-        children: [
-          Icon(
-            creditLimit > 0 ? Icons.warning : Icons.info,
-            color: creditLimit > 0 ? Colors.orange : Colors.blue,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  creditLimit > 0
-                      ? 'Credit Customer (₱${creditLimit.toStringAsFixed(2)} limit)'
-                      : 'Cash-Only Customer',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 12,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  creditLimit > 0
-                      ? 'This customer can purchase on credit up to the specified limit.'
-                      : 'This customer can only make cash purchases.',
-                  style: const TextStyle(fontSize: 11),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -373,12 +293,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         }
       }
 
-      // Safely parse credit limit
-      final creditLimit = double.tryParse(_creditLimitController.text.trim());
-      if (creditLimit == null) {
-        throw const FormatException('Invalid credit limit format');
-      }
-
       // Clean and prepare optional fields
       final phone = _phoneController.text.trim();
       final email = _emailController.text.trim();
@@ -392,12 +306,11 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         address: address.isEmpty ? null : address,
         imageUrl: imageUrl,
         localImagePath: _imageFile?.path,
-        creditLimit: creditLimit,
-        currentBalance: _isEditMode ? widget.customer!.currentBalance : 0.0,
+        utangBalance: _isEditMode ? widget.customer!.utangBalance : 0.0,
         createdAt: _isEditMode ? widget.customer!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
       );
-
+      if (!mounted) return;
       final provider = Provider.of<CustomerProvider>(context, listen: false);
       Customer? result;
       if (_isEditMode) {
@@ -419,7 +332,8 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                  'Customer "${result.name}" ${_isEditMode ? 'updated' : 'added'} successfully!'),
+                'Customer "${result.name}" ${_isEditMode ? 'updated' : 'added'} successfully!',
+              ),
               backgroundColor: Colors.green,
               duration: const Duration(seconds: 3),
             ),
@@ -430,7 +344,8 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(
-                  'Failed to ${_isEditMode ? 'update' : 'add'} customer. ${provider.error ?? ''}'),
+                'Failed to ${_isEditMode ? 'update' : 'add'} customer. ${provider.error ?? ''}',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -473,7 +388,8 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         String errorMessage = 'Error saving customer';
 
         if (e.toString().contains('already exists')) {
-          errorMessage = 'Customer with this name, phone, or email already exists.';
+          errorMessage =
+              'Customer with this name, phone, or email already exists.';
         } else if (e.toString().contains('network') ||
             e.toString().contains('connection')) {
           errorMessage = 'Network error. Please check your connection.';

@@ -51,6 +51,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
         _devices = devices;
       });
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error scanning for printers: $e')),
       );
@@ -61,10 +62,12 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
   Future<void> _selectPrinter(dynamic device) async {
     final bool connected = await _printingService.connect(device);
     if (connected) {
+      if (!mounted) return;
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Connected to ${device.name}')));
     } else {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Failed to connect to ${device.name}')),
       );

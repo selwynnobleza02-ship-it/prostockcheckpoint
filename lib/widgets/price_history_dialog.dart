@@ -9,10 +9,10 @@ class PriceHistoryDialog extends StatefulWidget {
   const PriceHistoryDialog({super.key, required this.productId});
 
   @override
-  _PriceHistoryDialogState createState() => _PriceHistoryDialogState();
+  PriceHistoryDialogState createState() => PriceHistoryDialogState();
 }
 
-class _PriceHistoryDialogState extends State<PriceHistoryDialog> {
+class PriceHistoryDialogState extends State<PriceHistoryDialog> {
   late Future<List<PriceHistory>> _priceHistoryFuture;
 
   @override

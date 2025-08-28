@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:developer';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:prostock/models/loss.dart';
+import 'package:prostock/utils/app_constants.dart';
 import '../models/product.dart';
 import '../models/price_history.dart';
 import '../models/customer.dart';
@@ -59,8 +61,7 @@ class FirestoreService {
       _firestore.collection(AppConstants.errorLogsCollection);
   CollectionReference get losses =>
       _firestore.collection(AppConstants.lossesCollection);
-  CollectionReference get priceHistory =>
-      _firestore.collection('priceHistory');
+  CollectionReference get priceHistory => _firestore.collection('priceHistory');
 
   // Authentication
   User? get currentUser => _auth.currentUser;
@@ -177,6 +178,7 @@ class FirestoreService {
     String userId,
     String action,
     String details, {
+    String? username,
     Map<String, dynamic>? metadata,
   }) async {
     try {
@@ -191,6 +193,7 @@ class FirestoreService {
 
       await activities.add({
         'userId': userId,
+        'username': username, // Denormalized username
         'action': action,
         'details': details,
         'metadata': sanitizedMetadata,
@@ -204,7 +207,7 @@ class FirestoreService {
 
   // Input validation and sanitization methods
   void _validateCollectionName(String collection) {
-    if (collection.isEmpty || collection.length > 100) {
+    if (collection.isEmpty || collection.length > ValidationConstants.maxCollectionNameLength) {
       throw ArgumentError('Invalid collection name');
     }
 
@@ -227,7 +230,7 @@ class FirestoreService {
   }
 
   void _validateDocumentId(String docId) {
-    if (docId.isEmpty || docId.length > 100) {
+    if (docId.isEmpty || docId.length > ValidationConstants.maxDocIdLength) {
       throw ArgumentError('Invalid document ID');
     }
 
@@ -245,7 +248,7 @@ class FirestoreService {
       throw ArgumentError('$fieldName cannot be empty');
     }
 
-    if (input.length > 1000) {
+    if (input.length > ValidationConstants.maxInputLength) {
       throw ArgumentError('$fieldName exceeds maximum length');
     }
 
@@ -271,8 +274,7 @@ class FirestoreService {
         _sanitizeData(value); // Recursively sanitize nested maps
       } else if (value is List) {
         // Handle lists that might contain maps or strings
-        for (int i = 0; i < value.length;
-i) {
+        for (int i = 0; i < value.length; i) {
           if (value[i] is String) {
             value[i] = const HtmlEscape().convert((value[i] as String).trim());
           } else if (value[i] is Map<String, dynamic>) {
@@ -298,9 +300,7 @@ i) {
   }
 
   bool _isValidCustomer(Customer customer) {
-    return customer.name.isNotEmpty &&
-        customer.creditLimit >= 0 &&
-        customer.currentBalance >= 0;
+    return customer.name.isNotEmpty && customer.utangBalance >= 0;
   }
 
   bool _isValidSale(Sale sale) {
@@ -320,18 +320,26 @@ i) {
   bool isValidPhoneNumber(String phone) {
     if (phone.isEmpty) return false;
     final cleanPhone = phone.replaceAll(RegExp(r'[^\d+]'), '');
-    final phoneRegex = RegExp(r'^\+?[1-9]\d{6,14');
+    final phoneRegex = RegExp(r'^\+?[1-9]\d{6,14}');
     return phoneRegex.hasMatch(cleanPhone);
   }
 
   // Product operations
+  Product _productFromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return Product.fromMap(data);
+  }
+
   Future<void> insertProduct(Product product) async {
     try {
       if (!_isValidProduct(product)) {
         throw ArgumentError('Invalid product data');
       }
       if (product.id == null || product.id!.isEmpty) {
-        throw ArgumentError('Product ID cannot be null or empty for insertion.');
+        throw ArgumentError(
+          'Product ID cannot be null or empty for insertion.',
+        );
       }
 
       final productData = product.toMap();
@@ -349,7 +357,9 @@ i) {
         throw ArgumentError('Invalid product data');
       }
       if (product.id == null || product.id!.isEmpty) {
-        throw ArgumentError('Product ID cannot be null or empty for insertion.');
+        throw ArgumentError(
+          'Product ID cannot be null or empty for insertion.',
+        );
       }
 
       final batch = _firestore.batch();
@@ -368,11 +378,16 @@ i) {
 
       await batch.commit();
     } catch (e) {
-      throw FirestoreException('Failed to insert product with price history: $e');
+      throw FirestoreException(
+        'Failed to insert product with price history: $e',
+      );
     }
   }
 
-  Future<void> updateProductWithPriceHistory(Product product, bool priceChanged) async {
+  Future<void> updateProductWithPriceHistory(
+    Product product,
+    bool priceChanged,
+  ) async {
     try {
       if (!_isValidProduct(product)) {
         throw ArgumentError('Invalid product data');
@@ -396,7 +411,9 @@ i) {
 
       await batch.commit();
     } catch (e) {
-      throw FirestoreException('Failed to update product with price history: $e');
+      throw FirestoreException(
+        'Failed to update product with price history: $e',
+      );
     }
   }
 
@@ -428,12 +445,7 @@ i) {
   Future<List<Product>> getAllProducts() async {
     try {
       final snapshot = await products.orderBy('name').get();
-
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return Product.fromMap(data);
-      }).toList();
+      return snapshot.docs.map(_productFromDocument).toList();
     } catch (e) {
       throw FirestoreException('Failed to get all products: $e');
     }
@@ -445,12 +457,7 @@ i) {
           .where('name', isGreaterThanOrEqualTo: query)
           .where('name', isLessThan: '$query\ufff0')
           .get();
-
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return Product.fromMap(data);
-      }).toList();
+      return snapshot.docs.map(_productFromDocument).toList();
     } catch (e) {
       throw FirestoreException('Failed to search products: $e');
     }
@@ -466,10 +473,7 @@ i) {
           .get();
 
       if (snapshot.docs.isNotEmpty) {
-        final doc = snapshot.docs.first;
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return Product.fromMap(data);
+        return _productFromDocument(snapshot.docs.first);
       }
       return null;
     } catch (e) {
@@ -482,9 +486,7 @@ i) {
       final doc = await products.doc(id).get();
 
       if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return Product.fromMap(data);
+        return _productFromDocument(doc);
       }
       return null;
     } catch (e) {
@@ -520,7 +522,7 @@ i) {
   }
 
   Future<PaginatedResult<Product>> getProductsPaginated({
-    int limit = 50,
+    int limit = ApiConstants.productSearchLimit,
     DocumentSnapshot? lastDocument,
     String? searchQuery,
   }) async {
@@ -535,11 +537,7 @@ i) {
 
       final snapshot = await query.get();
 
-      final productsList = snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return Product.fromMap(data);
-      }).toList();
+      final productsList = snapshot.docs.map(_productFromDocument).toList();
 
       return PaginatedResult(
         items: productsList,
@@ -551,6 +549,12 @@ i) {
   }
 
   // Customer operations
+  Customer _customerFromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return Customer.fromMap(data);
+  }
+
   Future<String> insertCustomer(Customer customer) async {
     try {
       if (!_isValidCustomer(customer)) {
@@ -569,12 +573,7 @@ i) {
   Future<List<Customer>> getAllCustomers() async {
     try {
       final snapshot = await customers.orderBy('name').get();
-
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return Customer.fromMap(data);
-      }).toList();
+      return snapshot.docs.map(_customerFromDocument).toList();
     } catch (e) {
       throw FirestoreException('Failed to get all customers: $e');
     }
@@ -586,12 +585,7 @@ i) {
           .where('name', isGreaterThanOrEqualTo: query)
           .where('name', isLessThan: '$query\ufff0')
           .get();
-
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return Customer.fromMap(data);
-      }).toList();
+      return snapshot.docs.map(_customerFromDocument).toList();
     } catch (e) {
       throw FirestoreException('Failed to search customers: $e');
     }
@@ -602,9 +596,7 @@ i) {
       final doc = await customers.doc(id).get();
 
       if (doc.exists) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return Customer.fromMap(data);
+        return _customerFromDocument(doc);
       }
       return null;
     } catch (e) {
@@ -631,12 +623,14 @@ i) {
     }
   }
 
-  Future<double> updateCustomerBalance(
+  Future<double> updateCustomerUtang(
     String customerId,
     double amountChange,
   ) async {
     try {
-      return await FirebaseFirestore.instance.runTransaction((transaction) async {
+      return await FirebaseFirestore.instance.runTransaction((
+        transaction,
+      ) async {
         final customerRef = customers.doc(customerId);
         final customerDoc = await transaction.get(customerRef);
 
@@ -645,22 +639,22 @@ i) {
         }
 
         final data = customerDoc.data() as Map<String, dynamic>;
-        final currentBalance = (data['currentBalance'] ?? 0.0) as double;
+        final currentBalance = (data['utang_balance'] ?? 0.0) as double;
         final newBalance = currentBalance + amountChange;
 
         transaction.update(customerRef, {
-          'currentBalance': newBalance,
+          'utang_balance': newBalance,
           'updatedAt': FieldValue.serverTimestamp(),
         });
         return newBalance;
       });
     } catch (e) {
-      throw FirestoreException('Failed to update customer balance: $e');
+      throw FirestoreException('Failed to update customer utang: $e');
     }
   }
 
   Future<PaginatedResult<Customer>> getCustomersPaginated({
-    int limit = 50,
+    int limit = ApiConstants.productSearchLimit,
     DocumentSnapshot? lastDocument,
     String? searchQuery,
   }) async {
@@ -681,11 +675,7 @@ i) {
 
       final snapshot = await query.get();
 
-      final customersList = snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return Customer.fromMap(data);
-      }).toList();
+      final customersList = snapshot.docs.map(_customerFromDocument).toList();
 
       return PaginatedResult(
         items: customersList,
@@ -705,8 +695,12 @@ i) {
 
       return await _firestore.runTransaction((transaction) async {
         // 1. Read all product documents first.
-        final productRefs = products.map((p) => this.products.doc(p.id)).toList();
-        final productDocs = await Future.wait(productRefs.map((ref) => transaction.get(ref)));
+        final productRefs = products
+            .map((p) => this.products.doc(p.id))
+            .toList();
+        final productDocs = await Future.wait(
+          productRefs.map((ref) => transaction.get(ref)),
+        );
 
         // 2. Validate products and prepare updates.
         for (int i = 0; i < products.length; i++) {
@@ -714,9 +708,12 @@ i) {
           if (!productDoc.exists) {
             throw Exception('Product with ID ${products[i].id} not found');
           }
-          final currentStock = (productDoc.data() as Map<String, dynamic>)['stock'] ?? 0;
+          final currentStock =
+              (productDoc.data() as Map<String, dynamic>)['stock'] ?? 0;
           if (currentStock <= 0) {
-            throw Exception('Product with ID ${products[i].id} is out of stock');
+            throw Exception(
+              'Product with ID ${products[i].id} is out of stock',
+            );
           }
         }
 
@@ -724,7 +721,9 @@ i) {
         final saleRef = sales.doc();
         final saleData = sale.toMap();
         saleData.remove('id');
-        saleData['createdAt'] = Timestamp.fromDate(sale.createdAt); // Explicitly convert to Timestamp
+        saleData['createdAt'] = Timestamp.fromDate(
+          sale.createdAt,
+        ); // Explicitly convert to Timestamp
         transaction.set(saleRef, saleData);
 
         for (int i = 0; i < products.length; i++) {
@@ -736,6 +735,54 @@ i) {
       });
     } catch (e) {
       throw FirestoreException('Failed to insert sale: $e');
+    }
+  }
+
+  Future<String> recordUtang(
+    String customerId,
+    double totalAmount,
+    List<SaleItem> saleItems,
+  ) async {
+    try {
+      return await _firestore.runTransaction((transaction) async {
+        // 1. Update customer's utang balance
+        final customerRef = customers.doc(customerId);
+        final customerDoc = await transaction.get(customerRef);
+
+        if (!customerDoc.exists) {
+          throw Exception('Customer not found');
+        }
+
+        final data = customerDoc.data() as Map<String, dynamic>;
+        final currentBalance = (data['utang_balance'] ?? 0.0) as double;
+        final newBalance = currentBalance + totalAmount;
+
+        transaction.update(customerRef, {
+          'utang_balance': newBalance,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+
+        // 2. Create a credit transaction record
+        final creditTransactionRef = creditTransactions.doc();
+        final creditTransaction = CreditTransaction(
+          customerId: customerId,
+          amount: totalAmount,
+          type: 'credit',
+          description: 'POS Utang',
+          createdAt: DateTime.now(),
+        );
+        transaction.set(creditTransactionRef, creditTransaction.toMap());
+
+        // 3. Decrement product stock
+        for (final item in saleItems) {
+          final productRef = products.doc(item.productId);
+          transaction.update(productRef, {'stock': FieldValue.increment(-item.quantity)});
+        }
+
+        return creditTransactionRef.id;
+      });
+    } catch (e) {
+      throw FirestoreException('Failed to record utang: $e');
     }
   }
 
@@ -782,7 +829,7 @@ i) {
       });
     } catch (e) {
       throw FirestoreException(
-        'Failed to insert complete sale transaction: $e',
+        'Failed to insert complete transaction: $e',
       );
     }
   }
@@ -801,10 +848,16 @@ i) {
     }
   }
 
-  Future<List<Sale>> getSalesInDateRange(DateTime startDate, DateTime endDate) async {
+  Future<List<Sale>> getSalesInDateRange(
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
     try {
       final snapshot = await sales
-          .where('createdAt', isGreaterThanOrEqualTo: Timestamp.fromDate(startDate))
+          .where(
+            'createdAt',
+            isGreaterThanOrEqualTo: Timestamp.fromDate(startDate),
+          )
           .where('createdAt', isLessThanOrEqualTo: Timestamp.fromDate(endDate))
           .get();
 
@@ -833,7 +886,7 @@ i) {
   }
 
   Future<PaginatedResult<Sale>> getSalesPaginated({
-    int limit = 30,
+    int limit = ApiConstants.salesHistoryLimit,
     DocumentSnapshot? lastDocument,
     DateTime? startDate,
     DateTime? endDate,
@@ -862,7 +915,9 @@ i) {
       query = query.limit(limit);
 
       final snapshot = await query.get();
-      print('FirestoreService: Fetched ${snapshot.docs.length} sales documents.');
+      print(
+        'FirestoreService: Fetched ${snapshot.docs.length} sales documents.',
+      );
 
       final salesList = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
@@ -911,7 +966,8 @@ i) {
         totalRevenue += (data['totalAmount'] ?? 0.0) as double;
 
         final paymentMethod = data['paymentMethod'] as String? ?? 'Unknown';
-        paymentMethods[paymentMethod] = (paymentMethods[paymentMethod] ?? 0) + 1;
+        paymentMethods[paymentMethod] =
+            (paymentMethods[paymentMethod] ?? 0) + 1;
       }
 
       return {
@@ -1172,7 +1228,7 @@ i) {
   Future<List<UserActivity>> getUserActivities(
     String userId,
     {
-    int limit = 100,
+    int limit = ValidationConstants.maxLocalErrors,
   }) async {
     try {
       final snapshot = await activities
@@ -1192,7 +1248,7 @@ i) {
   }
 
   Future<List<Map<String, dynamic>>> getAllUserActivitiesWithUsernames({
-    int limit = 200,
+    int limit = ValidationConstants.maxDescriptionLength,
   }) async {
     try {
       final activitiesSnapshot = await activities
@@ -1205,7 +1261,6 @@ i) {
       for (final activityDoc in activitiesSnapshot.docs) {
         final activityData = activityDoc.data() as Map<String, dynamic>;
         activityData['id'] = activityDoc.id;
-
         // Get username
         final userId = activityData['userId'];
         final userDoc = await users.doc(userId).get();
@@ -1227,7 +1282,8 @@ i) {
 
   Future<List<UserActivity>> getActivitiesByDateRange(
     DateTime start,
-    DateTime end, {
+    DateTime end,
+    {
     String? userId,
   }) async {
     try {
@@ -1253,7 +1309,7 @@ i) {
 
   Future<PaginatedResult<UserActivity>> getUserActivitiesPaginated({
     required String userId,
-    int limit = 50,
+    int limit = ApiConstants.productSearchLimit,
     DocumentSnapshot? lastDocument,
   }) async {
     try {
@@ -1287,20 +1343,18 @@ i) {
   // Debug method for testing Firestore operations
   Future<void> debugFirestoreOperations() async {
     try {
-      print('=== FIRESTORE DEBUG START ===');
+      log('=== FIRESTORE DEBUG START ===');
 
       // Test 1: List all documents in users collection
       final querySnapshot = await FirebaseFirestore.instance
           .collection(AppConstants.usersCollection)
           .get();
 
-      print(
-        'Total documents in users collection: ${querySnapshot.docs.length}',
-      );
+      log('Total documents in users collection: ${querySnapshot.docs.length}');
 
       for (var doc in querySnapshot.docs) {
-        print('Document ID: ${doc.id}');
-        print('Document data: ${doc.data()}');
+        log('Document ID: ${doc.id}');
+        log('Document data: ${doc.data()}');
       }
 
       // Test 2: Try to find admin user specifically
@@ -1309,10 +1363,10 @@ i) {
           .where('username', isEqualTo: 'admin')
           .get();
 
-      print('Admin query results: ${adminQuery.docs.length}');
+      log('Admin query results: ${adminQuery.docs.length}');
 
       if (adminQuery.docs.isNotEmpty) {
-        print('Admin found: ${adminQuery.docs.first.data()}');
+        log('Admin found: ${adminQuery.docs.first.data()}');
       }
 
       // Test 3: Try to find user specifically
@@ -1321,15 +1375,15 @@ i) {
           .where('username', isEqualTo: 'user')
           .get();
 
-      print('User query results: ${userQuery.docs.length}');
+      log('User query results: ${userQuery.docs.length}');
 
       if (userQuery.docs.isNotEmpty) {
-        print('User found: ${userQuery.docs.first.data()}');
+        log('User found: ${userQuery.docs.first.data()}');
       }
 
-      print('=== FIRESTORE DEBUG END ===');
+      log('=== FIRESTORE DEBUG END ===');
     } catch (e) {
-      print('Firestore debug error: $e');
+      log('Firestore debug error: $e');
     }
   }
 
@@ -1367,7 +1421,9 @@ i) {
 
   Future<List<Loss>> getLosses() async {
     try {
-      final snapshot = await losses.orderBy('timestamp', descending: true).get();
+      final snapshot = await losses
+          .orderBy('timestamp', descending: true)
+          .get();
 
       return snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;

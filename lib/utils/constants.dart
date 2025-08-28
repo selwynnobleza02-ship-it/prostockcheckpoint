@@ -12,6 +12,12 @@ class AppConstants {
   static const String lossesCollection = 'losses';
   static const String priceHistoryCollection = 'price_history';
 
+  // Operation types
+  static const String operationInsert = 'insert';
+  static const String operationUpdate = 'update';
+  static const String operationDelete = 'delete';
+  static const String operationCreateSaleTransaction = 'createSaleTransaction';
+
   // Tax rate
   static const double taxRate = 0.12;
 }

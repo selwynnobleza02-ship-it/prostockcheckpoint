@@ -148,7 +148,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
                     labelText: 'Cost Price *',
                     border: OutlineInputBorder(),
                     prefixText: '₱ ', // Philippine Peso symbol
-                    prefixIcon: Icon(Icons.money_off),
+                    prefixIcon: Icon(Icons.shopping_cart),
                   ),
                   validator: (value) {
                     if (value == null || value.trim().isEmpty) {

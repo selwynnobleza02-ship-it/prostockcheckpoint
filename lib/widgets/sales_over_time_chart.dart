@@ -46,7 +46,11 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
                       ],
                       onPressed: (index) {
                         setState(() {
-                          _selectedFilter = ["Daily", "Monthly", "Yearly"][index];
+                          _selectedFilter = [
+                            "Daily",
+                            "Monthly",
+                            "Yearly",
+                          ][index];
                         });
                       },
                       borderRadius: BorderRadius.circular(12),
@@ -129,8 +133,8 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
             show: true,
             gradient: LinearGradient(
               colors: [
-                Colors.blue.withOpacity(0.3),
-                Colors.blue.withOpacity(0.05),
+                Colors.blue.withValues(alpha: 0.3),
+                Colors.blue.withValues(alpha: 0.05),
               ],
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,

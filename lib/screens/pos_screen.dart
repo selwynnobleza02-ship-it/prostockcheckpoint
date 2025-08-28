@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:prostock/utils/app_constants.dart';
 import '../providers/sales_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/customer_provider.dart';
@@ -7,8 +8,8 @@ import '../models/customer.dart';
 import '../widgets/barcode_scanner_widget.dart';
 import '../models/product.dart';
 import '../utils/currency_utils.dart';
-import '../widgets/receipt_dialog.dart'; // Added import for receipt dialog
-import 'dart:async'; // Import for Timer
+import '../widgets/receipt_dialog.dart';
+import 'dart:async';
 
 class POSScreen extends StatefulWidget {
   const POSScreen({super.key});
@@ -23,7 +24,7 @@ class _POSScreenState extends State<POSScreen> {
   final TextEditingController _productSearchController =
       TextEditingController();
   Timer? _productSearchDebounce;
-  bool _isProcessingSale = false; // New state for checkout loading
+  bool _isProcessingSale = false;
 
   @override
   void initState() {
@@ -43,8 +44,7 @@ class _POSScreenState extends State<POSScreen> {
     if (_productSearchDebounce?.isActive ?? false) {
       _productSearchDebounce!.cancel();
     }
-    _productSearchDebounce = Timer(const Duration(milliseconds: 300), () {
-      // Trigger product search in InventoryProvider
+    _productSearchDebounce = Timer(UiConstants.debounceDuration, () {
       Provider.of<InventoryProvider>(
         context,
         listen: false,
@@ -55,6 +55,7 @@ class _POSScreenState extends State<POSScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      resizeToAvoidBottomInset: false,
       appBar: AppBar(
         title: const Text('Point of Sale'),
         actions: [
@@ -72,33 +73,11 @@ class _POSScreenState extends State<POSScreen> {
           ),
         ],
       ),
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 600) {
-            // Mobile layout - stack vertically
-            return Column(
-              children: [
-                // Product selection on top
-                Expanded(flex: 2, child: _buildProductSection()),
-                // Cart on bottom
-                SizedBox(height: 300, child: _buildCartSection()),
-              ],
-            );
-          } else {
-            // Desktop/tablet layout - side by side
-            return Row(
-              children: [
-                // Product selection side
-                Expanded(flex: 2, child: _buildProductSection()),
-                // Cart side with minimum width constraint
-                SizedBox(
-                  width: constraints.maxWidth > 800 ? 350 : 280,
-                  child: _buildCartSection(),
-                ),
-              ],
-            );
-          }
-        },
+      body: Column(
+        children: [
+          Flexible(flex: 3, child: _buildProductSection()),
+          Flexible(flex: 2, child: _buildCartSection()),
+        ],
       ),
     );
   }
@@ -107,16 +86,15 @@ class _POSScreenState extends State<POSScreen> {
     return Column(
       children: [
         Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(UiConstants.spacingMedium),
           child: TextField(
             controller: _productSearchController,
             decoration: const InputDecoration(
               hintText: 'Search products...',
               prefixIcon: Icon(Icons.search),
               border: OutlineInputBorder(),
-              isDense: true, // Added dense to reduce height
+              isDense: true,
             ),
-            // onChanged is now handled by the listener on _productSearchController
           ),
         ),
         Expanded(
@@ -133,7 +111,7 @@ class _POSScreenState extends State<POSScreen> {
                       backgroundColor: Colors.red,
                     ),
                   );
-                  provider.clearError(); // Clear the error after showing it
+                  provider.clearError();
                 });
               }
 
@@ -144,16 +122,12 @@ class _POSScreenState extends State<POSScreen> {
               }
 
               return GridView.builder(
-                padding: const EdgeInsets.all(16),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: MediaQuery.of(context).size.width > 600
-                      ? 2
-                      : 1, // Responsive grid
-                  crossAxisSpacing: 8,
-                  mainAxisSpacing: 8,
-                  childAspectRatio: MediaQuery.of(context).size.width > 600
-                      ? 0.8
-                      : 1.2, // Responsive aspect ratio
+                padding: const EdgeInsets.all(UiConstants.spacingMedium),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: UiConstants.spacingSmall,
+                  mainAxisSpacing: UiConstants.spacingSmall,
+                  childAspectRatio: 0.9,
                 ),
                 itemCount: productsToDisplay.length,
                 itemBuilder: (context, index) {
@@ -169,7 +143,7 @@ class _POSScreenState extends State<POSScreen> {
                         }
                       },
                       child: Padding(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(UiConstants.spacingSmall),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
@@ -178,21 +152,23 @@ class _POSScreenState extends State<POSScreen> {
                                 width: double.infinity,
                                 decoration: BoxDecoration(
                                   color: Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(8),
+                                  borderRadius: BorderRadius.circular(
+                                    UiConstants.borderRadiusStandard,
+                                  ),
                                 ),
                                 child: const Icon(
                                   Icons.inventory,
-                                  size: 40,
+                                  size: UiConstants.iconSizeMedium,
                                   color: Colors.grey,
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 8),
+                            const SizedBox(height: UiConstants.spacingSmall),
                             Text(
                               product.name,
                               style: const TextStyle(
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12, // Reduced font size
+                                fontSize: UiConstants.fontSizeSmall,
                               ),
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
@@ -202,7 +178,7 @@ class _POSScreenState extends State<POSScreen> {
                               style: const TextStyle(
                                 color: Colors.green,
                                 fontWeight: FontWeight.bold,
-                                fontSize: 12, // Reduced font size
+                                fontSize: UiConstants.fontSizeSmall,
                               ),
                             ),
                             Text(
@@ -211,7 +187,7 @@ class _POSScreenState extends State<POSScreen> {
                                 color: product.stock > 0
                                     ? Colors.grey[600]
                                     : Colors.red,
-                                fontSize: 10, // Reduced font size
+                                fontSize: UiConstants.fontSizeExtraSmall,
                               ),
                             ),
                           ],
@@ -231,19 +207,18 @@ class _POSScreenState extends State<POSScreen> {
   Widget _buildCartSection() {
     return Container(
       decoration: BoxDecoration(
-        border: Border(left: BorderSide(color: Colors.grey[300]!)),
+        border: Border(top: BorderSide(color: Colors.grey[300]!)),
       ),
       child: Column(
         children: [
           Container(
-            padding: const EdgeInsets.all(12), // Reduced padding from 16 to 12
+            padding: const EdgeInsets.all(UiConstants.spacingSmall),
             decoration: BoxDecoration(
               color: Colors.grey[100],
               border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
             ),
             child: Column(
               children: [
-                // Customer selection
                 Consumer<CustomerProvider>(
                   builder: (context, provider, child) {
                     return DropdownButtonFormField<Customer>(
@@ -253,18 +228,15 @@ class _POSScreenState extends State<POSScreen> {
                         border: OutlineInputBorder(),
                         isDense: true,
                         contentPadding: EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 8,
+                          horizontal: UiConstants.spacingSmall,
+                          vertical: UiConstants.spacingSmall,
                         ),
                       ),
                       isExpanded: true,
                       items: [
                         const DropdownMenuItem<Customer>(
                           value: null,
-                          child: Text(
-                            'Walk-in Customer',
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          child: Text('Walk-in Customer'),
                         ),
                         ...provider.customers.map(
                           (customer) => DropdownMenuItem<Customer>(
@@ -279,13 +251,15 @@ class _POSScreenState extends State<POSScreen> {
                       onChanged: (customer) {
                         setState(() {
                           _selectedCustomer = customer;
+                          if (_selectedCustomer == null) {
+                            _paymentMethod = 'cash';
+                          }
                         });
                       },
                     );
                   },
                 ),
-                const SizedBox(height: 8), // Reduced from 12 to 8
-                // Payment method
+                const SizedBox(height: UiConstants.spacingSmall),
                 DropdownButtonFormField<String>(
                   initialValue: _paymentMethod,
                   decoration: const InputDecoration(
@@ -293,15 +267,25 @@ class _POSScreenState extends State<POSScreen> {
                     border: OutlineInputBorder(),
                     isDense: true,
                     contentPadding: EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
+                      horizontal: UiConstants.spacingSmall,
+                      vertical: UiConstants.spacingSmall,
                     ),
                   ),
                   isExpanded: true,
-                  items: const [
-                    DropdownMenuItem(value: 'cash', child: Text('Cash')),
-                    DropdownMenuItem(value: 'card', child: Text('Card')),
-                    DropdownMenuItem(value: 'credit', child: Text('Credit')),
+                  items: [
+                    const DropdownMenuItem(value: 'cash', child: Text('Cash')),
+                    DropdownMenuItem(
+                      value: 'credit',
+                      enabled: _selectedCustomer != null,
+                      child: Text(
+                        'Credit',
+                        style: TextStyle(
+                          color: _selectedCustomer != null
+                              ? Colors.black
+                              : Colors.grey,
+                        ),
+                      ),
+                    ),
                   ],
                   onChanged: (value) {
                     setState(() {
@@ -312,97 +296,91 @@ class _POSScreenState extends State<POSScreen> {
               ],
             ),
           ),
-          // Cart items
           Expanded(
-            child: Consumer<SalesProvider>(
-              builder: (context, provider, child) {
-                if (provider.currentSaleItems.isEmpty) {
-                  return const Center(child: Text('No items in cart'));
-                }
-
-                return ListView.builder(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
-                  itemCount: provider.currentSaleItems.length,
-                  itemBuilder: (context, index) {
-                    final item = provider.currentSaleItems[index];
-                    // Get the actual product to display its name
-                    final product =
-                        Provider.of<InventoryProvider>(
-                          context,
-                          listen: false,
-                        ).products.firstWhere(
-                          (p) => p.id == item.productId,
-                          orElse: () => Product(
-                            name: 'Unknown Product',
-                            cost: 0,
-                            stock: 0,
-                            createdAt: DateTime.now(),
-                            updatedAt: DateTime.now(),
-                          ),
-                        );
-
-                    return ListTile(
-                      dense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      title: Text(
-                        product.name,
-                        style: const TextStyle(
-                          fontSize: 12,
-                        ), // Reduced font size
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      subtitle: Text(
-                        'Qty: ${item.quantity}',
-                        style: const TextStyle(
-                          fontSize: 10,
-                        ), // Reduced font size
-                      ),
-                      trailing: SizedBox(
-                        width: 80, // Fixed width for trailing section
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Expanded(
-                              child: Text(
-                                CurrencyUtils.formatCurrency(item.totalPrice),
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                ), // Reduced font size
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            SizedBox(
-                              width: 24, // Fixed width for icon button
-                              child: IconButton(
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(),
-                                icon: const Icon(Icons.remove, size: 16),
-                                onPressed: () {
-                                  provider.removeItemFromCurrentSale(index);
-                                },
-                              ),
-                            ),
-                          ],
-                        ),
+            child: ListView.builder(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              itemCount: context.watch<SalesProvider>().currentSaleItems.length,
+              itemBuilder: (context, index) {
+                final item = context
+                    .watch<SalesProvider>()
+                    .currentSaleItems[index];
+                final product = context
+                    .watch<InventoryProvider>()
+                    .products
+                    .firstWhere(
+                      (p) => p.id == item.productId,
+                      orElse: () => Product(
+                        name: 'Unknown Product',
+                        cost: 0,
+                        stock: 0,
+                        createdAt: DateTime.now(),
+                        updatedAt: DateTime.now(),
                       ),
                     );
-                  },
+
+                return ListTile(
+                  dense: true,
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: UiConstants.spacingSmall,
+                    vertical: 2,
+                  ),
+                  title: Text(
+                    product.name,
+                    style: const TextStyle(fontSize: UiConstants.fontSizeSmall),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    'Qty: ${item.quantity}',
+                    style: const TextStyle(
+                      fontSize: UiConstants.fontSizeExtraSmall,
+                    ),
+                  ),
+                  trailing: SizedBox(
+                    width: 80,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            CurrencyUtils.formatCurrency(item.totalPrice),
+                            style: const TextStyle(
+                              fontSize: UiConstants.fontSizeExtraSmall,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        SizedBox(
+                          width: UiConstants.spacingLarge,
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(
+                              Icons.remove,
+                              size: UiConstants.spacingMedium,
+                            ),
+                            onPressed: () {
+                              context
+                                  .read<SalesProvider>()
+                                  .removeItemFromCurrentSale(index);
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 );
               },
             ),
           ),
-          // Total and checkout
           Container(
-            padding: const EdgeInsets.all(12), // Reduced padding from 16 to 12
+            padding: const EdgeInsets.all(UiConstants.spacingSmall),
             decoration: BoxDecoration(
               border: Border(top: BorderSide(color: Colors.grey[300]!)),
             ),
             child: Consumer<SalesProvider>(
               builder: (context, provider, child) {
                 return Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -410,7 +388,7 @@ class _POSScreenState extends State<POSScreen> {
                         const Text(
                           'Total:',
                           style: TextStyle(
-                            fontSize: 16, // Reduced from 18 to 16
+                            fontSize: UiConstants.fontSizeMedium,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -420,7 +398,7 @@ class _POSScreenState extends State<POSScreen> {
                               provider.currentSaleTotal,
                             ),
                             style: const TextStyle(
-                              fontSize: 16, // Reduced from 18 to 16
+                              fontSize: UiConstants.fontSizeMedium,
                               fontWeight: FontWeight.bold,
                               color: Colors.green,
                             ),
@@ -429,7 +407,7 @@ class _POSScreenState extends State<POSScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 12), // Reduced from 16 to 12
+                    const SizedBox(height: UiConstants.spacingSmall),
                     Row(
                       children: [
                         Expanded(
@@ -441,21 +419,25 @@ class _POSScreenState extends State<POSScreen> {
                                   },
                             style: ElevatedButton.styleFrom(
                               backgroundColor: Colors.grey,
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: UiConstants.spacingSmall,
+                              ),
                             ),
                             child: const Text(
                               'Clear',
-                              style: TextStyle(fontSize: 12),
+                              style: TextStyle(
+                                fontSize: UiConstants.fontSizeSmall,
+                              ),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
+                        const SizedBox(width: UiConstants.spacingSmall),
                         Expanded(
                           flex: 2,
                           child: ElevatedButton(
                             onPressed:
                                 provider.currentSaleItems.isEmpty ||
-                                    _isProcessingSale // Disable if processing
+                                    _isProcessingSale
                                 ? null
                                 : () async {
                                     setState(() {
@@ -467,25 +449,26 @@ class _POSScreenState extends State<POSScreen> {
                                             customerId: _selectedCustomer?.id,
                                             paymentMethod: _paymentMethod,
                                           );
-
-                                      if (receipt != null && mounted) {
-                                        showDialog(
-                                          context: context,
-                                          barrierDismissible: false,
-                                          builder: (context) =>
-                                              ReceiptDialog(receipt: receipt),
-                                        );
-                                      } else if (mounted) {
-                                        ScaffoldMessenger.of(
-                                          context,
-                                        ).showSnackBar(
-                                          SnackBar(
-                                            content: Text(
-                                              provider.error ?? 'Sale failed',
+                                      if (context.mounted) {
+                                        if (receipt != null && mounted) {
+                                          showDialog(
+                                            context: context,
+                                            barrierDismissible: false,
+                                            builder: (context) =>
+                                                ReceiptDialog(receipt: receipt),
+                                          );
+                                        } else if (mounted) {
+                                          ScaffoldMessenger.of(
+                                            context,
+                                          ).showSnackBar(
+                                            SnackBar(
+                                              content: Text(
+                                                provider.error ?? 'Sale failed',
+                                              ),
+                                              backgroundColor: Colors.red,
                                             ),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
+                                          );
+                                        }
                                       }
                                     } finally {
                                       setState(() {
@@ -494,21 +477,24 @@ class _POSScreenState extends State<POSScreen> {
                                     }
                                   },
                             style: ElevatedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                vertical: UiConstants.spacingSmall,
+                              ),
                             ),
-                            child:
-                                _isProcessingSale // Show loading indicator if processing
+                            child: _isProcessingSale
                                 ? const SizedBox(
-                                    width: 20,
-                                    height: 20,
+                                    width: UiConstants.iconSizeSmall,
+                                    height: UiConstants.iconSizeSmall,
                                     child: CircularProgressIndicator(
                                       color: Colors.white,
-                                      strokeWidth: 2,
+                                      strokeWidth: UiConstants.strokeWidthSmall,
                                     ),
                                   )
                                 : const Text(
                                     'Checkout',
-                                    style: TextStyle(fontSize: 12),
+                                    style: TextStyle(
+                                      fontSize: UiConstants.fontSizeSmall,
+                                    ),
                                   ),
                           ),
                         ),

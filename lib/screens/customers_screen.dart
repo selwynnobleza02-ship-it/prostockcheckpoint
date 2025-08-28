@@ -165,9 +165,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                         ),
                         child: ListTile(
                           leading: CircleAvatar(
-                            backgroundColor: customer.hasOverdueBalance
-                                ? Colors.red
-                                : customer.currentBalance > 0
+                            backgroundColor: customer.hasUtang
                                 ? Colors.orange
                                 : Colors.green,
                             child: Text(
@@ -186,38 +184,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 Text('Phone: ${customer.phone}'),
                               if (customer.email != null)
                                 Text('Email: ${customer.email}'),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      'Credit: ${CurrencyUtils.formatCurrency(customer.creditLimit)}',
-                                    ),
-                                  ),
-                                  const SizedBox(width: 16),
-                                  Expanded(
-                                    child: Text(
-                                      'Balance: ${CurrencyUtils.formatCurrency(customer.currentBalance)}',
-                                      style: TextStyle(
-                                        color: customer.hasOverdueBalance
-                                            ? Colors.red
-                                            : customer.currentBalance > 0
-                                            ? Colors.orange
-                                            : Colors.green,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              if (customer.hasOverdueBalance)
-                                const Text(
-                                  'OVERDUE BALANCE!',
-                                  style: TextStyle(
-                                    color: Colors.red,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 12,
-                                  ),
+                              Text(
+                                'Utang: ${CurrencyUtils.formatCurrency(customer.utangBalance)}',
+                                style: TextStyle(
+                                  color: customer.hasUtang
+                                      ? Colors.orange
+                                      : Colors.green,
+                                  fontWeight: FontWeight.bold,
                                 ),
+                              ),
                             ],
                           ),
                           trailing: PopupMenuButton(
@@ -231,8 +206,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                 child: Text('Edit'),
                               ),
                               const PopupMenuItem(
-                                value: 'credit',
-                                child: Text('Manage Credit'),
+                                value: 'utang',
+                                child: Text('Manage Utang'),
                               ),
                               const PopupMenuItem(
                                 value: 'history',
@@ -256,8 +231,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
                                     ), // Pass existing customer for editing
                                   );
                                   break;
-                                case 'credit':
-                                  _showCreditManagement(customer);
+                                case 'utang':
+                                  _showUtangManagement(customer);
                                   break;
                                 case 'history':
                                   _showTransactionHistory(customer);
@@ -337,16 +312,8 @@ class _CustomersScreenState extends State<CustomersScreen> {
             if (customer.address != null)
               _buildDetailRow('Address', customer.address!),
             _buildDetailRow(
-              'Credit Limit',
-              CurrencyUtils.formatCurrency(customer.creditLimit),
-            ),
-            _buildDetailRow(
-              'Current Balance',
-              CurrencyUtils.formatCurrency(customer.currentBalance),
-            ),
-            _buildDetailRow(
-              'Available Credit',
-              CurrencyUtils.formatCurrency(customer.availableCredit),
+              'Utang Balance',
+              CurrencyUtils.formatCurrency(customer.utangBalance),
             ),
             _buildDetailRow(
               'Member Since',
@@ -383,13 +350,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
   }
 
-  void _showCreditManagement(Customer customer) {
+  void _showUtangManagement(Customer customer) {
     final paymentController = TextEditingController();
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text('Manage Credit - ${customer.name}'),
+        title: Text('Manage Utang - ${customer.name}'),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -404,31 +371,15 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      const Text('Credit Limit:'),
-                      Text(CurrencyUtils.formatCurrency(customer.creditLimit)),
-                    ],
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Current Balance:'),
+                      const Text('Current Utang:'),
                       Text(
-                        CurrencyUtils.formatCurrency(customer.currentBalance),
+                        CurrencyUtils.formatCurrency(customer.utangBalance),
                         style: TextStyle(
-                          color: customer.currentBalance > 0
+                          color: customer.utangBalance > 0
                               ? Colors.red
                               : Colors.green,
                           fontWeight: FontWeight.bold,
                         ),
-                      ),
-                    ],
-                  ),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text('Available Credit:'),
-                      Text(
-                        CurrencyUtils.formatCurrency(customer.availableCredit),
                       ),
                     ],
                   ),
@@ -471,7 +422,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 );
 
                 if (success) {
-                  if (mounted) {
+                  if (context.mounted) {
                     Navigator.pop(context);
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
@@ -483,7 +434,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     );
                   }
                 } else {
-                  if (mounted) {
+                  if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Failed to record payment'),
@@ -506,7 +457,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Customer'),
-        content: Text('Are you sure you want to delete ${customer.name}? This action cannot be undone.'),
+        content: Text(
+          'Are you sure you want to delete ${customer.name}? This action cannot be undone.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -514,21 +467,28 @@ class _CustomersScreenState extends State<CustomersScreen> {
           ),
           ElevatedButton(
             onPressed: () async {
-              final provider = Provider.of<CustomerProvider>(context, listen: false);
+              final provider = Provider.of<CustomerProvider>(
+                context,
+                listen: false,
+              );
               final success = await provider.deleteCustomer(customer.id!);
-              if (mounted) {
+              if (context.mounted) {
                 Navigator.pop(context);
                 if (success) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Customer "${customer.name}" deleted successfully!'),
+                      content: Text(
+                        'Customer "${customer.name}" deleted successfully!',
+                      ),
                       backgroundColor: Colors.green,
                     ),
                   );
                 } else {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text('Failed to delete customer. ${provider.error ?? ''}'),
+                      content: Text(
+                        'Failed to delete customer. ${provider.error ?? ''}',
+                      ),
                       backgroundColor: Colors.red,
                     ),
                   );

@@ -47,7 +47,7 @@ class _UserScreenState extends State<UserScreen> {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await authProvider.logout();
-              if (mounted) {
+              if (context.mounted) {
                 Navigator.of(context).pushReplacementNamed('/login');
               }
             },
@@ -116,7 +116,7 @@ class UserDashboard extends StatelessWidget {
                 Text(
                   'Make sales and manage inventory',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withValues(alpha: 0.9),
                     fontSize: 16,
                   ),
                 ),
@@ -177,8 +177,7 @@ class UserDashboard extends StatelessWidget {
                     'Scan items to remove from inventory',
                     Icons.remove_circle,
                     Colors.red,
-                    () =>
-                        _openBarcodeScanner(context, ScannerMode.removeStock),
+                    () => _openBarcodeScanner(context, ScannerMode.removeStock),
                   ),
                 ),
               ],
@@ -265,7 +264,7 @@ class UserDashboard extends StatelessWidget {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withValues(alpha: 0.1),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -276,7 +275,7 @@ class UserDashboard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 32),
@@ -474,7 +473,9 @@ class _StockManagementState extends State<StockManagement> {
                     Expanded(
                       child: ElevatedButton.icon(
                         onPressed: () => _openBarcodeScanner(
-                            context, ScannerMode.removeStock),
+                          context,
+                          ScannerMode.removeStock,
+                        ),
                         icon: const Icon(Icons.remove_circle),
                         label: const Text('Remove Stock'),
                         style: ElevatedButton.styleFrom(
@@ -498,17 +499,17 @@ class _StockManagementState extends State<StockManagement> {
               final products = _searchQuery.isEmpty
                   ? inventoryProvider.products
                   : inventoryProvider.products
-                      .where(
-                        (product) =>
-                            product.name.toLowerCase().contains(
-                              _searchQuery.toLowerCase(),
-                            ) ||
-                            (product.barcode?.toLowerCase().contains(
-                                  _searchQuery.toLowerCase(),
-                                ) ??
-                                false),
-                      )
-                      .toList();
+                        .where(
+                          (product) =>
+                              product.name.toLowerCase().contains(
+                                _searchQuery.toLowerCase(),
+                              ) ||
+                              (product.barcode?.toLowerCase().contains(
+                                    _searchQuery.toLowerCase(),
+                                  ) ??
+                                  false),
+                        )
+                        .toList();
 
               if (products.isEmpty) {
                 return const Center(
@@ -661,7 +662,7 @@ class UserProfile extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
+                      color: Colors.black.withValues(alpha: 0.1),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),

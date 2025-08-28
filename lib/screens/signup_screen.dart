@@ -28,6 +28,12 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -90,10 +96,13 @@ class _SignupScreenState extends State<SignupScreen> {
                     prefixIcon: const Icon(Icons.lock),
                     filled: true,
                     fillColor: Colors.white70,
-                    helperText: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.',
+                    helperText:
+                        'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.',
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                        _isPasswordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off,
                       ),
                       onPressed: () {
                         setState(() {
@@ -141,42 +150,40 @@ class _SignupScreenState extends State<SignupScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : () async {
-                      if (_formKey.currentState!.validate()) {
-                        setState(() {
-                          _isLoading = true;
-                        });
-                        try {
-                          final authProvider = context.read<AuthProvider>();
-                          final success = await authProvider.createUser(
-                            _usernameController.text,
-                            _emailController.text,
-                            _passwordController.text,
-                            _selectedRole,
-                          );
-                          if (success) {
-                            if (mounted) {
-                              Navigator.of(context).pushReplacementNamed('/login');
+                    onPressed: _isLoading
+                        ? null
+                        : () async {
+                            if (_formKey.currentState!.validate()) {
+                              setState(() {
+                                _isLoading = true;
+                              });
+                              try {
+                                final authProvider = context
+                                    .read<AuthProvider>();
+                                await authProvider.createUser(
+                                  _usernameController.text,
+                                  _emailController.text,
+                                  _passwordController.text,
+                                  _selectedRole,
+                                );
+                                if (context.mounted) {
+                                  Navigator.of(
+                                    context,
+                                  ).pushReplacementNamed('/login');
+                                }
+                              } catch (e) {
+                                if (mounted) {
+                                  _showErrorSnackBar(e.toString());
+                                }
+                              } finally {
+                                if (mounted) {
+                                  setState(() {
+                                    _isLoading = false;
+                                  });
+                                }
+                              }
                             }
-                          } else {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(authProvider.error ?? 'Signup failed'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
-                            }
-                          }
-                        } finally {
-                          if (mounted) {
-                            setState(() {
-                              _isLoading = false;
-                            });
-                          }
-                        }
-                      }
-                    },
+                          },
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       shape: RoundedRectangleBorder(
@@ -187,10 +194,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text(
-                      'Sign Up',
-                      style: TextStyle(fontSize: 18),
-                    ),
+                        : const Text('Sign Up', style: TextStyle(fontSize: 18)),
                   ),
                 ),
                 const SizedBox(height: 10),

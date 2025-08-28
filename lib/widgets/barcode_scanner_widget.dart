@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:prostock/models/stock_update_result.dart';
 import 'package:flutter/material.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
@@ -103,7 +105,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
             Container(
               margin: const EdgeInsets.only(right: 8),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: .1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: IconButton(
@@ -124,7 +126,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                       stackTrace: s,
                     );
                     // Handle error silently or show snackbar
-                    print('Torch toggle error: $e');
+                    log('Torch toggle error: $e');
                   }
                 },
               ),
@@ -132,7 +134,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
             Container(
               margin: const EdgeInsets.only(right: 16),
               decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.1),
+                color: Colors.white.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: IconButton(
@@ -153,7 +155,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                       stackTrace: s,
                     );
                     // Handle error silently or show snackbar
-                    print('Camera switch error: $e');
+                    log('Camera switch error: $e');
                   }
                 },
               ),
@@ -300,7 +302,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
             shape: ModernScannerOverlay(
               borderColor: _getBorderColor(),
               borderWidth: 3.0,
-              overlayColor: Colors.black.withOpacity(0.3),
+              overlayColor: Colors.black.withValues(alpha: 0.3),
               borderRadius: 16,
               borderLength: 40,
               cutOutSize: 280,
@@ -314,9 +316,11 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
           child: Container(
             padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: Colors.black.withOpacity(0.8),
+              color: Colors.black.withValues(alpha: .8),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: _getBorderColor().withOpacity(0.3)),
+              border: Border.all(
+                color: _getBorderColor().withValues(alpha: 0.3),
+              ),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -348,7 +352,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
         ),
         if (_isProcessing)
           Container(
-            color: Colors.black.withOpacity(0.7),
+            color: Colors.black.withValues(alpha: 0.7),
             child: Center(
               child: Container(
                 padding: const EdgeInsets.all(24),
@@ -453,10 +457,10 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     );
     final salesProvider = Provider.of<SalesProvider>(context, listen: false);
 
-    print('BarcodeScannerWidget: Scanned barcodeValue: $barcodeValue');
-    print('BarcodeScannerWidget: Products in inventory:');
+    log('BarcodeScannerWidget: Scanned barcodeValue: $barcodeValue');
+    log('BarcodeScannerWidget: Products in inventory:');
     for (var p in inventoryProvider.products) {
-      print('  - Product ID: ${p.id}, Barcode: ${p.barcode}, Name: ${p.name}');
+      log('  - Product ID: ${p.id}, Barcode: ${p.barcode}, Name: ${p.name}');
     }
 
     final existingProduct = inventoryProvider.products
@@ -533,6 +537,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     );
 
     if (result != null && result.quantity > 0) {
+      if (!mounted) return;
       final inventoryProvider = Provider.of<InventoryProvider>(
         context,
         listen: false,
@@ -887,7 +892,7 @@ class ModernScannerOverlay extends ShapeBorder {
       ..strokeCap = StrokeCap.round;
 
     final glowPaint = Paint()
-      ..color = borderColor.withOpacity(0.3)
+      ..color = borderColor.withValues(alpha: 0.3)
       ..style = PaintingStyle.stroke
       ..strokeWidth = borderWidth * 2
       ..strokeCap = StrokeCap.round;

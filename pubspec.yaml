@@ -57,6 +57,7 @@ dependencies:
   esc_pos_utils_plus: ^2.0.1+3 # For generating receipt data
   cloudinary_public: ^0.23.1
   path_provider: ^2.1.5
+  path: ^1.9.1
 
 dependency_overrides:
   bluetooth_thermal_printer_plus:

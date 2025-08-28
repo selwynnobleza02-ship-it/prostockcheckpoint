@@ -45,17 +45,18 @@ class _AdminScreenState extends State<AdminScreen> {
             icon: const Icon(Icons.delete_forever),
             onPressed: () async {
               await OfflineManager.instance.clearCache();
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Cache cleared')),
-                );
-              }
+              if (!context.mounted) return;
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Cache cleared')));
             },
           ),
           IconButton(
             icon: const Icon(Icons.settings),
             onPressed: () {
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const SettingsScreen()));
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
             },
           ),
         ],
@@ -143,7 +144,7 @@ class _AdminActivityMonitorState extends State<AdminActivityMonitor> {
       // Search filter
       if (_searchQuery.isNotEmpty) {
         final searchLower = _searchQuery.toLowerCase();
-        final matchesSearch = 
+        final matchesSearch =
             activity['username'].toString().toLowerCase().contains(
               searchLower,
             ) ||
@@ -262,7 +263,7 @@ class _AdminActivityMonitorState extends State<AdminActivityMonitor> {
               // Search bar
               TextField(
                 decoration: InputDecoration(
-                  hintText: 'Search activities...', 
+                  hintText: 'Search activities...',
                   prefixIcon: const Icon(Icons.search),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
@@ -376,7 +377,7 @@ class _AdminActivityMonitorState extends State<AdminActivityMonitor> {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.2),
+        color: Colors.white.withValues(alpha: 0.2),
         borderRadius: BorderRadius.circular(12),
       ),
       child: Column(
@@ -448,7 +449,7 @@ class _AdminActivityMonitorState extends State<AdminActivityMonitor> {
                             decoration: BoxDecoration(
                               color: _getActionColor(
                                 activity['action'],
-                              ).withOpacity(0.2),
+                              ).withValues(alpha: 0.2),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Text(
@@ -548,7 +549,7 @@ class _AdminActivityMonitorState extends State<AdminActivityMonitor> {
                       Row(
                         children: [
                           const Icon(
-                            Icons.attach_money,
+                            Icons.payments,
                             size: 16,
                             color: Colors.grey,
                           ),

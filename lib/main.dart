@@ -44,13 +44,9 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider.value(value: OfflineManager.instance),
         ChangeNotifierProvider(
-          create: (context) {
-            final inventoryProvider = InventoryProvider(
-              offlineManager: context.read<OfflineManager>(),
-            );
-            inventoryProvider.loadProducts(); // Load products when provider is created
-            return inventoryProvider;
-          },
+          create: (context) => InventoryProvider(
+            offlineManager: context.read<OfflineManager>(),
+          ),
         ),
         ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
           create: (context) => SalesProvider(

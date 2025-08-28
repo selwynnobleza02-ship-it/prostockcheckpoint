@@ -9,10 +9,10 @@ class ReceiveStockDialog extends StatefulWidget {
   const ReceiveStockDialog({super.key, required this.product});
 
   @override
-  _ReceiveStockDialogState createState() => _ReceiveStockDialogState();
+  ReceiveStockDialogState createState() => ReceiveStockDialogState();
 }
 
-class _ReceiveStockDialogState extends State<ReceiveStockDialog> {
+class ReceiveStockDialogState extends State<ReceiveStockDialog> {
   final _formKey = GlobalKey<FormState>();
   final _quantityController = TextEditingController();
   final _costController = TextEditingController();
@@ -104,7 +104,7 @@ class _ReceiveStockDialogState extends State<ReceiveStockDialog> {
       );
 
       await inventoryProvider.updateProduct(updatedProduct);
-
+      if (!mounted) return;
       Navigator.of(context).pop(true);
     }
   }

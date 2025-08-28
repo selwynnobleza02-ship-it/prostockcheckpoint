@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:io';
 import 'package:cloudinary_public/cloudinary_public.dart';
 import '../utils/error_logger.dart';
@@ -7,8 +8,6 @@ class CloudinaryService {
   CloudinaryService._init();
 
   static const String _cloudName = 'dnhynbh5i';
-  static const String _apiKey = '253652324299343';
-  static const String _apiSecret = '23DjVLSV1QWp2rjGEZ_o5hdDH4A';
 
   final CloudinaryPublic _cloudinary = CloudinaryPublic(
     _cloudName,
@@ -19,8 +18,10 @@ class CloudinaryService {
   Future<String?> uploadImage(File imageFile) async {
     try {
       final response = await _cloudinary.uploadFile(
-        CloudinaryFile.fromFile(imageFile.path,
-            resourceType: CloudinaryResourceType.Image),
+        CloudinaryFile.fromFile(
+          imageFile.path,
+          resourceType: CloudinaryResourceType.Image,
+        ),
       );
       return response.secureUrl;
     } on CloudinaryException catch (e, s) {
@@ -40,7 +41,7 @@ class CloudinaryService {
       // The cloudinary_public package does not support image deletion directly.
       // You would typically need to make a signed API request from your backend
       // to delete images. For now, this method will be a placeholder.
-      print('Deleting image with publicId: $publicId');
+      log('Deleting image with publicId: $publicId');
       // In a real app, you would make a call to your backend here.
     } catch (e, s) {
       ErrorLogger.logError(

@@ -157,7 +157,9 @@ class DashboardHome extends StatelessWidget {
                   context,
                   listen: false,
                 );
+
                 await authProvider.logout();
+                if (!context.mounted) return;
                 Navigator.of(context).pushReplacementNamed('/login');
               }
             },
@@ -196,7 +198,7 @@ class DashboardHome extends StatelessWidget {
                     DashboardCard(
                       title: 'Today\'s Sales',
                       value: _getTodaysSales(sales.sales),
-                      icon: Icons.attach_money,
+                      icon: Icons.calendar_month,
                       color: Colors.green,
                       isCurrency: true,
                     ),

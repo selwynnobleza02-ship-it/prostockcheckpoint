@@ -1,3 +1,5 @@
+import 'package:prostock/utils/app_constants.dart';
+
 class CreditTransaction {
   final String?
   id; // Standardized ID type to String for Firestore compatibility
@@ -22,7 +24,7 @@ class CreditTransaction {
     if (amount <= 0) {
       throw ArgumentError('Transaction amount must be greater than zero');
     }
-    if (amount > 1000000) {
+    if (amount > ValidationConstants.maxTransactionAmount) {
       throw ArgumentError('Transaction amount cannot exceed ₱1,000,000');
     }
     if (!_isValidTransactionType(type)) {
@@ -30,7 +32,7 @@ class CreditTransaction {
         'Invalid transaction type. Must be "credit" or "payment"',
       );
     }
-    if (description != null && description!.length > 200) {
+    if (description != null && description!.length > ValidationConstants.maxDescriptionLength) {
       throw ArgumentError('Description cannot exceed 200 characters');
     }
   }

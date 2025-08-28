@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:prostock/utils/app_constants.dart';
 import '../providers/auth_provider.dart';
 // Make sure UserRole is imported if defined elsewhere
 import '../models/user_role.dart';
@@ -25,12 +26,18 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
+          padding: const EdgeInsets.all(UiConstants.spacingMedium),
           child: Form(
             key: _formKey,
             child: Column(
@@ -39,12 +46,12 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Text(
                   'Welcome Back!',
                   style: TextStyle(
-                    fontSize: 32,
+                    fontSize: UiConstants.fontSizeTitle,
                     fontWeight: FontWeight.bold,
                     color: Colors.blueAccent,
                   ),
                 ),
-                const SizedBox(height: 40),
+                const SizedBox(height: UiConstants.spacingExtraLarge),
                 TextFormField(
                   controller: _emailController,
                   decoration: const InputDecoration(
@@ -61,7 +68,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: UiConstants.spacingLarge),
                 TextFormField(
                   controller: _passwordController,
                   decoration: InputDecoration(
@@ -72,7 +79,9 @@ class _LoginScreenState extends State<LoginScreen> {
                     fillColor: Colors.white70,
                     suffixIcon: IconButton(
                       icon: Icon(
-                        _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
+                        _isPasswordVisible
+                            ? Icons.visibility
+                            : Icons.visibility_off,
                       ),
                       onPressed: () {
                         setState(() {
@@ -89,11 +98,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 30),
+                const SizedBox(height: UiConstants.spacingExtraLarge2),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isLoading // Disable button when loading
+                    onPressed:
+                        _isLoading // Disable button when loading
                         ? null
                         : () async {
                             if (_formKey.currentState!.validate()) {
@@ -101,57 +111,63 @@ class _LoginScreenState extends State<LoginScreen> {
                                 _isLoading = true;
                               });
                               try {
-                                final authProvider = context.read<AuthProvider>();
+                                final authProvider = context
+                                    .read<AuthProvider>();
                                 final success = await authProvider.login(
                                   _emailController.text,
                                   _passwordController.text,
                                 );
+
                                 if (success) {
-                                  if (!mounted) return; // Check if the widget is still mounted
+                                  // Check if the widget is still mounted
                                   final userRole = authProvider.userRole;
+                                  if (!context.mounted) return;
                                   if (userRole == UserRole.admin) {
                                     Navigator.of(
                                       context,
                                     ).pushReplacementNamed('/admin');
                                   } else {
-                                    Navigator.of(context).pushReplacementNamed('/user');
+                                    Navigator.of(
+                                      context,
+                                    ).pushReplacementNamed('/user');
                                   }
                                 } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(authProvider.error ?? 'Login failed'), // Show specific error
-                                      backgroundColor: Colors.red,
-                                    ),
+                                  if (!mounted) return;
+                                  _showErrorSnackBar(
+                                    authProvider.error ?? 'Login failed',
                                   );
                                 }
                               } finally {
-                                setState(() {
-                                  _isLoading = false;
-                                });
+                                if (!mounted) {
+                                  setState(() {
+                                    _isLoading = false;
+                                  });
+                                }
                               }
                             }
                           },
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      padding: const EdgeInsets.symmetric(vertical: UiConstants.spacingMedium),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                        borderRadius: BorderRadius.circular(UiConstants.borderRadiusStandard),
                       ),
                       backgroundColor: Colors.blueAccent,
                       foregroundColor: Colors.white,
                     ),
-                    child: _isLoading // Show loading indicator
+                    child:
+                        _isLoading // Show loading indicator
                         ? const SizedBox(
-                            width: 20,
-                            height: 20,
+                            width: UiConstants.iconSizeSmall,
+                            height: UiConstants.iconSizeSmall,
                             child: CircularProgressIndicator(
                               color: Colors.white,
-                              strokeWidth: 2,
+                              strokeWidth: UiConstants.strokeWidthSmall,
                             ),
                           )
-                        : const Text('Login', style: TextStyle(fontSize: 18)),
+                        : const Text('Login', style: TextStyle(fontSize: UiConstants.fontSizeButton)),
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: UiConstants.spacingSmall),
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pushNamed('/signup');
@@ -161,7 +177,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: const Text(
                     'Create Account',
-                    style: TextStyle(fontSize: 16),
+                    style: TextStyle(fontSize: UiConstants.fontSizeMedium),
                   ),
                 ),
               ],

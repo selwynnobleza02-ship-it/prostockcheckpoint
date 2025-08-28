@@ -95,8 +95,8 @@ class CreditProvider with ChangeNotifier {
 
       await addCreditTransaction(transaction);
 
-      final newBalance = await FirestoreService.instance.updateCustomerBalance(customerId, -amount);
-      customerProvider.updateLocalCustomerBalance(customerId, newBalance);
+      final newBalance = await FirestoreService.instance.updateCustomerUtang(customerId, -amount);
+      customerProvider.updateLocalCustomerUtang(customerId, newBalance);
 
       _isLoading = false;
       notifyListeners();
@@ -141,8 +141,8 @@ class CreditProvider with ChangeNotifier {
 
       await addCreditTransaction(transaction);
 
-      final newBalance = await FirestoreService.instance.updateCustomerBalance(customerId, amount);
-      customerProvider.updateLocalCustomerBalance(customerId, newBalance);
+      final newBalance = await FirestoreService.instance.updateCustomerUtang(customerId, amount);
+      customerProvider.updateLocalCustomerUtang(customerId, newBalance);
 
       _isLoading = false;
       notifyListeners();

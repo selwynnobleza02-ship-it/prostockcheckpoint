@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:background_fetch/background_fetch.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:prostock/utils/error_logger.dart';
@@ -7,20 +9,22 @@ const _backgroundFetchTaskId = 'com.prostock.background_fetch';
 class BackgroundSyncService {
   static Future<void> init() async {
     BackgroundFetch.configure(
-      BackgroundFetchConfig(
-        minimumFetchInterval: 15,
-        stopOnTerminate: false,
-        enableHeadless: true,
-        startOnBoot: true,
-        requiredNetworkType: NetworkType.ANY,
-      ),
-      _onBackgroundFetch,
-      _onBackgroundFetchTimeout,
-    ).then((int status) {
-      print('[BackgroundFetch] configure success: $status');
-    }).catchError((e) {
-      print('[BackgroundFetch] configure ERROR: $e');
-    });
+          BackgroundFetchConfig(
+            minimumFetchInterval: 15,
+            stopOnTerminate: false,
+            enableHeadless: true,
+            startOnBoot: true,
+            requiredNetworkType: NetworkType.ANY,
+          ),
+          _onBackgroundFetch,
+          _onBackgroundFetchTimeout,
+        )
+        .then((int status) {
+          log('[BackgroundFetch] configure success: $status');
+        })
+        .catchError((e) {
+          log('[BackgroundFetch] configure ERROR: $e');
+        });
   }
 
   static void _onBackgroundFetch(String taskId) async {

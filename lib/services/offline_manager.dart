@@ -9,6 +9,7 @@ import '../models/sale.dart';
 import '../services/firestore_service.dart';
 import '../services/local_database_service.dart';
 import '../utils/error_logger.dart';
+import '../utils/constants.dart';
 
 /// Offline Manager - Comprehensive offline-first data synchronization system
 ///
@@ -256,96 +257,114 @@ class OfflineManager with ChangeNotifier {
     _isSyncing = true;
     notifyListeners();
 
-    const int batchSize = 50;
-    final List<OfflineOperation> operationsToSync = List.from(
-      _pendingOperations,
-    );
+    final operationsToSync = await _getOperationsToSync();
 
     try {
-      for (int i = 0; i < operationsToSync.length; i += batchSize) {
-        final List<OfflineOperation> batch = operationsToSync.sublist(
-          i,
-          i + batchSize > operationsToSync.length
-              ? operationsToSync.length
-              : i + batchSize,
-        );
-        final List<Map<String, dynamic>> batchOperations = [];
-        final List<int> successfulOperationIds = [];
-        final List<OfflineOperation> failedOperations = [];
-
-        for (final operation in batch) {
-          try {
-            final newBatchOperations = _getBatchOperations(operation);
-            batchOperations.addAll(newBatchOperations);
-            successfulOperationIds.add(operation.dbId!);
-            _pendingOperations.remove(operation);
-            ErrorLogger.logInfo(
-              'Synced operation: ${operation.type} - ${operation.id}',
-              context: 'OfflineManager.syncPendingOperations',
-            );
-          } catch (e) {
-            ErrorLogger.logError(
-              'Failed to sync operation ${operation.id}',
-              error: e,
-              context: 'OfflineManager.syncPendingOperations',
-            );
-            if (operation.retryCount < maxRetries) {
-              final updatedOperation = operation.copyWith(
-                retryCount: operation.retryCount + 1,
-              );
-              failedOperations.add(updatedOperation);
-            } else {
-              // Move to dead letter queue
-              await _moveToDeadLetterQueue(operation, e.toString());
-              successfulOperationIds.add(operation.dbId!);
-              ErrorLogger.logError(
-                'Operation ${operation.id} failed after $maxRetries retries',
-                error: e,
-                context: 'OfflineManager.syncPendingOperations',
-              );
-            }
-          }
-        }
-
-        if (batchOperations.isNotEmpty) {
-          await FirestoreService.instance.batchWrite(batchOperations);
-        }
-
-        final db = await _localDatabaseService.database;
-        if (successfulOperationIds.isNotEmpty) {
-          await db.delete(
-            'offline_operations',
-            where: 'id IN (?)',
-            whereArgs: [successfulOperationIds.join(',')],
-          );
-        }
-
-        if (failedOperations.isNotEmpty) {
-          final batchDb = db.batch();
-          for (final op in failedOperations) {
-            batchDb.update(
-              'offline_operations',
-              op.toMap(),
-              where: 'id = ?',
-              whereArgs: [op.dbId],
-            );
-          }
-          await batchDb.commit(noResult: true);
-        }
-      }
-
-      _lastSyncTime = DateTime.now();
-      await _saveLastSyncTime();
+      await _processBatches(operationsToSync);
+      await _handleSuccessfulSync();
     } catch (e) {
-      ErrorLogger.logError(
-        'Error during sync',
-        error: e,
-        context: 'OfflineManager.syncPendingOperations',
-      );
+      _handleFailedSync(e);
     } finally {
       _isSyncing = false;
       notifyListeners();
     }
+  }
+
+  Future<List<OfflineOperation>> _getOperationsToSync() async {
+    await _loadPendingOperationsFromDb();
+    return List.from(_pendingOperations);
+  }
+
+  Future<void> _processBatches(List<OfflineOperation> operationsToSync) async {
+    const int batchSize = 50;
+    for (int i = 0; i < operationsToSync.length; i += batchSize) {
+      final List<OfflineOperation> batch = operationsToSync.sublist(
+        i,
+        i + batchSize > operationsToSync.length
+            ? operationsToSync.length
+            : i + batchSize,
+      );
+      await _processBatch(batch);
+    }
+  }
+
+  Future<void> _processBatch(List<OfflineOperation> batch) async {
+    final List<Map<String, dynamic>> batchOperations = [];
+    final List<int> successfulOperationIds = [];
+    final List<OfflineOperation> failedOperations = [];
+
+    for (final operation in batch) {
+      try {
+        final newBatchOperations = _getBatchOperations(operation);
+        batchOperations.addAll(newBatchOperations);
+        successfulOperationIds.add(operation.dbId!);
+        _pendingOperations.remove(operation);
+        ErrorLogger.logInfo(
+          'Synced operation: ${operation.type} - ${operation.id}',
+          context: 'OfflineManager.syncPendingOperations',
+        );
+      } catch (e) {
+        ErrorLogger.logError(
+          'Failed to sync operation ${operation.id}',
+          error: e,
+          context: 'OfflineManager.syncPendingOperations',
+        );
+        if (operation.retryCount < maxRetries) {
+          final updatedOperation = operation.copyWith(
+            retryCount: operation.retryCount + 1,
+          );
+          failedOperations.add(updatedOperation);
+        } else {
+          // Move to dead letter queue
+          await _moveToDeadLetterQueue(operation, e.toString());
+          successfulOperationIds.add(operation.dbId!);
+          ErrorLogger.logError(
+            'Operation ${operation.id} failed after $maxRetries retries',
+            error: e,
+            context: 'OfflineManager.syncPendingOperations',
+          );
+        }
+      }
+    }
+
+    if (batchOperations.isNotEmpty) {
+      await FirestoreService.instance.batchWrite(batchOperations);
+    }
+
+    final db = await _localDatabaseService.database;
+    if (successfulOperationIds.isNotEmpty) {
+      await db.delete(
+        'offline_operations',
+        where: 'id IN (?)',
+        whereArgs: [successfulOperationIds.join(',')],
+      );
+    }
+
+    if (failedOperations.isNotEmpty) {
+      final batchDb = db.batch();
+      for (final op in failedOperations) {
+        batchDb.update(
+          'offline_operations',
+          op.toMap(),
+          where: 'id = ?',
+          whereArgs: [op.dbId],
+        );
+      }
+      await batchDb.commit(noResult: true);
+    }
+  }
+
+  Future<void> _handleSuccessfulSync() async {
+    _lastSyncTime = DateTime.now();
+    await _saveLastSyncTime();
+  }
+
+  void _handleFailedSync(Object e) {
+    ErrorLogger.logError(
+      'Error during sync',
+      error: e,
+      context: 'OfflineManager.syncPendingOperations',
+    );
   }
 
   Future<void> _moveToDeadLetterQueue(
@@ -380,7 +399,7 @@ class OfflineManager with ChangeNotifier {
       case OperationType.insertProduct:
         return [
           {
-            'type': 'insert',
+            'type': AppConstants.operationInsert,
             'collection': operation.collectionName,
             'data': operation.data,
           },
@@ -388,7 +407,7 @@ class OfflineManager with ChangeNotifier {
       case OperationType.updateProduct:
         return [
           {
-            'type': 'update',
+            'type': AppConstants.operationUpdate,
             'collection': operation.collectionName,
             'docId': operation.documentId,
             'data': operation.data,
@@ -397,7 +416,7 @@ class OfflineManager with ChangeNotifier {
       case OperationType.insertCustomer:
         return [
           {
-            'type': 'insert',
+            'type': AppConstants.operationInsert,
             'collection': operation.collectionName,
             'data': operation.data,
           },
@@ -405,7 +424,7 @@ class OfflineManager with ChangeNotifier {
       case OperationType.updateCustomer:
         return [
           {
-            'type': 'update',
+            'type': AppConstants.operationUpdate,
             'collection': operation.collectionName,
             'docId': operation.documentId,
             'data': operation.data,
@@ -430,8 +449,8 @@ class OfflineManager with ChangeNotifier {
 
         // Add sale insertion
         operations.add({
-          'type': 'insert',
-          'collection': 'sales',
+          'type': AppConstants.operationInsert,
+          'collection': AppConstants.salesCollection,
           'docId': sale.id,
           'data': sale.toMap(),
         });
@@ -439,8 +458,8 @@ class OfflineManager with ChangeNotifier {
         // Add sale item insertions
         for (final item in saleItems) {
           operations.add({
-            'type': 'insert',
-            'collection': 'sale_items',
+            'type': AppConstants.operationInsert,
+            'collection': AppConstants.saleItemsCollection,
             'docId': item.id,
             'data': item.toMap(),
           });
@@ -449,8 +468,8 @@ class OfflineManager with ChangeNotifier {
         // Add stock updates
         for (final item in saleItems) {
           operations.add({
-            'type': 'update',
-            'collection': 'products',
+            'type': AppConstants.operationUpdate,
+            'collection': AppConstants.productsCollection,
             'docId': item.productId,
             'data': {'stock': FieldValue.increment(-item.quantity)},
           });
@@ -460,7 +479,7 @@ class OfflineManager with ChangeNotifier {
       case OperationType.insertCreditTransaction:
         return [
           {
-            'type': 'insert',
+            'type': AppConstants.operationInsert,
             'collection': operation.collectionName,
             'data': operation.data,
           },
@@ -468,7 +487,7 @@ class OfflineManager with ChangeNotifier {
       case OperationType.updateCustomerBalance:
         return [
           {
-            'type': 'update',
+            'type': AppConstants.operationUpdate,
             'collection': operation.collectionName,
             'docId': operation.documentId,
             'data': operation.data,
@@ -477,14 +496,19 @@ class OfflineManager with ChangeNotifier {
       case OperationType.insertLoss:
         return [
           {
-            'type': 'insert',
+            'type': AppConstants.operationInsert,
             'collection': operation.collectionName,
             'data': operation.data,
           },
         ];
       case OperationType.insertPriceHistory:
-        // TODO: Handle this case.
-        throw UnimplementedError();
+        return [
+          {
+            'type': AppConstants.operationInsert,
+            'collection': operation.collectionName,
+            'data': operation.data,
+          },
+        ];
     }
   }
 

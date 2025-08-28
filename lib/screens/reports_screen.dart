@@ -11,9 +11,7 @@ import '../widgets/receipt_dialog.dart';
 import '../models/receipt.dart';
 import '../models/sale.dart';
 import '../services/firestore_service.dart';
-import '../widgets/sales_over_time_chart.dart';
-import '../widgets/top_selling_products_chart.dart';
-import '../widgets/top_customers_list.dart';
+import '../widgets/analytics_report_widget.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -38,21 +36,33 @@ class _ReportsScreenState extends State<ReportsScreen>
   Future<void> _loadData({bool refresh = false}) async {
     final salesProvider = Provider.of<SalesProvider>(context, listen: false);
     await salesProvider.loadSales(refresh: refresh);
-    await Provider.of<CustomerProvider>(context, listen: false)
-        .loadCustomers(refresh: refresh);
-    await Provider.of<InventoryProvider>(context, listen: false)
-        .loadProducts(refresh: refresh);
+    if (!mounted) return;
+    await Provider.of<CustomerProvider>(
+      context,
+      listen: false,
+    ).loadCustomers(refresh: refresh);
+    if (!mounted) return;
+    await Provider.of<InventoryProvider>(
+      context,
+      listen: false,
+    ).loadProducts(refresh: refresh);
     final losses = await FirestoreService.instance.getLosses();
 
     final List<SaleItem> allSaleItems = [];
     for (final sale in salesProvider.sales) {
       if (sale.id != null) {
         if (sale.isSynced == 1) {
-          final items = await FirestoreService.instance.getSaleItemsBySaleId(sale.id!);
+          final items = await FirestoreService.instance.getSaleItemsBySaleId(
+            sale.id!,
+          );
           allSaleItems.addAll(items);
         } else {
-          final localItems = await LocalDatabaseService.instance.getSaleItems(sale.id!);
-          allSaleItems.addAll(localItems.map((item) => SaleItem.fromMap(item)).toList());
+          final localItems = await LocalDatabaseService.instance.getSaleItems(
+            sale.id!,
+          );
+          allSaleItems.addAll(
+            localItems.map((item) => SaleItem.fromMap(item)).toList(),
+          );
         }
       }
     }
@@ -92,59 +102,9 @@ class _ReportsScreenState extends State<ReportsScreen>
           _buildInventoryReport(),
           _buildCustomersReport(),
           _buildFinancialReport(),
-          _buildAnalyticsReport(),
+          AnalyticsReportWidget(saleItems: _saleItems),
         ],
       ),
-    );
-  }
-
-  Widget _buildAnalyticsReport() {
-    return Consumer3<SalesProvider, InventoryProvider, CustomerProvider>(
-      builder: (context, salesProvider, inventoryProvider, customerProvider, child) {
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Sales Over Time',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              if (salesProvider.sales.isEmpty)
-                const Center(child: Text('No sales data available.'))
-              else
-                SalesOverTimeChart(sales: salesProvider.sales),
-              const SizedBox(height: 24),
-              const Text(
-                'Top Selling Products',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              if (_saleItems.isEmpty || inventoryProvider.products.isEmpty)
-                const Center(child: Text('No product data available.'))
-              else
-                TopSellingProductsChart(
-                  saleItems: _saleItems,
-                  products: inventoryProvider.products,
-                ),
-              const SizedBox(height: 24),
-              const Text(
-                'Top Customers',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              if (salesProvider.sales.isEmpty || customerProvider.customers.isEmpty)
-                const Center(child: Text('No customer data available.'))
-              else
-                TopCustomersList(
-                  sales: salesProvider.sales,
-                  customers: customerProvider.customers,
-                ),
-            ],
-          ),
-        );
-      },
     );
   }
 
@@ -188,7 +148,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                       child: _buildSummaryCard(
                         'Total Sales',
                         CurrencyUtils.formatCurrency(totalSales),
-                        Icons.attach_money,
+                        Icons.receipt_long,
                         Colors.blue,
                       ),
                     ),
@@ -290,7 +250,7 @@ class _ReportsScreenState extends State<ReportsScreen>
               _buildSummaryCard(
                 'Total Inventory Value',
                 CurrencyUtils.formatCurrency(totalValue),
-                Icons.attach_money,
+                Icons.inventory,
                 Colors.green,
               ),
               const SizedBox(height: 24),
@@ -345,12 +305,12 @@ class _ReportsScreenState extends State<ReportsScreen>
     return Consumer<CustomerProvider>(
       builder: (context, provider, child) {
         final totalCustomers = provider.customers.length;
-        final overdueCustomers = provider.customers
-            .where((c) => c.hasOverdueBalance)
+        final customersWithUtang = provider.customers
+            .where((c) => c.hasUtang)
             .length;
-        final totalCredit = provider.customers.fold(
+        final totalUtang = provider.customers.fold(
           0.0,
-          (sum, c) => sum + c.currentBalance,
+          (sum, c) => sum + c.utangBalance,
         );
 
         return SingleChildScrollView(
@@ -372,10 +332,10 @@ class _ReportsScreenState extends State<ReportsScreen>
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildSummaryCard(
-                      'Overdue Customers',
-                      overdueCustomers.toString(),
-                      Icons.warning,
-                      Colors.red,
+                      'Customers with Utang',
+                      customersWithUtang.toString(),
+                      Icons.credit_card_off,
+                      Colors.orange,
                     ),
                   ),
                 ],
@@ -383,17 +343,17 @@ class _ReportsScreenState extends State<ReportsScreen>
               const SizedBox(height: 16),
 
               _buildSummaryCard(
-                'Total Outstanding Credit',
-                CurrencyUtils.formatCurrency(totalCredit),
+                'Total Outstanding Utang',
+                CurrencyUtils.formatCurrency(totalUtang),
                 Icons.credit_card,
-                Colors.orange,
+                Colors.red,
               ),
               const SizedBox(height: 24),
 
-              // Overdue Customers List
-              if (overdueCustomers > 0) ...[
+              // Customers with Utang List
+              if (customersWithUtang > 0) ...[
                 const Text(
-                  'Overdue Customers',
+                  'Customers with Utang',
                   style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 16),
@@ -401,27 +361,25 @@ class _ReportsScreenState extends State<ReportsScreen>
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: provider.customers
-                      .where((c) => c.hasOverdueBalance)
+                      .where((c) => c.hasUtang)
                       .length,
                   itemBuilder: (context, index) {
                     final customer = provider.customers
-                        .where((c) => c.hasOverdueBalance)
+                        .where((c) => c.hasUtang)
                         .toList()[index];
                     return Card(
                       child: ListTile(
                         leading: const CircleAvatar(
-                          backgroundColor: Colors.red,
+                          backgroundColor: Colors.orange,
                           child: Icon(Icons.person, color: Colors.white),
                         ),
                         title: Text(customer.name),
                         subtitle: Text('Phone: ${customer.phone ?? 'N/A'}'),
                         trailing: Text(
-                          CurrencyUtils.formatCurrency(
-                            customer.currentBalance,
-                          ),
+                          CurrencyUtils.formatCurrency(customer.utangBalance),
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
-                            color: Colors.red,
+                            color: Colors.orange,
                           ),
                         ),
                       ),
@@ -435,7 +393,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                       Icon(Icons.check_circle, size: 64, color: Colors.green),
                       SizedBox(height: 16),
                       Text(
-                        'No Overdue Customers',
+                        'No Outstanding Utang',
                         style: TextStyle(fontSize: 18, color: Colors.green),
                       ),
                     ],
@@ -465,9 +423,9 @@ class _ReportsScreenState extends State<ReportsScreen>
           (sum, loss) => sum + loss.totalCost,
         );
         final totalProfit = totalRevenue - totalCost - totalLoss;
-        final outstandingCredit = customers.customers.fold(
+        final outstandingUtang = customers.customers.fold(
           0.0,
-          (sum, c) => sum + c.currentBalance,
+          (sum, c) => sum + c.utangBalance,
         );
 
         return SingleChildScrollView(
@@ -505,15 +463,15 @@ class _ReportsScreenState extends State<ReportsScreen>
                     child: _buildSummaryCard(
                       'Gross Profit',
                       CurrencyUtils.formatCurrency(totalProfit),
-                      Icons.attach_money,
+                      Icons.signal_cellular_alt,
                       totalProfit >= 0 ? Colors.green : Colors.red,
                     ),
                   ),
                   const SizedBox(width: 16),
                   Expanded(
                     child: _buildSummaryCard(
-                      'Outstanding Credit',
-                      CurrencyUtils.formatCurrency(outstandingCredit),
+                      'Outstanding Utang',
+                      CurrencyUtils.formatCurrency(outstandingUtang),
                       Icons.credit_card,
                       Colors.orange,
                     ),
@@ -632,7 +590,9 @@ class _ReportsScreenState extends State<ReportsScreen>
           sale.id!,
         );
       } else {
-        final localItems = await LocalDatabaseService.instance.getSaleItems(sale.id!);
+        final localItems = await LocalDatabaseService.instance.getSaleItems(
+          sale.id!,
+        );
         saleItems = localItems.map((item) => SaleItem.fromMap(item)).toList();
       }
 

@@ -1,3 +1,5 @@
+import 'package:prostock/utils/app_constants.dart';
+
 class Sale {
   late final String? id;
   final String? customerId;
@@ -14,7 +16,7 @@ class Sale {
     required this.paymentMethod,
     required this.status,
     required this.createdAt,
-    this.isSynced = 0,
+    this.isSynced = AppDefaults.notSynced,
   }) {
     _validateSale();
   }
@@ -23,7 +25,7 @@ class Sale {
     if (totalAmount <= 0) {
       throw ArgumentError('Total amount must be greater than zero');
     }
-    if (totalAmount > 1000000) {
+    if (totalAmount > ValidationConstants.maxTransactionAmount) {
       throw ArgumentError('Total amount cannot exceed ₱1,000,000');
     }
     if (!_isValidPaymentMethod(paymentMethod)) {
@@ -74,7 +76,7 @@ class Sale {
       createdAt: DateTime.parse(
         map['created_at'] ?? DateTime.now().toIso8601String(),
       ),
-      isSynced: map['is_synced'] ?? 0,
+      isSynced: map['is_synced'] ?? AppDefaults.notSynced,
     );
   }
 
@@ -122,7 +124,7 @@ class SaleItem {
     if (quantity <= 0) {
       throw ArgumentError('Quantity must be greater than zero');
     }
-    if (quantity > 1000) {
+    if (quantity > ValidationConstants.maxSaleQuantity) {
       throw ArgumentError('Quantity cannot exceed 1000 items');
     }
     if (unitPrice <= 0) {

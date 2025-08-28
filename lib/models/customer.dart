@@ -1,3 +1,5 @@
+import 'package:prostock/utils/app_constants.dart';
+
 class Customer {
   final String? id;
   final String name;
@@ -6,8 +8,7 @@ class Customer {
   final String? address;
   final String? imageUrl;
   final String? localImagePath;
-  final double creditLimit;
-  final double currentBalance;
+  final double utangBalance;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -19,8 +20,7 @@ class Customer {
     this.address,
     this.imageUrl,
     this.localImagePath,
-    this.creditLimit = 0,
-    this.currentBalance = 0,
+    this.utangBalance = 0,
     required this.createdAt,
     required this.updatedAt,
   }) {
@@ -31,7 +31,7 @@ class Customer {
     if (name.trim().isEmpty) {
       throw ArgumentError('Customer name cannot be empty');
     }
-    if (name.length > 100) {
+    if (name.length > ValidationConstants.maxNameLength) {
       throw ArgumentError('Customer name cannot exceed 100 characters');
     }
     if (phone != null && phone!.isNotEmpty && !_isValidPhoneNumber(phone!)) {
@@ -40,14 +40,11 @@ class Customer {
     if (email != null && email!.isNotEmpty && !_isValidEmail(email!)) {
       throw ArgumentError('Invalid email format');
     }
-    if (address != null && address!.length > 200) {
+    if (address != null && address!.length > ValidationConstants.maxDescriptionLength) {
       throw ArgumentError('Address cannot exceed 200 characters');
     }
-    if (creditLimit < 0) {
-      throw ArgumentError('Credit limit cannot be negative');
-    }
-    if (currentBalance < 0) {
-      throw ArgumentError('Current balance cannot be negative');
+    if (utangBalance < 0) {
+      throw ArgumentError('Utang balance cannot be negative');
     }
   }
 
@@ -73,8 +70,7 @@ class Customer {
       'address': address,
       'imageUrl': imageUrl,
       'localImagePath': localImagePath,
-      'credit_limit': creditLimit,
-      'current_balance': currentBalance,
+      'utang_balance': utangBalance,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -89,8 +85,7 @@ class Customer {
       address: map['address']?.toString(),
       imageUrl: map['imageUrl']?.toString(),
       localImagePath: map['localImagePath']?.toString(),
-      creditLimit: (map['credit_limit'] ?? 0).toDouble(),
-      currentBalance: (map['current_balance'] ?? 0).toDouble(),
+      utangBalance: (map['utang_balance'] ?? 0).toDouble(),
       createdAt: DateTime.parse(
         map['created_at'] ?? DateTime.now().toIso8601String(),
       ),
@@ -100,9 +95,5 @@ class Customer {
     );
   }
 
-  bool get hasOverdueBalance => currentBalance > creditLimit;
-  double get availableCredit => creditLimit - currentBalance;
-  bool get canPurchase => availableCredit > 0;
-  bool get isGoodStanding =>
-      currentBalance <= creditLimit * 0.8; // 80% threshold
+  bool get hasUtang => utangBalance > 0;
 }

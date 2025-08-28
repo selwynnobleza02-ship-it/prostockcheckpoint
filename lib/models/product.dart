@@ -1,4 +1,5 @@
 import '../utils/constants.dart';
+import 'package:prostock/utils/app_constants.dart';
 
 class Product {
   final String? id;
@@ -33,7 +34,7 @@ class Product {
     if (name.trim().isEmpty) {
       throw ArgumentError('Product name cannot be empty');
     }
-    if (name.length > 100) {
+    if (name.length > ValidationConstants.maxNameLength) {
       throw ArgumentError('Product name cannot exceed 100 characters');
     }
     if (cost < 0) {
@@ -50,7 +51,7 @@ class Product {
         throw ArgumentError('Invalid barcode format');
       }
     }
-    if (category != null && category!.length > 50) {
+    if (category != null && category!.length > ValidationConstants.maxCategoryLength) {
       throw ArgumentError('Category name cannot exceed 50 characters');
     }
   }
