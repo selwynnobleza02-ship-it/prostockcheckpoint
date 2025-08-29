@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
@@ -110,152 +111,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     );
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: Text(_isEditMode ? 'Edit Customer' : 'Add New Customer'),
-      content: SizedBox(
-        width: MediaQuery.of(context).size.width * 0.9,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                GestureDetector(
-                  onTap: _showImageSourceActionSheet,
-                  child: Container(
-                    width: double.infinity,
-                    height: 200,
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: _imageFile != null
-                        ? Image.file(_imageFile!, fit: BoxFit.cover)
-                        : widget.customer?.localImagePath != null
-                        ? Image.file(
-                            File(widget.customer!.localImagePath!),
-                            fit: BoxFit.cover,
-                          )
-                        : _networkImageUrl != null
-                        ? Image.network(_networkImageUrl!, fit: BoxFit.cover)
-                        : const Icon(
-                            Icons.add_a_photo,
-                            size: 50,
-                            color: Colors.grey,
-                          ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                // Customer Name
-                TextFormField(
-                  controller: _nameController,
-                  textCapitalization: TextCapitalization.words,
-                  decoration: const InputDecoration(
-                    labelText: 'Customer Name *',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
-                  ),
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter customer name';
-                    }
-                    if (value.trim().length < 2) {
-                      return 'Name must be at least 2 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Phone Number
-                TextFormField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'Phone Number',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.phone),
-                    helperText: 'Optional - e.g. 09123456789',
-                    prefixText: '+63 ',
-                  ),
-                  validator: (value) {
-                    if (value != null && value.trim().isNotEmpty) {
-                      // Basic Philippine mobile number validation
-                      final cleanNumber = value.trim().replaceAll(
-                        RegExp(r'[^0-9]'),
-                        '',
-                      );
-                      if (cleanNumber.length < 10 || cleanNumber.length > 11) {
-                        return 'Enter a valid phone number';
-                      }
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Email
-                TextFormField(
-                  controller: _emailController,
-                  keyboardType: TextInputType.emailAddress,
-                  decoration: const InputDecoration(
-                    labelText: 'Email Address',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
-                    helperText: 'Optional',
-                  ),
-                  validator: (value) {
-                    if (value != null && value.trim().isNotEmpty) {
-                      if (!RegExp(
-                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}',
-                      ).hasMatch(value.trim())) {
-                        return 'Enter a valid email address';
-                      }
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Address
-                TextFormField(
-                  controller: _addressController,
-                  maxLines: 2,
-                  textCapitalization: TextCapitalization.sentences,
-                  decoration: const InputDecoration(
-                    labelText: 'Address',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.location_on),
-                    helperText: 'Optional',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _isLoading ? null : () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _isLoading ? null : _saveCustomer,
-          child: _isLoading
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : Text(_isEditMode ? 'Save Changes' : 'Add Customer'),
-        ),
-      ],
-    );
-  }
-
   Future<String?> _uploadImage(File imageFile) async {
     try {
       return await CloudinaryService.instance.uploadImage(imageFile);
@@ -310,7 +165,9 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         createdAt: _isEditMode ? widget.customer!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
       );
+
       if (!mounted) return;
+
       final provider = Provider.of<CustomerProvider>(context, listen: false);
       Customer? result;
       if (_isEditMode) {
@@ -372,7 +229,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         error: e,
         stackTrace: s,
       );
-      // Catch ArgumentError from model validation
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -417,5 +273,162 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         });
       }
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(_isEditMode ? 'Edit Customer' : 'Add New Customer'),
+      content: SizedBox(
+        width: MediaQuery.of(context).size.width * 0.9,
+        child: Form(
+          key: _formKey,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Image picker
+                GestureDetector(
+                  onTap: _showImageSourceActionSheet,
+                  child: Container(
+                    width: double.infinity,
+                    height: 200,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: _imageFile != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(_imageFile!, fit: BoxFit.cover),
+                          )
+                        : widget.customer?.localImagePath != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.file(
+                              File(widget.customer!.localImagePath!),
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : _networkImageUrl != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(
+                              _networkImageUrl!,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.add_a_photo,
+                            size: 50,
+                            color: Colors.grey,
+                          ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Customer Name
+                TextFormField(
+                  controller: _nameController,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Customer Name *',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person),
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter customer name';
+                    }
+                    if (value.trim().length < 2) {
+                      return 'Name must be at least 2 characters';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Phone Number
+                TextFormField(
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Phone Number',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.phone),
+                    helperText: 'e.g. 9123456789',
+                    prefixText: '+63 ',
+                  ),
+                  validator: (value) {
+                    if (value != null && value.trim().isNotEmpty) {
+                      final cleanNumber = value.trim();
+                      if (!RegExp(r'^[9][0-9]{9}$').hasMatch(cleanNumber)) {
+                        return 'Enter a valid 10-digit number starting with 9';
+                      }
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Email
+                TextFormField(
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: const InputDecoration(
+                    labelText: 'Email Address',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.email),
+                    helperText: 'Optional',
+                  ),
+                  validator: (value) {
+                    if (value != null && value.trim().isNotEmpty) {
+                      if (!RegExp(
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                      ).hasMatch(value.trim())) {
+                        return 'Enter a valid email address';
+                      }
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Address
+                TextFormField(
+                  controller: _addressController,
+                  maxLines: 2,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Address',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.location_on),
+                    helperText: 'Optional',
+                    alignLabelWithHint: true,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isLoading ? null : () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _isLoading ? null : _saveCustomer,
+          child: _isLoading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : Text(_isEditMode ? 'Save Changes' : 'Add Customer'),
+        ),
+      ],
+    );
   }
 }

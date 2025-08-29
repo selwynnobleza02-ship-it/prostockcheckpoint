@@ -55,7 +55,7 @@ class _POSScreenState extends State<POSScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset: false,
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Point of Sale'),
         actions: [

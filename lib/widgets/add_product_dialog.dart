@@ -21,18 +21,21 @@ class _AddProductDialogState extends State<AddProductDialog> {
   final _stockController = TextEditingController();
   final _minStockController = TextEditingController(text: '5');
 
-  String _selectedCategory = 'General';
+  // FIX: Use the first category from the list instead of 'General'
+  String _selectedCategory = 'Snacks (Chichirya)';
   bool _isLoading = false;
 
   final List<String> _categories = [
-    'General',
-    'Food & Beverages',
+    'Snacks (Chichirya)',
+    'Drinks (Inumin)',
+    'Canned Goods (De Lata)',
+    'Noodles & Pasta',
+    'Condiments (Pampalasa)',
+    'Cleaning Supplies (Panlinis)',
     'Personal Care',
-    'Household Items',
-    'Electronics',
-    'Clothing',
-    'Health & Medicine',
-    'Office Supplies',
+    'Medicine (Gamot)',
+    'Cigarettes & Lighters',
+    'Others (Iba pa)',
   ];
 
   bool get _isEditing => widget.product != null;
@@ -47,7 +50,14 @@ class _AddProductDialogState extends State<AddProductDialog> {
       _costController.text = product.cost.toString();
       _stockController.text = product.stock.toString();
       _minStockController.text = product.minStock.toString();
-      _selectedCategory = product.category!;
+
+      // FIX: Ensure the product's category exists in the list
+      if (_categories.contains(product.category)) {
+        _selectedCategory = product.category!;
+      } else {
+        // If the product's category doesn't exist, default to first category
+        _selectedCategory = _categories.first;
+      }
     }
   }
 
@@ -64,7 +74,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text(_isEditing ? 'Edit Product' : 'Add New Product'),
+      title: Text(_isEditing ? 'Product Information' : 'Add New Product'),
       content: SizedBox(
         width: MediaQuery.of(context).size.width * 0.9,
         child: Form(
@@ -124,7 +134,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
                   items: _categories.map((category) {
                     return DropdownMenuItem(
                       value: category,
-                      child: Text(category),
+                      child: Text(category, overflow: TextOverflow.ellipsis),
                     );
                   }).toList(),
                   onChanged: _isEditing

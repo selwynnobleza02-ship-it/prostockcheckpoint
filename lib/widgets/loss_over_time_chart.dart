@@ -1,18 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
-import '../models/sale.dart';
+import '../models/loss.dart';
 
-class SalesOverTimeChart extends StatefulWidget {
-  final List<Sale> sales;
+class LossOverTimeChart extends StatefulWidget {
+  final List<Loss> losses;
 
-  const SalesOverTimeChart({super.key, required this.sales});
+  const LossOverTimeChart({super.key, required this.losses});
 
   @override
-  State<SalesOverTimeChart> createState() => _SalesOverTimeChartState();
+  State<LossOverTimeChart> createState() => _LossOverTimeChartState();
 }
 
-class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
+class _LossOverTimeChartState extends State<LossOverTimeChart> {
   String _selectedFilter = "Daily"; // default
 
   @override
@@ -31,7 +31,7 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
               Column(
                 children: [
                   const Text(
-                    "Sales Over Time",
+                    "Losses Over Time",
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 8),
@@ -55,8 +55,8 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
                       },
                       borderRadius: BorderRadius.circular(12),
                       selectedColor: Colors.white,
-                      fillColor: Colors.blue,
-                      color: Colors.blueGrey,
+                      fillColor: Colors.red,
+                      color: Colors.red,
                       constraints: const BoxConstraints(
                         minHeight: 36,
                         minWidth: 70,
@@ -73,7 +73,7 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
               const SizedBox(height: 12),
 
               /// Chart
-              Expanded(child: LineChart(_mainData())),
+              Expanded(child: BarChart(_mainData())),
             ],
           ),
         ),
@@ -81,10 +81,11 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
     );
   }
 
-  LineChartData _mainData() {
-    final spots = _getChartSpots();
+  BarChartData _mainData() {
+    final barGroups = _getChartGroups();
 
-    return LineChartData(
+    return BarChartData(
+      barGroups: barGroups,
       gridData: FlGridData(
         show: true,
         drawVerticalLine: true,
@@ -116,64 +117,50 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
         ),
       ),
       borderData: FlBorderData(show: false),
-      minX: 0,
-      maxX: (spots.length - 1).toDouble(),
-      minY: 0,
-      lineBarsData: [
-        LineChartBarData(
-          spots: spots,
-          isCurved: true,
-          gradient: LinearGradient(
-            colors: [Colors.blue.shade400, Colors.blue.shade800],
-          ),
-          barWidth: 4,
-          isStrokeCapRound: true,
-          dotData: const FlDotData(show: false),
-          belowBarData: BarAreaData(
-            show: true,
-            gradient: LinearGradient(
-              colors: [
-                Colors.blue.withValues(alpha: 0.3),
-                Colors.blue.withValues(alpha: 0.05),
-              ],
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-            ),
-          ),
-        ),
-      ],
     );
   }
 
-  List<FlSpot> _getChartSpots() {
-    if (widget.sales.isEmpty) return [const FlSpot(0, 0)];
+  List<BarChartGroupData> _getChartGroups() {
+    if (widget.losses.isEmpty) return [];
 
-    final Map<DateTime, double> groupedSales = {};
+    final Map<DateTime, double> groupedLosses = {};
 
-    for (final sale in widget.sales) {
+    for (final loss in widget.losses) {
       DateTime key;
 
       if (_selectedFilter == "Daily") {
         key = DateTime(
-          sale.createdAt.year,
-          sale.createdAt.month,
-          sale.createdAt.day,
+          loss.timestamp.year,
+          loss.timestamp.month,
+          loss.timestamp.day,
         );
       } else if (_selectedFilter == "Monthly") {
-        key = DateTime(sale.createdAt.year, sale.createdAt.month);
+        key = DateTime(loss.timestamp.year, loss.timestamp.month);
       } else {
-        key = DateTime(sale.createdAt.year);
+        key = DateTime(loss.timestamp.year);
       }
 
-      groupedSales[key] = (groupedSales[key] ?? 0) + sale.totalAmount;
+      groupedLosses[key] = (groupedLosses[key] ?? 0) + loss.totalCost;
     }
 
-    final sortedKeys = groupedSales.keys.toList()..sort();
+    final sortedKeys = groupedLosses.keys.toList()..sort();
 
     return List.generate(sortedKeys.length, (i) {
       final date = sortedKeys[i];
-      final total = groupedSales[date]!;
-      return FlSpot(i.toDouble(), total);
+      final total = groupedLosses[date]!;
+      return BarChartGroupData(
+        x: i,
+        barRods: [
+          BarChartRodData(
+            toY: total,
+            gradient: LinearGradient(
+              colors: [Colors.red.shade400, Colors.red.shade800],
+              begin: Alignment.bottomCenter,
+              end: Alignment.topCenter,
+            ),
+          ),
+        ],
+      );
     });
   }
 
@@ -206,24 +193,24 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
   }
 
   List<DateTime> _getSortedKeys() {
-    final Map<DateTime, double> groupedSales = {};
+    final Map<DateTime, double> groupedLosses = {};
 
-    for (final sale in widget.sales) {
+    for (final loss in widget.losses) {
       DateTime key;
       if (_selectedFilter == "Daily") {
         key = DateTime(
-          sale.createdAt.year,
-          sale.createdAt.month,
-          sale.createdAt.day,
+          loss.timestamp.year,
+          loss.timestamp.month,
+          loss.timestamp.day,
         );
       } else if (_selectedFilter == "Monthly") {
-        key = DateTime(sale.createdAt.year, sale.createdAt.month);
+        key = DateTime(loss.timestamp.year, loss.timestamp.month);
       } else {
-        key = DateTime(sale.createdAt.year);
+        key = DateTime(loss.timestamp.year);
       }
-      groupedSales[key] = (groupedSales[key] ?? 0) + sale.totalAmount;
+      groupedLosses[key] = (groupedLosses[key] ?? 0) + loss.totalCost;
     }
-    return groupedSales.keys.toList()..sort();
+    return groupedLosses.keys.toList()..sort();
   }
 
   Widget leftTitleWidgets(double value, TitleMeta meta) {
@@ -240,6 +227,6 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
       text = value.toStringAsFixed(0);
     }
 
-    return Text(text, style: style);
+    return Text(text, style: style, textAlign: TextAlign.left);
   }
 }

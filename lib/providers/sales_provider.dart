@@ -388,7 +388,8 @@ class SalesProvider with ChangeNotifier {
         final creditId = await FirestoreService.instance.recordUtang(
           customerId!,
           currentSaleTotal,
-          _currentSaleItems,
+          _currentSaleItems as double,
+          productsInSale.cast<SaleItem>(),
         );
 
         // Reduce stock for each item in the credit sale
@@ -401,7 +402,8 @@ class SalesProvider with ChangeNotifier {
           if (!stockReduced) {
             // This part is crucial for handling potential failures.
             // Depending on the business logic, you might want to rollback the Utang record.
-            _error = 'Failed to reduce stock for product: \${item.productId}. The credit was recorded, but inventory might be inconsistent.';
+            _error =
+                'Failed to reduce stock for product: \${item.productId}. The credit was recorded, but inventory might be inconsistent.';
             _isLoading = false;
             notifyListeners();
             // Returning null or a specific error object might be appropriate here

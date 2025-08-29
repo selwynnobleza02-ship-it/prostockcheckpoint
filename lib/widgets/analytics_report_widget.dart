@@ -1,20 +1,19 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/sale.dart';
+import 'package:prostock/widgets/loss_over_time_chart.dart';
 import 'package:provider/provider.dart';
 import '../providers/customer_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
 import 'sales_over_time_chart.dart';
-import 'top_customers_list.dart';
-import 'top_selling_products_chart.dart';
 
 class AnalyticsReportWidget extends StatelessWidget {
   final List<SaleItem> saleItems;
+  final List<Loss> losses;
 
-  const AnalyticsReportWidget({
-    super.key,
-    required this.saleItems,
-  });
+  const AnalyticsReportWidget(
+      {super.key, required this.saleItems, required this.losses});
 
   @override
   Widget build(BuildContext context) {
@@ -37,31 +36,14 @@ class AnalyticsReportWidget extends StatelessWidget {
                 SalesOverTimeChart(sales: salesProvider.sales),
               const SizedBox(height: 24),
               const Text(
-                'Top Selling Products',
+                'Losses Over Time',
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 16),
-              if (saleItems.isEmpty || inventoryProvider.products.isEmpty)
-                const Center(child: Text('No product data available.'))
+              if (losses.isEmpty)
+                const Center(child: Text('No loss data available.'))
               else
-                TopSellingProductsChart(
-                  saleItems: saleItems,
-                  products: inventoryProvider.products,
-                ),
-              const SizedBox(height: 24),
-              const Text(
-                'Top Customers',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              if (salesProvider.sales.isEmpty ||
-                  customerProvider.customers.isEmpty)
-                const Center(child: Text('No customer data available.'))
-              else
-                TopCustomersList(
-                  sales: salesProvider.sales,
-                  customers: customerProvider.customers,
-                ),
+                LossOverTimeChart(losses: losses),
             ],
           ),
         );

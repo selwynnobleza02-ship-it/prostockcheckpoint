@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
+import 'package:prostock/providers/stock_movement_provider.dart';
+import 'package:prostock/widgets/stock_movement_report_widget.dart';
 import 'package:provider/provider.dart';
 import '../providers/sales_provider.dart';
 import '../providers/inventory_provider.dart';
@@ -29,7 +31,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 5, vsync: this);
+    _tabController = TabController(length: 6, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
   }
 
@@ -46,6 +48,11 @@ class _ReportsScreenState extends State<ReportsScreen>
       context,
       listen: false,
     ).loadProducts(refresh: refresh);
+    if (!mounted) return;
+    await Provider.of<StockMovementProvider>(
+      context,
+      listen: false,
+    ).loadMovements(refresh: refresh);
     final losses = await FirestoreService.instance.getLosses();
 
     final List<SaleItem> allSaleItems = [];
@@ -86,12 +93,14 @@ class _ReportsScreenState extends State<ReportsScreen>
         title: const Text('Reports'),
         bottom: TabBar(
           controller: _tabController,
+          isScrollable: true,
           tabs: const [
             Tab(text: 'Sales'),
             Tab(text: 'Inventory'),
             Tab(text: 'Customers'),
             Tab(text: 'Financial'),
             Tab(text: 'Analytics'),
+            Tab(text: 'Stock Log'),
           ],
         ),
       ),
@@ -102,7 +111,8 @@ class _ReportsScreenState extends State<ReportsScreen>
           _buildInventoryReport(),
           _buildCustomersReport(),
           _buildFinancialReport(),
-          AnalyticsReportWidget(saleItems: _saleItems),
+          AnalyticsReportWidget(saleItems: _saleItems, losses: _losses),
+          const StockMovementReportWidget(),
         ],
       ),
     );
@@ -132,25 +142,26 @@ class _ReportsScreenState extends State<ReportsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Sales Summary Cards
-                Row(
+                // Sales Summary Cards - Using GridView for consistent sizing
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  childAspectRatio: 1.8,
+                  crossAxisSpacing: 16,
+                  mainAxisSpacing: 16,
                   children: [
-                    Expanded(
-                      child: _buildSummaryCard(
-                        'Today\'s Sales',
-                        CurrencyUtils.formatCurrency(todaySales),
-                        Icons.today,
-                        Colors.green,
-                      ),
+                    _buildSummaryCard(
+                      'Today\'s Sales',
+                      CurrencyUtils.formatCurrency(todaySales),
+                      Icons.today,
+                      Colors.green,
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: _buildSummaryCard(
-                        'Total Sales',
-                        CurrencyUtils.formatCurrency(totalSales),
-                        Icons.receipt_long,
-                        Colors.blue,
-                      ),
+                    _buildSummaryCard(
+                      'Total Sales',
+                      CurrencyUtils.formatCurrency(totalSales),
+                      Icons.receipt_long,
+                      Colors.blue,
                     ),
                   ],
                 ),
@@ -223,30 +234,32 @@ class _ReportsScreenState extends State<ReportsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Inventory Summary Cards
-              Row(
+              // Inventory Summary Cards - Using GridView for consistent sizing
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: 1.8,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
                 children: [
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Total Products',
-                      totalProducts.toString(),
-                      Icons.inventory,
-                      Colors.blue,
-                    ),
+                  _buildSummaryCard(
+                    'Total Products',
+                    totalProducts.toString(),
+                    Icons.inventory,
+                    Colors.blue,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Low Stock Items',
-                      lowStockCount.toString(),
-                      Icons.warning,
-                      Colors.orange,
-                    ),
+                  _buildSummaryCard(
+                    'Low Stock Items',
+                    lowStockCount.toString(),
+                    Icons.warning,
+                    Colors.orange,
                   ),
                 ],
               ),
               const SizedBox(height: 16),
 
+              // Total Inventory Value - Single card
               _buildSummaryCard(
                 'Total Inventory Value',
                 CurrencyUtils.formatCurrency(totalValue),
@@ -318,30 +331,32 @@ class _ReportsScreenState extends State<ReportsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Customer Summary Cards
-              Row(
+              // Customer Summary Cards - Using GridView for consistent sizing
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: 1.8,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
                 children: [
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Total Customers',
-                      totalCustomers.toString(),
-                      Icons.people,
-                      Colors.blue,
-                    ),
+                  _buildSummaryCard(
+                    'Total Customers',
+                    totalCustomers.toString(),
+                    Icons.people,
+                    Colors.blue,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Customers with Utang',
-                      customersWithUtang.toString(),
-                      Icons.credit_card_off,
-                      Colors.orange,
-                    ),
+                  _buildSummaryCard(
+                    'Customers with Utang',
+                    customersWithUtang.toString(),
+                    Icons.credit_card_off,
+                    Colors.orange,
                   ),
                 ],
               ),
               const SizedBox(height: 16),
 
+              // Total Outstanding Utang - Single card
               _buildSummaryCard(
                 'Total Outstanding Utang',
                 CurrencyUtils.formatCurrency(totalUtang),
@@ -360,9 +375,7 @@ class _ReportsScreenState extends State<ReportsScreen>
                 ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: provider.customers
-                      .where((c) => c.hasUtang)
-                      .length,
+                  itemCount: provider.customers.where((c) => c.hasUtang).length,
                   itemBuilder: (context, index) {
                     final customer = provider.customers
                         .where((c) => c.hasUtang)
@@ -433,55 +446,55 @@ class _ReportsScreenState extends State<ReportsScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Financial Summary Cards
-              Row(
+              // Financial Summary Cards - Using GridView for consistent sizing
+              GridView.count(
+                crossAxisCount: 2,
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                childAspectRatio: 1.8,
+                crossAxisSpacing: 16,
+                mainAxisSpacing: 16,
                 children: [
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Total Revenue',
-                      CurrencyUtils.formatCurrency(totalRevenue),
-                      Icons.trending_up,
-                      Colors.green,
-                    ),
+                  _buildSummaryCard(
+                    'Total Revenue',
+                    CurrencyUtils.formatCurrency(totalRevenue),
+                    Icons.trending_up,
+                    Colors.green,
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Total Cost',
-                      CurrencyUtils.formatCurrency(totalCost),
-                      Icons.trending_down,
-                      Colors.red,
-                    ),
+                  _buildSummaryCard(
+                    'Total Cost',
+                    CurrencyUtils.formatCurrency(totalCost),
+                    Icons.trending_down,
+                    Colors.red,
+                  ),
+                  _buildSummaryCard(
+                    'Total Loss',
+                    CurrencyUtils.formatCurrency(totalLoss),
+                    Icons.remove_shopping_cart,
+                    Colors.orange,
+                  ),
+                  _buildSummaryCard(
+                    'Gross Profit',
+                    CurrencyUtils.formatCurrency(totalProfit),
+                    Icons.signal_cellular_alt,
+                    totalProfit >= 0 ? Colors.green : Colors.red,
                   ),
                 ],
               ),
               const SizedBox(height: 16),
 
-              Row(
-                children: [
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Gross Profit',
-                      CurrencyUtils.formatCurrency(totalProfit),
-                      Icons.signal_cellular_alt,
-                      totalProfit >= 0 ? Colors.green : Colors.red,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: _buildSummaryCard(
-                      'Outstanding Utang',
-                      CurrencyUtils.formatCurrency(outstandingUtang),
-                      Icons.credit_card,
-                      Colors.orange,
-                    ),
-                  ),
-                ],
+              // Outstanding Utang - Single card
+              _buildSummaryCard(
+                'Outstanding Utang',
+                CurrencyUtils.formatCurrency(outstandingUtang),
+                Icons.credit_card,
+                Colors.red,
               ),
               const SizedBox(height: 24),
 
               // Profit Margin Analysis
               Container(
+                width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
@@ -501,29 +514,50 @@ class _ReportsScreenState extends State<ReportsScreen>
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Profit Margin:'),
-                        Text(
-                          totalRevenue > 0
-                              ? '${(totalProfit / totalRevenue * 100).toStringAsFixed(1)}%'
-                              : '0.0%',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: totalProfit >= 0 ? Colors.green : Colors.red,
+                        const Flexible(
+                          child: Text(
+                            'Profit Margin:',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Flexible(
+                          child: Text(
+                            totalRevenue > 0
+                                ? '${(totalProfit / totalRevenue * 100).toStringAsFixed(1)}%'
+                                : '0.0%',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: totalProfit >= 0
+                                  ? Colors.green
+                                  : Colors.red,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 4),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Return on Investment:'),
-                        Text(
-                          totalCost > 0
-                              ? '${(totalProfit / totalCost * 100).toStringAsFixed(1)}%'
-                              : '0.0%',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: totalProfit >= 0 ? Colors.green : Colors.red,
+                        const Flexible(
+                          child: Text(
+                            'Return on Investment:',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        Flexible(
+                          child: Text(
+                            totalCost > 0
+                                ? '${(totalProfit / totalCost * 100).toStringAsFixed(1)}%'
+                                : '0.0%',
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: totalProfit >= 0
+                                  ? Colors.green
+                                  : Colors.red,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],
@@ -545,21 +579,30 @@ class _ReportsScreenState extends State<ReportsScreen>
     Color color,
   ) {
     return Card(
-      child: Padding(
+      child: Container(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Icon(icon, color: color, size: 32),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: color,
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: color,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                 ),
               ],
@@ -568,6 +611,8 @@ class _ReportsScreenState extends State<ReportsScreen>
             Text(
               title,
               style: const TextStyle(fontSize: 14, color: Colors.grey),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

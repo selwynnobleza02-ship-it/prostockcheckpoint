@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/providers/stock_movement_provider.dart';
 import 'package:prostock/providers/theme_provider.dart';
 import 'package:prostock/screens/change_password_screen.dart';
 import 'package:prostock/screens/printer_settings_screen.dart';
@@ -65,6 +66,7 @@ class MyApp extends StatelessWidget {
               previousCreditProvider ??
               CreditProvider(customerProvider: customerProvider),
         ),
+        ChangeNotifierProvider(create: (_) => StockMovementProvider()),
       ],
       child: const RetailCreditApp(),
     );

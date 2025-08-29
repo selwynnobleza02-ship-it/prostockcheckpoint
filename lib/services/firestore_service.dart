@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:prostock/models/loss.dart';
+import 'package:prostock/models/stock_movement.dart';
 import 'package:prostock/utils/app_constants.dart';
 import '../models/product.dart';
 import '../models/price_history.dart';
@@ -207,7 +208,8 @@ class FirestoreService {
 
   // Input validation and sanitization methods
   void _validateCollectionName(String collection) {
-    if (collection.isEmpty || collection.length > ValidationConstants.maxCollectionNameLength) {
+    if (collection.isEmpty ||
+        collection.length > ValidationConstants.maxCollectionNameLength) {
       throw ArgumentError('Invalid collection name');
     }
 
@@ -741,6 +743,7 @@ class FirestoreService {
   Future<String> recordUtang(
     String customerId,
     double totalAmount,
+    double amountChange,
     List<SaleItem> saleItems,
   ) async {
     try {
@@ -755,7 +758,7 @@ class FirestoreService {
 
         final data = customerDoc.data() as Map<String, dynamic>;
         final currentBalance = (data['utang_balance'] ?? 0.0) as double;
-        final newBalance = currentBalance + totalAmount;
+        final newBalance = currentBalance + amountChange;
 
         transaction.update(customerRef, {
           'utang_balance': newBalance,
@@ -776,7 +779,9 @@ class FirestoreService {
         // 3. Decrement product stock
         for (final item in saleItems) {
           final productRef = products.doc(item.productId);
-          transaction.update(productRef, {'stock': FieldValue.increment(-item.quantity)});
+          transaction.update(productRef, {
+            'stock': FieldValue.increment(-item.quantity),
+          });
         }
 
         return creditTransactionRef.id;
@@ -828,9 +833,7 @@ class FirestoreService {
         return saleRef.id;
       });
     } catch (e) {
-      throw FirestoreException(
-        'Failed to insert complete transaction: $e',
-      );
+      throw FirestoreException('Failed to insert complete transaction: $e');
     }
   }
 
@@ -1036,6 +1039,7 @@ class FirestoreService {
   // Stock movement operations
   Future<String> insertStockMovement(
     String productId,
+    String productName,
     String movementType,
     int quantity,
     String? reason,
@@ -1043,6 +1047,7 @@ class FirestoreService {
     try {
       final stockMovementData = {
         'productId': productId,
+        'productName': productName,
         'movementType': movementType,
         'quantity': quantity,
         'reason': reason,
@@ -1058,7 +1063,7 @@ class FirestoreService {
     }
   }
 
-  Future<List<Map<String, dynamic>>> getStockMovementsByProduct(
+  Future<List<StockMovement>> getStockMovementsByProduct(
     String productId,
   ) async {
     try {
@@ -1067,13 +1072,42 @@ class FirestoreService {
           .orderBy('createdAt', descending: true)
           .get();
 
-      return snapshot.docs.map((doc) {
-        final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return data;
-      }).toList();
+      return snapshot.docs.map(_stockMovementFromDocument).toList();
     } catch (e) {
       throw FirestoreException('Failed to get stock movements by product: $e');
+    }
+  }
+
+  StockMovement _stockMovementFromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return StockMovement.fromMap(data);
+  }
+
+  Future<PaginatedResult<StockMovement>> getStockMovements({
+    int limit = 20,
+    DocumentSnapshot? lastDocument,
+  }) async {
+    try {
+      Query query = stockMovements.orderBy('createdAt', descending: true);
+
+      if (lastDocument != null) {
+        query = query.startAfterDocument(lastDocument);
+      }
+
+      query = query.limit(limit);
+
+      final snapshot = await query.get();
+
+      final movementsList =
+          snapshot.docs.map(_stockMovementFromDocument).toList();
+
+      return PaginatedResult(
+        items: movementsList,
+        lastDocument: snapshot.docs.isNotEmpty ? snapshot.docs.last : null,
+      );
+    } catch (e) {
+      throw FirestoreException('Failed to get paginated stock movements: $e');
     }
   }
 
@@ -1226,8 +1260,7 @@ class FirestoreService {
   }
 
   Future<List<UserActivity>> getUserActivities(
-    String userId,
-    {
+    String userId, {
     int limit = ValidationConstants.maxLocalErrors,
   }) async {
     try {
@@ -1282,8 +1315,7 @@ class FirestoreService {
 
   Future<List<UserActivity>> getActivitiesByDateRange(
     DateTime start,
-    DateTime end,
-    {
+    DateTime end, {
     String? userId,
   }) async {
     try {
