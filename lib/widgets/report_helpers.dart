@@ -1,0 +1,206 @@
+import 'package:flutter/material.dart';
+import 'package:prostock/models/receipt.dart';
+import 'package:prostock/models/sale.dart';
+import 'package:prostock/services/firestore_service.dart';
+import 'package:prostock/services/local_database_service.dart';
+import 'package:prostock/widgets/receipt_dialog.dart';
+
+Widget buildSummaryCard(
+  BuildContext context,
+  String title,
+  String value,
+  IconData icon,
+  Color color,
+) {
+  return Card(
+    child: IntrinsicHeight(
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  icon,
+                  color: color,
+                  size: 28,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      final messenger = ScaffoldMessenger.of(context);
+                      messenger.clearSnackBars();
+                      messenger.showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(icon, color: Colors.white, size: 16),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '$title: $value',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: color.withOpacity(0.9),
+                          duration: const Duration(seconds: 3),
+                          behavior: SnackBarBehavior.floating,
+                          margin: const EdgeInsets.all(16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      );
+                    },
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _formatLargeNumber(value),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                          ),
+                          textAlign: TextAlign.right,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        if (_formatLargeNumber(value) != value)
+                          Padding(
+                            padding: const EdgeInsets.only(
+                              top: 2,
+                            ),
+                            child: Text(
+                              'Tap for details',
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: Colors.grey.shade600,
+                                fontStyle: FontStyle.italic,
+                              ),
+                              textAlign: TextAlign.right,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Flexible(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: Colors.grey,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}
+
+String _formatLargeNumber(String value) {
+  String cleanValue = value.replaceAll(RegExp(r'[₱,\s]'), '');
+  double? numValue = double.tryParse(cleanValue);
+  if (numValue == null) return value;
+
+  if (numValue >= 1000000) {
+    return '₱${(numValue / 1000000).toStringAsFixed(1)}M';
+  } else if (numValue >= 1000) {
+    return '₱${(numValue / 1000).toStringAsFixed(1)}K';
+  } else {
+    return value;
+  }
+}
+
+Future<void> showHistoricalReceipt(BuildContext context, Sale sale) async {
+  try {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+
+    List<SaleItem> saleItems = [];
+    if (sale.isSynced == 1) {
+      saleItems = await FirestoreService.instance.getSaleItemsBySaleId(
+        sale.id!,
+      );
+    } else {
+      final localItems = await LocalDatabaseService.instance.getSaleItems(
+        sale.id!,
+      );
+      saleItems = localItems.map((item) => SaleItem.fromMap(item)).toList();
+    }
+
+    String? customerName;
+    if (sale.customerId != null) {
+      final customer = await FirestoreService.instance.getCustomerById(
+        sale.customerId!,
+      );
+      customerName = customer?.name;
+    }
+
+    List<ReceiptItem> receiptItems = [];
+    for (final saleItem in saleItems) {
+      final product = await FirestoreService.instance.getProductById(
+        saleItem.productId,
+      );
+      receiptItems.add(
+        ReceiptItem(
+          productName: product?.name ?? 'Unknown Product',
+          quantity: saleItem.quantity,
+          unitPrice: saleItem.unitPrice,
+          totalPrice: saleItem.totalPrice,
+        ),
+      );
+    }
+
+    final receipt = Receipt(
+      receiptNumber: sale.id.toString(),
+      timestamp: sale.createdAt,
+      customerName: customerName,
+      paymentMethod: sale.paymentMethod,
+      items: receiptItems,
+      subtotal: sale.totalAmount,
+      tax: 0.0,
+      total: sale.totalAmount,
+      saleId: sale.id.toString(),
+    );
+
+    if (context.mounted) {
+      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        builder: (context) => ReceiptDialog(receipt: receipt),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      Navigator.of(context).pop();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading receipt: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+}

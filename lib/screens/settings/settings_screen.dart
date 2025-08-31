@@ -1,10 +1,10 @@
-
 import 'package:flutter/material.dart';
 import 'package:prostock/providers/theme_provider.dart';
+import 'package:prostock/screens/settings/components/about_screen.dart';
 import 'package:provider/provider.dart';
-import '../providers/auth_provider.dart';
-import 'change_password_screen.dart';
-import 'printer_settings_screen.dart';
+import '../../providers/auth_provider.dart';
+import 'components/change_password_screen.dart';
+import 'components/printer_settings_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -12,9 +12,7 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
+      appBar: AppBar(title: const Text('Settings')),
       body: ListView(
         children: [
           ListTile(
@@ -28,14 +26,32 @@ class SettingsScreen extends StatelessWidget {
             leading: const Icon(Icons.lock_outline),
             title: const Text('Change Password'),
             onTap: () {
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const ChangePasswordScreen()));
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const ChangePasswordScreen(),
+                ),
+              );
             },
           ),
           ListTile(
             leading: const Icon(Icons.print_outlined),
             title: const Text('Printer Settings'),
             onTap: () {
-              Navigator.of(context).push(MaterialPageRoute(builder: (context) => const PrinterSettingsScreen()));
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const PrinterSettingsScreen(),
+                ),
+              );
+            },
+          ),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.info_outline),
+            title: const Text('About'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const AboutScreen()),
+              );
             },
           ),
           const Divider(),
@@ -46,7 +62,9 @@ class SettingsScreen extends StatelessWidget {
               final authProvider = context.read<AuthProvider>();
               await authProvider.logout();
               if (context.mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+                Navigator.of(
+                  context,
+                ).pushNamedAndRemoveUntil('/login', (route) => false);
               }
             },
           ),
@@ -64,24 +82,30 @@ class SettingsScreen extends StatelessWidget {
           children: [
             SimpleDialogOption(
               onPressed: () {
-                Provider.of<ThemeProvider>(context, listen: false)
-                    .setThemeMode(ThemeMode.light);
+                Provider.of<ThemeProvider>(
+                  context,
+                  listen: false,
+                ).setThemeMode(ThemeMode.light);
                 Navigator.of(context).pop();
               },
               child: const Text('Light'),
             ),
             SimpleDialogOption(
               onPressed: () {
-                Provider.of<ThemeProvider>(context, listen: false)
-                    .setThemeMode(ThemeMode.dark);
+                Provider.of<ThemeProvider>(
+                  context,
+                  listen: false,
+                ).setThemeMode(ThemeMode.dark);
                 Navigator.of(context).pop();
               },
               child: const Text('Dark'),
             ),
             SimpleDialogOption(
               onPressed: () {
-                Provider.of<ThemeProvider>(context, listen: false)
-                    .setThemeMode(ThemeMode.system);
+                Provider.of<ThemeProvider>(
+                  context,
+                  listen: false,
+                ).setThemeMode(ThemeMode.system);
                 Navigator.of(context).pop();
               },
               child: const Text('System Default'),

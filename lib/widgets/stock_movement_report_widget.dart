@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import '../providers/inventory_provider.dart';
 import '../providers/stock_movement_provider.dart';
 
 class StockMovementReportWidget extends StatelessWidget {
@@ -23,7 +24,10 @@ class StockMovementReportWidget extends StatelessWidget {
           );
         }
 
-        if (provider.movements.isEmpty) {
+        final inventoryProvider = Provider.of<InventoryProvider>(context, listen: false);
+        final movements = provider.movements;
+
+        if (movements.isEmpty) {
           return const Center(
             child: Text('No stock movements recorded yet.'),
           );
@@ -32,9 +36,12 @@ class StockMovementReportWidget extends StatelessWidget {
         return RefreshIndicator(
           onRefresh: () => provider.loadMovements(refresh: true),
           child: ListView.builder(
-            itemCount: provider.movements.length,
+            itemCount: movements.length,
             itemBuilder: (context, index) {
-              final movement = provider.movements[index];
+              final movement = movements[index];
+              final product = inventoryProvider.getProductById(movement.productId);
+              final productName = product?.name ?? movement.productName;
+
               final isStockIn = movement.movementType == 'stock_in';
               final isStockOut = movement.movementType == 'stock_out';
               final icon = isStockIn
@@ -56,7 +63,7 @@ class StockMovementReportWidget extends StatelessWidget {
                     child: Icon(icon, color: Colors.white),
                   ),
                   title: Text(
-                    movement.productName,
+                    productName,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Text(

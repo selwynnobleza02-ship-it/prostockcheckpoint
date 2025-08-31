@@ -14,7 +14,7 @@ import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/credit_provider.dart';
-import 'package:prostock/screens/login_screen.dart';
+import 'package:prostock/screens/login_signup/login_screen.dart';
 import 'package:prostock/screens/dashboard_screen.dart';
 import 'package:prostock/widgets/dashboard_card.dart';
 import 'package:prostock/widgets/barcode_scanner_widget.dart';

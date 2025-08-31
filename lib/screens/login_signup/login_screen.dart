@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/utils/app_constants.dart';
-import '../providers/auth_provider.dart';
+import '../../providers/auth_provider.dart';
 // Make sure UserRole is imported if defined elsewhere
-import '../models/user_role.dart';
+import '../../models/user_role.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -147,9 +147,13 @@ class _LoginScreenState extends State<LoginScreen> {
                             }
                           },
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: UiConstants.spacingMedium),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: UiConstants.spacingMedium,
+                      ),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(UiConstants.borderRadiusStandard),
+                        borderRadius: BorderRadius.circular(
+                          UiConstants.borderRadiusStandard,
+                        ),
                       ),
                       backgroundColor: Colors.blueAccent,
                       foregroundColor: Colors.white,
@@ -164,7 +168,12 @@ class _LoginScreenState extends State<LoginScreen> {
                               strokeWidth: UiConstants.strokeWidthSmall,
                             ),
                           )
-                        : const Text('Login', style: TextStyle(fontSize: UiConstants.fontSizeButton)),
+                        : const Text(
+                            'Login',
+                            style: TextStyle(
+                              fontSize: UiConstants.fontSizeButton,
+                            ),
+                          ),
                   ),
                 ),
                 const SizedBox(height: UiConstants.spacingSmall),
