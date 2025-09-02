@@ -1,3 +1,4 @@
+import 'package:prostock/services/printing_service.dart';
 import 'package:flutter/material.dart';
 import 'package:prostock/providers/sync_failure_provider.dart';
 import 'package:prostock/providers/stock_movement_provider.dart';
@@ -78,6 +79,7 @@ class MyApp extends StatelessWidget {
               CreditProvider(customerProvider: customerProvider),
         ),
         ChangeNotifierProvider(create: (_) => StockMovementProvider()),
+        ChangeNotifierProvider(create: (_) => PrintingService()),
       ],
       child: const RetailCreditApp(),
     );

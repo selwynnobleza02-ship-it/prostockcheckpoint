@@ -1,6 +1,7 @@
 import 'package:bluetooth_thermal_printer_plus/bluetooth_thermal_printer_plus.dart';
 import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
 import 'package:flutter/foundation.dart';
+import 'package:prostock/models/bluetooth_device.dart';
 import 'package:prostock/models/receipt.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -11,88 +12,233 @@ class PrintingService with ChangeNotifier {
 
   bool _isConnected = false;
   String? _connectedDeviceAddress;
+  String? _connectedDeviceName;
+  PaperSize _paperSize = PaperSize.mm80;
 
   bool get isConnected => _isConnected;
   String? get connectedDeviceAddress => _connectedDeviceAddress;
+  String? get connectedDeviceName => _connectedDeviceName;
+  PaperSize get paperSize => _paperSize;
 
-  Future<List<dynamic>> getBluetooths() async {
+  Future<void> loadPaperSize() async {
     try {
-      return await BluetoothThermalPrinter.getBluetooths ?? [];
+      final prefs = await SharedPreferences.getInstance();
+      final paperSizeName = prefs.getString('paper_size');
+
+      if (paperSizeName == 'mm58') {
+        _paperSize = PaperSize.mm58;
+      } else {
+        _paperSize = PaperSize.mm80; // default
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading paper size: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> savePaperSize(PaperSize paperSize) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      String paperSizeName;
+      if (paperSize == PaperSize.mm58) {
+        paperSizeName = 'mm58';
+      } else {
+        paperSizeName = 'mm80';
+      }
+
+      await prefs.setString('paper_size', paperSizeName);
+      _paperSize = paperSize;
+
+      if (kDebugMode) {
+        print('Saved paper size: $paperSizeName');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving paper size: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<List<BluetoothDevice>> getBluetooths() async {
+    try {
+      final devices = await BluetoothThermalPrinter.getBluetooths ?? [];
+      return devices.map((device) {
+        String name = 'Unknown Device';
+        String address = '';
+        if (device is String && device.contains('#')) {
+          final parts = device.split('#');
+          if (parts.length == 2) {
+            name = parts[0];
+            address = parts[1];
+          }
+        } else if (device is Map) {
+          name = device['name'] ?? 'Unknown Device';
+          address = device['address'] ?? '';
+        }
+        return BluetoothDevice(name: name, address: address);
+      }).toList();
     } catch (e) {
       if (kDebugMode) {
         print('Error getting bluetooth devices: $e');
       }
-      return [];
+      rethrow; // Re-throw to allow UI to handle the error
     }
   }
 
-  Future<bool> connect(dynamic device) async {
-    if (device['address'] == null) return false;
+  Future<bool> connect(BluetoothDevice device) async {
+    if (kDebugMode) {
+      print('Connect called with device: ${device.name}');
+    }
+
+    if (device.address.isEmpty) {
+      if (kDebugMode) {
+        print('Device address is null or empty for device: ${device.name}');
+      }
+      return false;
+    }
+
     try {
-      final result = await BluetoothThermalPrinter.connect(device['address']!);
+      if (kDebugMode) {
+        print('Attempting to connect to: ${device.name} (${device.address})');
+      }
+
+      final result = await BluetoothThermalPrinter.connect(device.address);
+      if (kDebugMode) {
+        print('Connection result: $result');
+      }
+
       if (result == 'true') {
         _isConnected = true;
-        _connectedDeviceAddress = device['address'];
-        await saveDefaultPrinter(device['address']!);
+        _connectedDeviceAddress = device.address;
+        _connectedDeviceName = device.name;
+        await saveDefaultPrinter(device.address);
         notifyListeners();
+
+        if (kDebugMode) {
+          print('Successfully connected to ${device.name}');
+        }
         return true;
+      } else {
+        if (kDebugMode) {
+          print('Connection failed with result: $result');
+        }
       }
     } catch (e) {
       if (kDebugMode) {
         print('Error connecting to printer: $e');
+        print('Stack trace: ${StackTrace.current}');
       }
+      // Reset connection state on error
+      _isConnected = false;
+      _connectedDeviceAddress = null;
+      _connectedDeviceName = null;
+      notifyListeners();
     }
     return false;
   }
 
   Future<void> disconnect() async {
-    BluetoothThermalPrinter.disconnect;
-    _isConnected = false;
-    _connectedDeviceAddress = null;
-    notifyListeners();
+    try {
+      await BluetoothThermalPrinter.disconnect(); // Fixed: Added parentheses
+      if (kDebugMode) {
+        print('Disconnected from printer');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error disconnecting: $e');
+      }
+    } finally {
+      // Always reset the connection state
+      _isConnected = false;
+      _connectedDeviceAddress = null;
+      _connectedDeviceName = null;
+      notifyListeners();
+    }
   }
 
   Future<void> saveDefaultPrinter(String address) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('default_printer_address', address);
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('default_printer_address', address);
+      if (kDebugMode) {
+        print('Saved default printer: $address');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving default printer: $e');
+      }
+    }
   }
 
   Future<String?> loadDefaultPrinter() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString('default_printer_address');
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final address = prefs.getString('default_printer_address');
+      if (kDebugMode) {
+        print('Loaded default printer: $address');
+      }
+      return address;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading default printer: $e');
+      }
+      return null;
+    }
   }
 
-  Future<void> printTest() async {
-    if (!_isConnected) return;
-    final List<int> bytes = await _generateTestTicket();
-    await BluetoothThermalPrinter.writeBytes(bytes);
+  Future<bool> printTest() async {
+    if (!_isConnected) {
+      if (kDebugMode) {
+        print('Cannot print: No printer connected');
+      }
+      return false;
+    }
+
+    try {
+      final List<int> bytes = await _generateTestTicket();
+      await BluetoothThermalPrinter.writeBytes(bytes);
+      if (kDebugMode) {
+        print('Test print sent successfully');
+      }
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error printing test: $e');
+      }
+      return false;
+    }
   }
 
-  Future<void> printReceipt(Receipt receipt) async {
-    if (!_isConnected) return;
-    final List<int> bytes = await _generateReceiptTicket(receipt);
-    await BluetoothThermalPrinter.writeBytes(bytes);
+  Future<bool> printReceipt(Receipt receipt) async {
+    if (!_isConnected) {
+      if (kDebugMode) {
+        print('Cannot print receipt: No printer connected');
+      }
+      return false;
+    }
+
+    try {
+      final List<int> bytes = await _generateReceiptTicket(receipt);
+      await BluetoothThermalPrinter.writeBytes(bytes);
+      if (kDebugMode) {
+        print('Receipt printed successfully');
+      }
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error printing receipt: $e');
+      }
+      return false;
+    }
   }
 
   Future<List<int>> _generateTestTicket() async {
     final profile = await CapabilityProfile.load();
-    final generator = Generator(PaperSize.mm80, profile);
-    List<int> bytes = [];
-
-    bytes += generator.text(
-      'Test Print',
-      styles: const PosStyles(align: PosAlign.center, bold: true),
-    );
-    bytes += generator.text('Connection Successful!');
-    bytes += generator.feed(2);
-    bytes += generator.cut();
-
-    return bytes;
-  }
-
-  Future<List<int>> _generateReceiptTicket(Receipt receipt) async {
-    final profile = await CapabilityProfile.load();
-    final generator = Generator(PaperSize.mm80, profile);
+    final generator = Generator(_paperSize, profile);
     List<int> bytes = [];
 
     bytes += generator.text(
@@ -101,9 +247,59 @@ class PrintingService with ChangeNotifier {
         align: PosAlign.center,
         height: PosTextSize.size2,
         width: PosTextSize.size2,
+        bold: true,
       ),
     );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'Test Print',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'Connection Successful!',
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'Printer: $_connectedDeviceName',
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.text(
+      'Address: $_connectedDeviceAddress',
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      DateTime.now().toString(),
+      styles: const PosStyles(align: PosAlign.center),
+    );
     bytes += generator.hr();
+    bytes += generator.feed(2);
+    bytes += generator.cut();
+
+    return bytes;
+  }
+
+  Future<List<int>> _generateReceiptTicket(Receipt receipt) async {
+    final profile = await CapabilityProfile.load();
+    final generator = Generator(_paperSize, profile);
+    List<int> bytes = [];
+
+    // Header
+    bytes += generator.text(
+      'ProStock POS',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        height: PosTextSize.size2,
+        width: PosTextSize.size2,
+        bold: true,
+      ),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.hr();
+
+    // Receipt info
     bytes += generator.text(
       'Receipt: ${receipt.receiptNumber}',
       styles: const PosStyles(align: PosAlign.center),
@@ -114,48 +310,63 @@ class PrintingService with ChangeNotifier {
     );
     bytes += generator.hr();
 
+    // Items
     for (final item in receipt.items) {
       bytes += generator.row([
-        PosColumn(text: item.productName, width: 6),
+        PosColumn(
+          text: item.productName,
+          width: 6,
+          styles: const PosStyles(align: PosAlign.left),
+        ),
         PosColumn(
           text: 'x${item.quantity}',
-          width: 1,
+          width: 2,
           styles: const PosStyles(align: PosAlign.center),
         ),
         PosColumn(
-          text: item.totalPrice.toStringAsFixed(2),
-          width: 5,
+          text: 'PHP${item.totalPrice.toStringAsFixed(2)}',
+          width: 4,
           styles: const PosStyles(align: PosAlign.right),
         ),
       ]);
     }
 
     bytes += generator.hr();
+
+    // Total
     bytes += generator.row([
       PosColumn(
         text: 'TOTAL',
-        width: 6,
+        width: 8,
         styles: const PosStyles(
           height: PosTextSize.size2,
           width: PosTextSize.size2,
+          bold: true,
         ),
       ),
       PosColumn(
-        text: receipt.total.toStringAsFixed(2),
-        width: 6,
+        text: 'PHP${receipt.total.toStringAsFixed(2)}',
+        width: 4,
         styles: const PosStyles(
           height: PosTextSize.size2,
           width: PosTextSize.size2,
           align: PosAlign.right,
+          bold: true,
         ),
       ),
     ]);
     bytes += generator.hr(ch: '=');
 
-    bytes += generator.feed(2);
+    // Footer
+    bytes += generator.feed(1);
     bytes += generator.text(
-      'Thank you!',
+      'Thank you for your business!',
       styles: const PosStyles(align: PosAlign.center, bold: true),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'Please come again',
+      styles: const PosStyles(align: PosAlign.center),
     );
     bytes += generator.feed(3);
     bytes += generator.cut();
