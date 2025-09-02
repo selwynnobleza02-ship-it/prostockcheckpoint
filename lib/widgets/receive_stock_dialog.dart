@@ -96,14 +96,15 @@ class ReceiveStockDialogState extends State<ReceiveStockDialog> {
 
       final inventoryProvider = context.read<InventoryProvider>();
 
-      final newStock = widget.product.stock + quantity;
-      final updatedProduct = widget.product.copyWith(
-        stock: newStock,
-        cost: newCost,
-        updatedAt: DateTime.now(),
-      );
+      // Create a copy of the product with the new cost
+      final productWithNewCost = widget.product.copyWith(cost: newCost);
 
-      await inventoryProvider.updateProduct(updatedProduct);
+      // First, update the product with the new cost
+      await inventoryProvider.updateProduct(productWithNewCost);
+
+      // Then, call receiveStock to handle the stock movement
+      await inventoryProvider.receiveStock(widget.product.id!, quantity);
+
       if (!mounted) return;
       Navigator.of(context).pop(true);
     }

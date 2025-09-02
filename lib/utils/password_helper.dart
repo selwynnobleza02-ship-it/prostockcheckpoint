@@ -29,7 +29,6 @@ class PasswordHelper {
       final parts = hashedPassword.split(':');
       if (parts.length != 2) return false;
 
-      final hash = parts[0];
       final salt = parts[1];
 
       final testHash = hashPassword(password, salt);

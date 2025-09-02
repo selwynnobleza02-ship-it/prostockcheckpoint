@@ -19,7 +19,7 @@ class LocalDatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 8, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return await openDatabase(path, version: 9, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -52,6 +52,9 @@ class LocalDatabaseService {
         case 7:
           await _createLossesTable(db);
           break;
+        case 8:
+          await db.execute('ALTER TABLE offline_operations ADD COLUMN version INTEGER');
+          break;
       }
     }
   }
@@ -81,7 +84,8 @@ class LocalDatabaseService {
         document_id TEXT,
         data TEXT NOT NULL,
         timestamp TEXT NOT NULL,
-        retry_count INTEGER DEFAULT 0
+        retry_count INTEGER DEFAULT 0,
+        version INTEGER
       )
       ''');
     await db.execute('''

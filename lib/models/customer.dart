@@ -8,7 +8,8 @@ class Customer {
   final String? address;
   final String? imageUrl;
   final String? localImagePath;
-  final double utangBalance;
+  final double balance;
+  final double creditLimit;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -20,7 +21,8 @@ class Customer {
     this.address,
     this.imageUrl,
     this.localImagePath,
-    this.utangBalance = 0,
+    this.balance = 0,
+    this.creditLimit = 0,
     required this.createdAt,
     required this.updatedAt,
   }) {
@@ -43,8 +45,11 @@ class Customer {
     if (address != null && address!.length > ValidationConstants.maxDescriptionLength) {
       throw ArgumentError('Address cannot exceed 200 characters');
     }
-    if (utangBalance < 0) {
-      throw ArgumentError('Utang balance cannot be negative');
+    if (balance < 0) {
+      throw ArgumentError('Balance cannot be negative');
+    }
+    if (creditLimit < 0) {
+      throw ArgumentError('Credit limit cannot be negative');
     }
   }
 
@@ -70,7 +75,8 @@ class Customer {
       'address': address,
       'imageUrl': imageUrl,
       'localImagePath': localImagePath,
-      'utang_balance': utangBalance,
+      'balance': balance,
+      'credit_limit': creditLimit,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
     };
@@ -85,7 +91,8 @@ class Customer {
       address: map['address']?.toString(),
       imageUrl: map['imageUrl']?.toString(),
       localImagePath: map['localImagePath']?.toString(),
-      utangBalance: (map['utang_balance'] ?? 0).toDouble(),
+      balance: (map['balance'] ?? 0).toDouble(),
+      creditLimit: (map['credit_limit'] ?? 0).toDouble(),
       createdAt: DateTime.parse(
         map['created_at'] ?? DateTime.now().toIso8601String(),
       ),
@@ -95,5 +102,43 @@ class Customer {
     );
   }
 
-  bool get hasUtang => utangBalance > 0;
+  Customer copyWith({
+    String? id,
+    String? name,
+    String? phone,
+    String? email,
+    String? address,
+    String? imageUrl,
+    String? localImagePath,
+    double? balance,
+    double? creditLimit,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return Customer(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      address: address ?? this.address,
+      imageUrl: imageUrl ?? this.imageUrl,
+      localImagePath: localImagePath ?? this.localImagePath,
+      balance: balance ?? this.balance,
+      creditLimit: creditLimit ?? this.creditLimit,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  bool get hasUtang => balance > 0;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Customer &&
+          runtimeType == other.runtimeType &&
+          id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
 }

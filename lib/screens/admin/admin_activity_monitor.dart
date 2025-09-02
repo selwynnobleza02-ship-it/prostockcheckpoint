@@ -3,7 +3,10 @@ import 'package:prostock/models/app_user.dart';
 import 'package:prostock/screens/admin/components/activity_list.dart';
 import 'package:prostock/screens/admin/components/filter_section.dart';
 import 'package:prostock/screens/admin/components/stats_header.dart';
-import 'package:prostock/services/firestore_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:prostock/services/firestore/activity_service.dart';
+import 'package:prostock/services/firestore/user_service.dart';
 
 class AdminActivityMonitor extends StatefulWidget {
   const AdminActivityMonitor({super.key});
@@ -31,9 +34,11 @@ class _AdminActivityMonitorState extends State<AdminActivityMonitor> {
     setState(() => _isLoading = true);
 
     try {
+      final activityService = ActivityService(FirebaseFirestore.instance);
+      final userService = UserService(FirebaseFirestore.instance, FirebaseAuth.instance);
       final activities =
-          await FirestoreService.instance.getAllUserActivitiesWithUsernames();
-      final users = await FirestoreService.instance.getAllUsers();
+          await activityService.getAllUserActivitiesWithUsernames();
+      final users = await userService.getAllUsers();
 
       if (mounted) {
         setState(() {

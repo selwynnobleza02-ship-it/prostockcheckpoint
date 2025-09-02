@@ -21,20 +21,11 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
   final _stockController = TextEditingController();
   final _minStockController = TextEditingController(text: '5');
 
-  String _selectedCategory = 'General';
+  String _selectedCategory = AppConstants.productCategories.first;
   bool _isLoading = false;
   bool _showSuccess = false;
 
-  final List<String> _categories = [
-    'General',
-    'Food & Beverages',
-    'Personal Care',
-    'Household Items',
-    'Electronics',
-    'Clothing',
-    'Health & Medicine',
-    'Office Supplies',
-  ];
+  final List<String> _categories = AppConstants.productCategories;
 
   @override
   void dispose() {

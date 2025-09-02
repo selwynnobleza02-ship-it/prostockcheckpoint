@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/utils/currency_utils.dart';
+import 'package:prostock/widgets/add_customer_dialog.dart';
 
 class CustomerDetailsDialog extends StatelessWidget {
   final Customer customer;
@@ -53,8 +54,12 @@ class CustomerDetailsDialog extends StatelessWidget {
           if (customer.address != null)
             _buildDetailRow('Address', customer.address!),
           _buildDetailRow(
-            'Utang Balance',
-            CurrencyUtils.formatCurrency(customer.utangBalance),
+            'Balance',
+            CurrencyUtils.formatCurrency(customer.balance),
+          ),
+          _buildDetailRow(
+            'Credit Limit',
+            CurrencyUtils.formatCurrency(customer.creditLimit),
           ),
           _buildDetailRow(
             'Member Since',
@@ -63,6 +68,16 @@ class CustomerDetailsDialog extends StatelessWidget {
         ],
       ),
       actions: [
+        TextButton(
+          onPressed: () {
+            Navigator.of(context).pop();
+            showDialog(
+              context: context,
+              builder: (context) => AddCustomerDialog(customer: customer),
+            );
+          },
+          child: const Text('Edit'),
+        ),
         TextButton(
           onPressed: () => Navigator.pop(context),
           child: const Text('Close'),

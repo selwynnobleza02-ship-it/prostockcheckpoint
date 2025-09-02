@@ -1,5 +1,4 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
@@ -25,6 +24,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
   final _phoneController = TextEditingController();
   final _emailController = TextEditingController();
   final _addressController = TextEditingController();
+  final _creditLimitController = TextEditingController();
 
   bool _isLoading = false;
   File? _imageFile;
@@ -38,9 +38,23 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     if (_isEditMode) {
       final customer = widget.customer!;
       _nameController.text = customer.name;
-      _phoneController.text = customer.phone ?? '';
+
+      String? displayPhone = customer.phone;
+      if (displayPhone != null && displayPhone.isNotEmpty) {
+        displayPhone = displayPhone.replaceAll(RegExp(r'[\s\-]'), '');
+        if (displayPhone.startsWith('+63')) {
+          displayPhone = displayPhone.substring(3);
+        } else if (displayPhone.startsWith('63')) {
+          displayPhone = displayPhone.substring(2);
+        } else if (displayPhone.startsWith('0')) {
+          displayPhone = displayPhone.substring(1);
+        }
+      }
+      _phoneController.text = displayPhone ?? '';
+
       _emailController.text = customer.email ?? '';
       _addressController.text = customer.address ?? '';
+      _creditLimitController.text = customer.creditLimit.toString();
       _networkImageUrl = customer.imageUrl;
       if (customer.localImagePath != null) {
         _imageFile = File(customer.localImagePath!);
@@ -54,6 +68,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
     _phoneController.dispose();
     _emailController.dispose();
     _addressController.dispose();
+    _creditLimitController.dispose();
     super.dispose();
   }
 
@@ -140,7 +155,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
       if (_imageFile != null) {
         imageUrl = await _uploadImage(_imageFile!);
         if (imageUrl == null) {
-          // Handle upload failure
           setState(() {
             _isLoading = false;
           });
@@ -148,20 +162,35 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         }
       }
 
-      // Clean and prepare optional fields
-      final phone = _phoneController.text.trim();
+      String? phone = _phoneController.text.trim();
       final email = _emailController.text.trim();
       final address = _addressController.text.trim();
+      final creditLimit =
+          double.tryParse(_creditLimitController.text.trim()) ?? 0.0;
+
+      if (phone.isNotEmpty) {
+        phone = phone.replaceAll(RegExp(r'[\s\-\+]'), '');
+        if (phone.startsWith('63')) {
+          phone = phone.substring(2);
+        }
+        if (phone.startsWith('0')) {
+          phone = phone.substring(1);
+        }
+        phone = '+63$phone';
+      } else {
+        phone = null;
+      }
 
       final customerData = Customer(
         id: _isEditMode ? widget.customer!.id : null,
         name: _nameController.text.trim(),
-        phone: phone.isEmpty ? null : phone,
+        phone: phone,
         email: email.isEmpty ? null : email,
         address: address.isEmpty ? null : address,
         imageUrl: imageUrl,
         localImagePath: _imageFile?.path,
-        utangBalance: _isEditMode ? widget.customer!.utangBalance : 0.0,
+        balance: _isEditMode ? widget.customer!.balance : 0.0,
+        creditLimit: creditLimit,
         createdAt: _isEditMode ? widget.customer!.createdAt : DateTime.now(),
         updatedAt: DateTime.now(),
       );
@@ -287,7 +316,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Image picker
                 GestureDetector(
                   onTap: _showImageSourceActionSheet,
                   child: Container(
@@ -327,7 +355,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Customer Name
                 TextFormField(
                   controller: _nameController,
                   textCapitalization: TextCapitalization.words,
@@ -348,7 +375,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Phone Number
                 TextFormField(
                   controller: _phoneController,
                   keyboardType: TextInputType.phone,
@@ -363,7 +389,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                   validator: (value) {
                     if (value != null && value.trim().isNotEmpty) {
                       final cleanNumber = value.trim();
-                      if (!RegExp(r'^[9][0-9]{9}$').hasMatch(cleanNumber)) {
+                      if (!RegExp(r'^[9][0-9]{9}').hasMatch(cleanNumber)) {
                         return 'Enter a valid 10-digit number starting with 9';
                       }
                     }
@@ -372,7 +398,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Email
                 TextFormField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
@@ -385,7 +410,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                   validator: (value) {
                     if (value != null && value.trim().isNotEmpty) {
                       if (!RegExp(
-                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                        r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}',
                       ).hasMatch(value.trim())) {
                         return 'Enter a valid email address';
                       }
@@ -395,7 +420,6 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Address
                 TextFormField(
                   controller: _addressController,
                   maxLines: 2,
@@ -407,6 +431,27 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
                     helperText: 'Optional',
                     alignLabelWithHint: true,
                   ),
+                ),
+                const SizedBox(height: 16),
+
+                TextFormField(
+                  controller: _creditLimitController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  decoration: const InputDecoration(
+                    labelText: 'Credit Limit',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.credit_card),
+                  ),
+                  validator: (value) {
+                    if (value != null && value.trim().isNotEmpty) {
+                      if (double.tryParse(value.trim()) == null) {
+                        return 'Please enter a valid number';
+                      }
+                    }
+                    return null;
+                  },
                 ),
               ],
             ),

@@ -2,10 +2,9 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/services/firestore/customer_service.dart';
 import '../models/customer.dart';
 import '../services/cloudinary_service.dart';
-import '../services/firestore_service.dart';
-import '../utils/constants.dart';
 import '../utils/error_logger.dart';
 
 class CustomerProvider with ChangeNotifier {
@@ -17,7 +16,7 @@ class CustomerProvider with ChangeNotifier {
   final Map<String, DateTime> _cacheTimestamps = {};
   static const Duration _cacheExpiry = Duration(minutes: 5);
   static const int _pageSize = 50;
-  DocumentSnapshot? _lastDocument; // Changed from _currentPage to _lastDocument
+  DocumentSnapshot? _lastDocument;
   bool _hasMoreData = true;
   String? _currentSearchQuery;
 
@@ -27,7 +26,7 @@ class CustomerProvider with ChangeNotifier {
   bool get hasMoreData => _hasMoreData;
 
   List<Customer> get overdueCustomers =>
-      _customers.where((customer) => customer.hasUtang).toList();
+      _customers.where((customer) => customer.balance > 0).toList();
 
   void clearError() {
     _error = null;
@@ -51,15 +50,16 @@ class CustomerProvider with ChangeNotifier {
 
     _isLoading = true;
     _error = null;
-    _lastDocument = null; // Reset pagination
+    _lastDocument = null;
     _hasMoreData = true;
     _currentSearchQuery = searchQuery;
     notifyListeners();
 
     try {
-      final result = await FirestoreService.instance.getCustomersPaginated(
+      final customerService = CustomerService(FirebaseFirestore.instance);
+      final result = await customerService.getCustomersPaginated(
         limit: _pageSize,
-        lastDocument: null, // Start from beginning
+        lastDocument: null,
         searchQuery: searchQuery,
       );
 
@@ -67,7 +67,6 @@ class CustomerProvider with ChangeNotifier {
       _lastDocument = result.lastDocument;
       _hasMoreData = result.items.length == _pageSize;
 
-      // Cache the data
       _setCachedData('customers_${searchQuery ?? 'all'}', _customers);
     } catch (e) {
       _error = 'Failed to load customers: ${e.toString()}';
@@ -89,18 +88,17 @@ class CustomerProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await FirestoreService.instance
-          .getCustomersPaginated(
-            limit: _pageSize,
-            lastDocument: _lastDocument,
-            searchQuery: _currentSearchQuery,
-          );
+      final customerService = CustomerService(FirebaseFirestore.instance);
+      final result = await customerService.getCustomersPaginated(
+        limit: _pageSize,
+        lastDocument: _lastDocument,
+        searchQuery: _currentSearchQuery,
+      );
 
       _customers.addAll(result.items);
       _lastDocument = result.lastDocument;
       _hasMoreData = result.items.length == _pageSize;
 
-      // Update cache
       _setCachedData('customers_${_currentSearchQuery ?? 'all'}', _customers);
     } catch (e) {
       _error = 'Failed to load more customers: ${e.toString()}';
@@ -141,19 +139,9 @@ class CustomerProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final id = await FirestoreService.instance.insertCustomer(customer);
-      final newCustomer = Customer(
-        id: id,
-        name: customer.name,
-        phone: customer.phone,
-        email: customer.email,
-        address: customer.address,
-        imageUrl: customer.imageUrl,
-        localImagePath: customer.localImagePath,
-        utangBalance: customer.utangBalance,
-        createdAt: customer.createdAt,
-        updatedAt: customer.updatedAt,
-      );
+      final customerService = CustomerService(FirebaseFirestore.instance);
+      final id = await customerService.insertCustomer(customer);
+      final newCustomer = customer.copyWith(id: id);
       _customers.add(newCustomer);
       _isLoading = false;
       notifyListeners();
@@ -178,20 +166,25 @@ class CustomerProvider with ChangeNotifier {
 
     try {
       final oldCustomer = getCustomerById(customer.id!);
-      if (oldCustomer?.localImagePath != null && oldCustomer!.localImagePath! != customer.localImagePath) {
+      if (oldCustomer?.localImagePath != null &&
+          oldCustomer!.localImagePath! != customer.localImagePath) {
         final imageFile = File(oldCustomer.localImagePath!);
         if (await imageFile.exists()) {
           await imageFile.delete();
         }
       }
-      if (oldCustomer?.imageUrl != null && oldCustomer!.imageUrl! != customer.imageUrl) {
-        final publicId = CloudinaryService.instance.getPublicIdFromUrl(oldCustomer.imageUrl!);
+      if (oldCustomer?.imageUrl != null &&
+          oldCustomer!.imageUrl! != customer.imageUrl) {
+        final publicId = CloudinaryService.instance.getPublicIdFromUrl(
+          oldCustomer.imageUrl!,
+        );
         if (publicId != null) {
           await CloudinaryService.instance.deleteImage(publicId);
         }
       }
 
-      await FirestoreService.instance.updateCustomer(customer);
+      final customerService = CustomerService(FirebaseFirestore.instance);
+      await customerService.updateCustomer(customer);
       final index = _customers.indexWhere((c) => c.id == customer.id);
       if (index != -1) {
         _customers[index] = customer;
@@ -222,12 +215,15 @@ class CustomerProvider with ChangeNotifier {
         }
       }
       if (customer?.imageUrl != null) {
-        final publicId = CloudinaryService.instance.getPublicIdFromUrl(customer!.imageUrl!);
+        final publicId = CloudinaryService.instance.getPublicIdFromUrl(
+          customer!.imageUrl!,
+        );
         if (publicId != null) {
           await CloudinaryService.instance.deleteImage(publicId);
         }
       }
-      await FirestoreService.instance.deleteDocument(AppConstants.customersCollection, customerId);
+      final customerService = CustomerService(FirebaseFirestore.instance);
+      await customerService.deleteCustomer(customerId);
       _customers.removeWhere((c) => c.id == customerId);
       notifyListeners();
       return true;
@@ -243,11 +239,7 @@ class CustomerProvider with ChangeNotifier {
     }
   }
 
-  /// Updates a customer's utang balance and refreshes the local data
-  Future<bool> updateCustomerUtang(
-    String customerId,
-    double newBalance,
-  ) async {
+  Future<bool> updateCustomerBalance(String customerId, double amount) async {
     try {
       final customerIndex = _customers.indexWhere((c) => c.id == customerId);
       if (customerIndex == -1) {
@@ -257,49 +249,34 @@ class CustomerProvider with ChangeNotifier {
       }
 
       final customer = _customers[customerIndex];
-      final updatedCustomer = Customer(
-        id: customer.id,
-        name: customer.name,
-        phone: customer.phone,
-        email: customer.email,
-        address: customer.address,
-        imageUrl: customer.imageUrl,
-        localImagePath: customer.localImagePath,
-        utangBalance: newBalance,
-        createdAt: customer.createdAt,
+      final updatedCustomer = customer.copyWith(
+        balance: customer.balance + amount,
         updatedAt: DateTime.now(),
       );
 
-      await FirestoreService.instance.updateCustomer(updatedCustomer);
+      final customerService = CustomerService(FirebaseFirestore.instance);
+      await customerService.updateCustomer(updatedCustomer);
       _customers[customerIndex] = updatedCustomer;
       notifyListeners();
       return true;
     } catch (e) {
-      _error = 'Failed to update customer utang: ${e.toString()}';
+      _error = 'Failed to update customer balance: ${e.toString()}';
       notifyListeners();
       ErrorLogger.logError(
-        'Error updating customer utang',
+        'Error updating customer balance',
         error: e,
-        context: 'CustomerProvider.updateCustomerUtang',
+        context: 'CustomerProvider.updateCustomerBalance',
       );
       return false;
     }
   }
 
-  void updateLocalCustomerUtang(String customerId, double newBalance) {
+  void updateLocalCustomerBalance(String customerId, double amount) {
     final index = _customers.indexWhere((c) => c.id == customerId);
     if (index != -1) {
       final oldCustomer = _customers[index];
-      _customers[index] = Customer(
-        id: oldCustomer.id,
-        name: oldCustomer.name,
-        phone: oldCustomer.phone,
-        email: oldCustomer.email,
-        address: oldCustomer.address,
-        imageUrl: oldCustomer.imageUrl,
-        localImagePath: oldCustomer.localImagePath,
-        utangBalance: newBalance,
-        createdAt: oldCustomer.createdAt,
+      _customers[index] = oldCustomer.copyWith(
+        balance: oldCustomer.balance + amount,
         updatedAt: DateTime.now(),
       );
       notifyListeners();
@@ -314,7 +291,33 @@ class CustomerProvider with ChangeNotifier {
     }
   }
 
-  /// Refreshes customer data from database
+  Future<Customer?> getCustomerByName(String name) async {
+    try {
+      Customer? localCustomer;
+      for (final customer in _customers) {
+        if (customer.name.toLowerCase() == name.toLowerCase()) {
+          localCustomer = customer;
+          break;
+        }
+      }
+
+      if (localCustomer != null) {
+        return localCustomer;
+      }
+
+      final customerService = CustomerService(FirebaseFirestore.instance);
+      final customer = await customerService.getCustomerByName(name);
+      return customer;
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error getting customer by name',
+        error: e,
+        context: 'CustomerProvider.getCustomerByName',
+      );
+      return null;
+    }
+  }
+
   Future<void> refreshCustomers() async {
     await loadCustomers(refresh: true);
   }

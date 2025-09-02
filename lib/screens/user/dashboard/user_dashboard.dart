@@ -3,8 +3,9 @@ import 'package:provider/provider.dart';
 import 'package:prostock/providers/auth_provider.dart';
 import 'package:prostock/screens/user/dashboard/components/action_card.dart';
 import 'package:prostock/screens/user/dashboard/components/activity_item.dart';
-import 'package:prostock/services/firestore_service.dart';
+import 'package:prostock/services/firestore/activity_service.dart';
 import 'package:prostock/widgets/barcode_scanner_widget.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class UserDashboard extends StatelessWidget {
   final Function(int) onNavigateToTab;
@@ -165,7 +166,8 @@ class UserDashboard extends StatelessWidget {
     if (userId == null) return [];
 
     try {
-      final activities = await FirestoreService.instance
+      final activityService = ActivityService(FirebaseFirestore.instance);
+      final activities = await activityService
           .getUserActivitiesPaginated(userId: userId, limit: 10);
       return activities.items.map((activity) => activity.toMap()).toList();
     } catch (e) {

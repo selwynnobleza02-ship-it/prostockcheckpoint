@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:prostock/models/price_history.dart';
-import 'package:prostock/services/firestore_service.dart';
+import 'package:prostock/services/firestore/product_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PriceHistoryDialog extends StatefulWidget {
   final String productId;
@@ -18,7 +19,8 @@ class PriceHistoryDialogState extends State<PriceHistoryDialog> {
   @override
   void initState() {
     super.initState();
-    _priceHistoryFuture = FirestoreService.instance.getPriceHistory(
+    final productService = ProductService(FirebaseFirestore.instance);
+    _priceHistoryFuture = productService.getPriceHistory(
       widget.productId,
     );
   }

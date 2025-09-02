@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/receipt.dart';
 import 'package:prostock/models/sale.dart';
-import 'package:prostock/services/firestore_service.dart';
+import 'package:prostock/services/firestore/customer_service.dart';
+import 'package:prostock/services/firestore/product_service.dart';
+import 'package:prostock/services/firestore/sale_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/widgets/receipt_dialog.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 Widget buildSummaryCard(
   BuildContext context,
@@ -138,9 +141,13 @@ Future<void> showHistoricalReceipt(BuildContext context, Sale sale) async {
       builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
+    final saleService = SaleService(FirebaseFirestore.instance);
+    final customerService = CustomerService(FirebaseFirestore.instance);
+    final productService = ProductService(FirebaseFirestore.instance);
+
     List<SaleItem> saleItems = [];
     if (sale.isSynced == 1) {
-      saleItems = await FirestoreService.instance.getSaleItemsBySaleId(
+      saleItems = await saleService.getSaleItemsBySaleId(
         sale.id!,
       );
     } else {
@@ -152,7 +159,7 @@ Future<void> showHistoricalReceipt(BuildContext context, Sale sale) async {
 
     String? customerName;
     if (sale.customerId != null) {
-      final customer = await FirestoreService.instance.getCustomerById(
+      final customer = await customerService.getCustomerById(
         sale.customerId!,
       );
       customerName = customer?.name;
@@ -160,7 +167,7 @@ Future<void> showHistoricalReceipt(BuildContext context, Sale sale) async {
 
     List<ReceiptItem> receiptItems = [];
     for (final saleItem in saleItems) {
-      final product = await FirestoreService.instance.getProductById(
+      final product = await productService.getProductById(
         saleItem.productId,
       );
       receiptItems.add(

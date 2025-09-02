@@ -1,32 +1,37 @@
+import 'package:prostock/models/offline_operation.dart';
+import 'package:prostock/models/update_result.dart';
 import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/price_history.dart';
+import 'package:prostock/services/firestore/inventory_service.dart';
+import 'package:prostock/services/firestore/product_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../models/product.dart';
-import '../services/firestore_service.dart';
 import '../services/local_database_service.dart';
-import '../utils/error_logger.dart'; // Added ErrorLogger import
-// Required for JSON encoding
+import '../utils/error_logger.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class InventoryProvider with ChangeNotifier {
   List<Product> _products = [];
   bool _isLoading = false;
   String? _error;
-  final Map<String, int> _reservedStock = {}; // productId -> reserved quantity
-  final Map<String, int> _reorderPoints = {}; // productId -> reorder point
+  final Map<String, int> _reservedStock = {};
+  final Map<String, int> _reorderPoints = {};
+  final Map<String, int> _visualStock = {};
 
   final LocalDatabaseService _localDatabaseService =
       LocalDatabaseService.instance;
   final OfflineManager _offlineManager;
 
   InventoryProvider({required OfflineManager offlineManager})
-    : _offlineManager = offlineManager;
+      : _offlineManager = offlineManager;
 
   List<Product> get products => _products;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  Map<String, int> get visualStock => _visualStock;
 
   List<Product> get lowStockProducts =>
       _products.where((product) => product.isLowStock).toList();
@@ -43,6 +48,35 @@ class InventoryProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  void initializeVisualStock() {
+    _visualStock.clear();
+    for (var product in _products) {
+      if (product.id != null) {
+        _visualStock[product.id!] = product.stock;
+      }
+    }
+    notifyListeners();
+  }
+
+  void decreaseVisualStock(String productId, int quantity) {
+    if (_visualStock.containsKey(productId)) {
+      _visualStock[productId] = (_visualStock[productId]! - quantity).clamp(0, _visualStock[productId]!);
+      notifyListeners();
+    }
+  }
+
+  void increaseVisualStock(String productId, int quantity) {
+    final product = getProductById(productId);
+    if (product != null && _visualStock.containsKey(productId)) {
+      _visualStock[productId] = (_visualStock[productId]! + quantity).clamp(0, product.stock);
+      notifyListeners();
+    }
+  }
+
+  int getVisualStock(String productId) {
+    return _visualStock[productId] ?? getProductById(productId)?.stock ?? 0;
+  }
+
   Future<void> loadProducts({bool refresh = false, String? searchQuery}) async {
     _isLoading = true;
     _error = null;
@@ -54,11 +88,13 @@ class InventoryProvider with ChangeNotifier {
         'products',
       )).map((json) => Product.fromMap(json)).toList();
 
-      _products = localProducts; // Always load local products first
+      _products = localProducts;
+      initializeVisualStock();
       notifyListeners();
 
       if (refresh || localProducts.isEmpty || _offlineManager.isOnline) {
-        final result = await FirestoreService.instance.getProductsPaginated(
+        final productService = ProductService(FirebaseFirestore.instance);
+        final result = await productService.getProductsPaginated(
           limit: 50,
           lastDocument: null,
           searchQuery: searchQuery,
@@ -72,12 +108,13 @@ class InventoryProvider with ChangeNotifier {
         };
         for (var p in localProducts) {
           if (p.id != null) {
-            mergedProductsMap[p.id!] = p; // Local version takes precedence
+            mergedProductsMap[p.id!] = p;
           }
         }
 
         _products = mergedProductsMap.values.toList();
-        await _saveProductsToLocalDB(_products); // Save merged list to local DB
+        await _saveProductsToLocalDB(_products);
+        initializeVisualStock();
       }
     } catch (e) {
       _error = 'Failed to load products: ${e.toString()}';
@@ -130,9 +167,17 @@ class InventoryProvider with ChangeNotifier {
       );
 
       if (_offlineManager.isOnline) {
-        await FirestoreService.instance.addProductWithPriceHistory(newProduct);
+        final productService = ProductService(FirebaseFirestore.instance);
+        final inventoryService = InventoryService(FirebaseFirestore.instance);
+        await productService.addProductWithPriceHistory(newProduct);
+        await inventoryService.insertStockMovement(
+          newProduct.id!,
+          newProduct.name,
+          'stock_in',
+          newProduct.stock,
+          'Initial stock',
+        );
       } else {
-        // Queue operations for later synchronization
         await _offlineManager.queueOperation(
           OfflineOperation(
             id: newProduct.id!,
@@ -143,7 +188,6 @@ class InventoryProvider with ChangeNotifier {
             timestamp: DateTime.now(),
           ),
         );
-        // Also queue the price history
         final priceHistory = PriceHistory(
           id: const Uuid().v4(),
           productId: newProduct.id!,
@@ -163,6 +207,7 @@ class InventoryProvider with ChangeNotifier {
       }
 
       _isLoading = false;
+      initializeVisualStock();
       notifyListeners();
       return newProduct;
     } catch (e) {
@@ -178,7 +223,7 @@ class InventoryProvider with ChangeNotifier {
     }
   }
 
-  Future<bool> updateProduct(Product product) async {
+  Future<UpdateResult> updateProduct(Product product) async {
     try {
       final db = await _localDatabaseService.database;
       final originalProductIndex = _products.indexWhere(
@@ -189,25 +234,33 @@ class InventoryProvider with ChangeNotifier {
           : null;
 
       if (_offlineManager.isOnline) {
-        final existingProduct = await FirestoreService.instance.getProductById(
+        final productService = ProductService(FirebaseFirestore.instance);
+        final existingProduct = await productService.getProductById(
           product.id!,
         );
 
-        Product productToUpdate;
         if (existingProduct != null &&
             existingProduct.version > product.version) {
-          // Conflict detected
-          productToUpdate = _mergeProducts(existingProduct, product);
-        } else {
-          productToUpdate = product.copyWith(version: product.version + 1);
+          ErrorLogger.logInfo(
+            'Conflict detected for product ${product.id}',
+            context: 'InventoryProvider.updateProduct',
+          );
+          return UpdateResult(
+            success: false,
+            conflict: Conflict(
+              localProduct: product,
+              remoteProduct: existingProduct,
+            ),
+          );
         }
 
-        // Check if the price has changed
+        final productToUpdate = product.copyWith(version: product.version + 1);
+
         final bool priceChanged =
             originalProduct != null &&
             originalProduct.price != productToUpdate.price;
 
-        await FirestoreService.instance.updateProductWithPriceHistory(
+        await productService.updateProductWithPriceHistory(
           productToUpdate,
           priceChanged,
         );
@@ -221,6 +274,7 @@ class InventoryProvider with ChangeNotifier {
         final index = _products.indexWhere((p) => p.id == productToUpdate.id);
         if (index != -1) {
           _products[index] = productToUpdate;
+          initializeVisualStock();
           notifyListeners();
         }
       } else {
@@ -239,10 +293,10 @@ class InventoryProvider with ChangeNotifier {
             documentId: updatedProduct.id,
             data: updatedProduct.toMap(),
             timestamp: DateTime.now(),
+            version: updatedProduct.version,
           ),
         );
 
-        // Queue price history if price changed
         if (originalProduct != null &&
             originalProduct.price != updatedProduct.price) {
           final priceHistory = PriceHistory(
@@ -266,11 +320,12 @@ class InventoryProvider with ChangeNotifier {
         final index = _products.indexWhere((p) => p.id == updatedProduct.id);
         if (index != -1) {
           _products[index] = updatedProduct;
+          initializeVisualStock();
           notifyListeners();
         }
       }
 
-      return true;
+      return UpdateResult(success: true);
     } catch (e) {
       _error = 'Error updating product: ${e.toString()}';
       notifyListeners();
@@ -279,33 +334,18 @@ class InventoryProvider with ChangeNotifier {
         error: e,
         context: 'InventoryProvider.updateProduct',
       );
-      return false;
+      return UpdateResult(success: false);
     }
   }
 
-  Product _mergeProducts(Product remote, Product local) {
-    // Simple merge strategy: last write wins for most fields
-    // More sophisticated logic can be added here based on business rules
-    return remote.copyWith(
-      name: local.name,
-      barcode: local.barcode,
-      cost: local.cost,
-      stock: local.stock,
-      minStock: local.minStock,
-      category: local.category,
-      updatedAt: DateTime.now(),
-      version: remote.version + 1, // Ensure the version is incremented
-    );
-  }
-
-  Future<bool> updateStock(
+  Future<UpdateResult> updateStock(
     String productId,
     int newStock, {
     String? reason,
   }) async {
     try {
       final index = _products.indexWhere((p) => p.id == productId);
-      if (index == -1) return false;
+      if (index == -1) return UpdateResult(success: false);
 
       final product = _products[index];
       final oldStock = product.stock;
@@ -325,11 +365,12 @@ class InventoryProvider with ChangeNotifier {
       );
 
       if (_offlineManager.isOnline) {
-        await FirestoreService.instance.updateProduct(updatedProduct);
+        final productService = ProductService(FirebaseFirestore.instance);
+        final inventoryService = InventoryService(FirebaseFirestore.instance);
+        await productService.updateProduct(updatedProduct);
 
-        // Record stock movement
         final movementType = stockChange > 0 ? 'stock_in' : 'stock_out';
-        await FirestoreService.instance.insertStockMovement(
+        await inventoryService.insertStockMovement(
           productId,
           product.name,
           movementType,
@@ -350,11 +391,12 @@ class InventoryProvider with ChangeNotifier {
       }
 
       _products[index] = updatedProduct;
+      initializeVisualStock();
 
       _checkStockAlerts(updatedProduct);
 
       notifyListeners();
-      return true;
+      return UpdateResult(success: true);
     } catch (e) {
       _error = 'Error updating stock: ${e.toString()}';
       notifyListeners();
@@ -363,7 +405,7 @@ class InventoryProvider with ChangeNotifier {
         error: e,
         context: 'InventoryProvider.updateStock',
       );
-      return false;
+      return UpdateResult(success: false);
     }
   }
 
@@ -380,8 +422,8 @@ class InventoryProvider with ChangeNotifier {
         return Product.fromMap(maps.first);
       } else {
         if (_offlineManager.isOnline) {
-          // Try to get the product from Firestore using its barcode
-          final product = await FirestoreService.instance.getProductByBarcode(
+          final productService = ProductService(FirebaseFirestore.instance);
+          final product = await productService.getProductByBarcode(
             barcode,
           );
           if (product != null) {
@@ -462,18 +504,18 @@ class InventoryProvider with ChangeNotifier {
 
       final product = _products[index];
       final newStock = product.stock + quantity;
-      final success = await updateStock(
+      final result = await updateStock(
         productId,
         newStock,
         reason: 'Stock received via barcode scan',
       );
 
-      if (!success) {
+      if (!result.success) {
         _error = 'Failed to update stock';
         notifyListeners();
       }
 
-      return success;
+      return result.success;
     } catch (e) {
       _error = 'Error receiving stock: ${e.toString()}';
       notifyListeners();
@@ -533,11 +575,12 @@ class InventoryProvider with ChangeNotifier {
       );
 
       if (!offline && _offlineManager.isOnline) {
-        await FirestoreService.instance.updateProduct(updatedProduct);
+        final productService = ProductService(FirebaseFirestore.instance);
+        final inventoryService = InventoryService(FirebaseFirestore.instance);
+        await productService.updateProduct(updatedProduct);
 
-        // Record stock movement
         final movementType = 'stock_out';
-        await FirestoreService.instance.insertStockMovement(
+        await inventoryService.insertStockMovement(
           productId,
           product.name,
           movementType,
@@ -558,6 +601,7 @@ class InventoryProvider with ChangeNotifier {
       }
 
       _products[index] = updatedProduct;
+      initializeVisualStock();
 
       releaseReservedStock(productId, quantity);
 
@@ -597,7 +641,8 @@ class InventoryProvider with ChangeNotifier {
       );
 
       if (_offlineManager.isOnline) {
-        await FirestoreService.instance.insertLoss(newLoss);
+        final inventoryService = InventoryService(FirebaseFirestore.instance);
+        await inventoryService.insertLoss(newLoss);
       } else {
         await _offlineManager.queueOperation(
           OfflineOperation(
@@ -629,12 +674,12 @@ class InventoryProvider with ChangeNotifier {
 
     try {
       for (final entry in stockUpdates.entries) {
-        final success = await updateStock(
+        final result = await updateStock(
           entry.key,
           entry.value,
           reason: reason,
         );
-        if (!success) {
+        if (!result.success) {
           _error = 'Failed to update stock for product ID: ${entry.key}';
           _isLoading = false;
           notifyListeners();
@@ -678,12 +723,17 @@ class InventoryProvider with ChangeNotifier {
             'difference': (physicalCount - product.stock).toInt(),
           };
 
-          // Update to physical count
-          await updateStock(
+          final result = await updateStock(
             productId,
             physicalCount,
             reason: 'Stock reconciliation',
           );
+          if (!result.success) {
+            _error = 'Failed to reconcile stock for product ID: $productId';
+            _isLoading = false;
+            notifyListeners();
+            return false;
+          }
         }
       }
 

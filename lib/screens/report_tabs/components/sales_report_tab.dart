@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
+import 'package:prostock/services/report_service.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/report_helpers.dart';
 
@@ -9,20 +10,12 @@ class SalesReportTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reportService = ReportService();
+
     return Consumer<SalesProvider>(
       builder: (context, provider, child) {
-        final totalSales = provider.sales.fold(
-          0.0,
-          (sum, sale) => sum + sale.totalAmount,
-        );
-        final todaySales = provider.sales
-            .where((sale) {
-              final today = DateTime.now();
-              return sale.createdAt.day == today.day &&
-                  sale.createdAt.month == today.month &&
-                  sale.createdAt.year == today.year;
-            })
-            .fold(0.0, (sum, sale) => sum + sale.totalAmount);
+        final totalSales = reportService.calculateTotalSales(provider.sales);
+        final todaySales = reportService.calculateTodaySales(provider.sales);
 
         return RefreshIndicator(
           onRefresh: () => provider.loadSales(refresh: true),

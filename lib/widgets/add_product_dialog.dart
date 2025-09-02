@@ -21,22 +21,10 @@ class _AddProductDialogState extends State<AddProductDialog> {
   final _stockController = TextEditingController();
   final _minStockController = TextEditingController(text: '5');
 
-  // FIX: Use the first category from the list instead of 'General'
-  String _selectedCategory = 'Snacks (Chichirya)';
+  String _selectedCategory = AppConstants.productCategories.first;
   bool _isLoading = false;
 
-  final List<String> _categories = [
-    'Snacks (Chichirya)',
-    'Drinks (Inumin)',
-    'Canned Goods (De Lata)',
-    'Noodles & Pasta',
-    'Condiments (Pampalasa)',
-    'Cleaning Supplies (Panlinis)',
-    'Personal Care',
-    'Medicine (Gamot)',
-    'Cigarettes & Lighters',
-    'Others (Iba pa)',
-  ];
+  final List<String> _categories = AppConstants.productCategories;
 
   bool get _isEditing => widget.product != null;
 
@@ -125,6 +113,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
 
                 // Category Dropdown
                 DropdownButtonFormField<String>(
+                  isExpanded: true,
                   initialValue: _selectedCategory,
                   decoration: const InputDecoration(
                     labelText: 'Category',

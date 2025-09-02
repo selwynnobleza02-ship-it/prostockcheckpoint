@@ -28,55 +28,69 @@ class OfflineStatusWidget extends StatelessWidget {
               ),
             ),
           ),
-          child: Row(
+          child: Column(
             children: [
-              Icon(
-                offlineManager.isOnline
-                    ? (offlineManager.isSyncing
-                          ? Icons.sync
-                          : Icons.cloud_queue)
-                    : Icons.cloud_off,
-                color: offlineManager.isOnline
-                    ? Colors.orange.shade700
-                    : Colors.red.shade700,
-                size: 16,
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _getStatusMessage(offlineManager),
-                  style: TextStyle(
+              Row(
+                children: [
+                  Icon(
+                    offlineManager.isOnline
+                        ? (offlineManager.isSyncing
+                            ? Icons.sync
+                            : Icons.cloud_queue)
+                        : Icons.cloud_off,
                     color: offlineManager.isOnline
                         ? Colors.orange.shade700
                         : Colors.red.shade700,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
+                    size: 16,
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _getStatusMessage(offlineManager),
+                      style: TextStyle(
+                        color: offlineManager.isOnline
+                            ? Colors.orange.shade700
+                            : Colors.red.shade700,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  if (offlineManager.pendingOperationsCount > 0 &&
+                      offlineManager.isOnline)
+                    TextButton(
+                      onPressed: offlineManager.isSyncing
+                          ? null
+                          : () {
+                              offlineManager.syncPendingOperations();
+                            },
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      ),
+                      child: Text(
+                        offlineManager.isSyncing ? 'Syncing...' : 'Sync Now',
+                        style: TextStyle(
+                          color: Colors.orange.shade700,
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                ],
               ),
-              if (offlineManager.pendingOperationsCount > 0 &&
-                  offlineManager.isOnline)
-                TextButton(
-                  onPressed: offlineManager.isSyncing
-                      ? null
-                      : () {
-                          offlineManager.syncPendingOperations();
-                        },
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    offlineManager.isSyncing ? 'Syncing...' : 'Sync Now',
-                    style: TextStyle(
-                      color: Colors.orange.shade700,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
+              if (offlineManager.isSyncing)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8.0),
+                  child: LinearProgressIndicator(
+                    value: offlineManager.totalOperationsToSync > 0
+                        ? offlineManager.syncProgress /
+                            offlineManager.totalOperationsToSync
+                        : 0,
                   ),
                 ),
             ],

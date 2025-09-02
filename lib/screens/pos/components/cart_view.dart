@@ -36,9 +36,7 @@ class CartView extends StatelessWidget {
       child: Column(
         children: [
           _buildCartHeader(context),
-          Expanded(
-            child: _buildCartItems(context),
-          ),
+          Expanded(child: _buildCartItems(context)),
           _buildCartFooter(context),
         ],
       ),
@@ -57,7 +55,7 @@ class CartView extends StatelessWidget {
           Consumer<CustomerProvider>(
             builder: (context, provider, child) {
               return DropdownButtonFormField<Customer>(
-                value: selectedCustomer,
+                initialValue: selectedCustomer,
                 decoration: const InputDecoration(
                   labelText: 'Customer',
                   border: OutlineInputBorder(),
@@ -89,7 +87,7 @@ class CartView extends StatelessWidget {
           ),
           const SizedBox(height: UiConstants.spacingSmall),
           DropdownButtonFormField<String>(
-            value: paymentMethod,
+            initialValue: paymentMethod,
             decoration: const InputDecoration(
               labelText: 'Payment Method',
               border: OutlineInputBorder(),
@@ -129,15 +127,15 @@ class CartView extends StatelessWidget {
       itemBuilder: (context, index) {
         final item = context.watch<SalesProvider>().currentSaleItems[index];
         final product = context.watch<InventoryProvider>().products.firstWhere(
-              (p) => p.id == item.productId,
-              orElse: () => Product(
-                name: 'Unknown Product',
-                cost: 0,
-                stock: 0,
-                createdAt: DateTime.now(),
-                updatedAt: DateTime.now(),
-              ),
-            );
+          (p) => p.id == item.productId,
+          orElse: () => Product(
+            name: 'Unknown Product',
+            cost: 0,
+            stock: 0,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
 
         return ListTile(
           dense: true,
@@ -152,9 +150,7 @@ class CartView extends StatelessWidget {
           ),
           subtitle: Text(
             'Qty: ${item.quantity}',
-            style: const TextStyle(
-              fontSize: UiConstants.fontSizeExtraSmall,
-            ),
+            style: const TextStyle(fontSize: UiConstants.fontSizeExtraSmall),
           ),
           trailing: SizedBox(
             width: 80,
@@ -180,9 +176,9 @@ class CartView extends StatelessWidget {
                       size: UiConstants.spacingMedium,
                     ),
                     onPressed: () {
-                      context
-                          .read<SalesProvider>()
-                          .removeItemFromCurrentSale(index);
+                      context.read<SalesProvider>().removeItemFromCurrentSale(
+                        index,
+                      );
                     },
                   ),
                 ),
@@ -217,9 +213,7 @@ class CartView extends StatelessWidget {
                   ),
                   Flexible(
                     child: Text(
-                      CurrencyUtils.formatCurrency(
-                        provider.currentSaleTotal,
-                      ),
+                      CurrencyUtils.formatCurrency(provider.currentSaleTotal),
                       style: const TextStyle(
                         fontSize: UiConstants.fontSizeMedium,
                         fontWeight: FontWeight.bold,
@@ -248,9 +242,7 @@ class CartView extends StatelessWidget {
                       ),
                       child: const Text(
                         'Clear',
-                        style: TextStyle(
-                          fontSize: UiConstants.fontSizeSmall,
-                        ),
+                        style: TextStyle(fontSize: UiConstants.fontSizeSmall),
                       ),
                     ),
                   ),
@@ -258,8 +250,8 @@ class CartView extends StatelessWidget {
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
-                      onPressed: provider.currentSaleItems.isEmpty ||
-                              isProcessingSale
+                      onPressed:
+                          provider.currentSaleItems.isEmpty || isProcessingSale
                           ? null
                           : onCompleteSale,
                       style: ElevatedButton.styleFrom(

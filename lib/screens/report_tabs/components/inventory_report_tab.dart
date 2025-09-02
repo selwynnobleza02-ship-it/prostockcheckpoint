@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
+import 'package:prostock/services/report_service.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/inventory_chart.dart';
 import 'package:prostock/widgets/report_helpers.dart';
@@ -10,14 +11,12 @@ class InventoryReportTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reportService = ReportService();
     return Consumer<InventoryProvider>(
       builder: (context, provider, child) {
-        final totalProducts = provider.products.length;
+        final totalProducts = reportService.calculateTotalProducts(provider.products);
         final lowStockCount = provider.lowStockProducts.length;
-        final totalValue = provider.products.fold(
-          0.0,
-          (sum, product) => sum + (product.price * product.stock),
-        );
+        final totalValue = reportService.calculateTotalInventoryValue(provider.products);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),

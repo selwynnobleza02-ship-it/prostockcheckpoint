@@ -20,4 +20,18 @@ class AppConstants {
 
   // Tax rate
   static const double taxRate = 0.12;
+
+  // Product Categories
+  static const List<String> productCategories = [
+    'Snacks (Chichirya)',
+    'Drinks (Inumin)',
+    'Canned Goods (De Lata)',
+    'Noodles & Pasta',
+    'Condiments (Pampalasa)',
+    'Cleaning Supplies (Panlinis)',
+    'Personal Care',
+    'Medicine (Gamot)',
+    'Cigarettes & Lighters',
+    'Others (Iba pa)',
+  ];
 }

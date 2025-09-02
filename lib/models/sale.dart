@@ -7,6 +7,7 @@ class Sale {
   final String paymentMethod;
   final String status;
   final DateTime createdAt;
+  final DateTime? dueDate;
   final int isSynced;
 
   Sale({
@@ -16,6 +17,7 @@ class Sale {
     required this.paymentMethod,
     required this.status,
     required this.createdAt,
+    this.dueDate,
     this.isSynced = AppDefaults.notSynced,
   }) {
     _validateSale();
@@ -33,6 +35,9 @@ class Sale {
     }
     if (!_isValidStatus(status)) {
       throw ArgumentError('Invalid sale status');
+    }
+    if (paymentMethod == 'credit' && dueDate == null) {
+      throw ArgumentError('Due date is required for credit sales');
     }
   }
 
@@ -58,6 +63,7 @@ class Sale {
       'payment_method': paymentMethod,
       'status': status,
       'created_at': createdAt.toIso8601String(),
+      'due_date': dueDate?.toIso8601String(),
       'is_synced': isSynced,
     };
   }
@@ -76,6 +82,7 @@ class Sale {
       createdAt: DateTime.parse(
         map['created_at'] ?? DateTime.now().toIso8601String(),
       ),
+      dueDate: map['due_date'] != null ? DateTime.parse(map['due_date']) : null,
       isSynced: map['is_synced'] ?? AppDefaults.notSynced,
     );
   }
@@ -87,6 +94,7 @@ class Sale {
     String? paymentMethod,
     String? status,
     DateTime? createdAt,
+    DateTime? dueDate,
     int? isSynced,
   }) {
     return Sale(
@@ -96,6 +104,7 @@ class Sale {
       paymentMethod: paymentMethod ?? this.paymentMethod,
       status: status ?? this.status,
       createdAt: createdAt ?? this.createdAt,
+      dueDate: dueDate ?? this.dueDate,
       isSynced: isSynced ?? this.isSynced,
     );
   }

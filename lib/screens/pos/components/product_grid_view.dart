@@ -45,10 +45,11 @@ class ProductGridView extends StatelessWidget {
           itemCount: productsToDisplay.length,
           itemBuilder: (context, index) {
             final product = productsToDisplay[index];
+            final visualStock = provider.getVisualStock(product.id!);
             return Card(
               child: InkWell(
                 onTap: () {
-                  if (product.stock > 0) {
+                  if (visualStock > 0) {
                     Provider.of<SalesProvider>(
                       context,
                       listen: false,
@@ -95,9 +96,9 @@ class ProductGridView extends StatelessWidget {
                         ),
                       ),
                       Text(
-                        'Stock: ${product.stock}',
+                        'Stock: $visualStock',
                         style: TextStyle(
-                          color: product.stock > 0
+                          color: visualStock > 0
                               ? Colors.grey[600]
                               : Colors.red,
                           fontSize: UiConstants.fontSizeExtraSmall,

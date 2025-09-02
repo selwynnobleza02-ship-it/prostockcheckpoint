@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/customer.dart';
+import 'package:prostock/providers/customer_provider.dart';
+import 'package:prostock/screens/customers/dialogs/balance_management_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/delete_confirmation_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/transaction_history_dialog.dart';
-import 'package:prostock/screens/customers/dialogs/utang_management_dialog.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/add_customer_dialog.dart';
+import 'package:provider/provider.dart';
 
 class CustomerListItem extends StatelessWidget {
   final Customer customer;
@@ -14,6 +16,9 @@ class CustomerListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
+    final isOverdue = customerProvider.overdueCustomers.any((c) => c.id == customer.id);
+
     return Card(
       margin: const EdgeInsets.symmetric(
         horizontal: 16,
@@ -21,7 +26,7 @@ class CustomerListItem extends StatelessWidget {
       ),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: customer.hasUtang ? Colors.orange : Colors.green,
+          backgroundColor: isOverdue ? Colors.red : (customer.balance > 0 ? Colors.orange : Colors.green),
           child: Text(
             customer.name.substring(0, 1).toUpperCase(),
             style: const TextStyle(
@@ -30,16 +35,25 @@ class CustomerListItem extends StatelessWidget {
             ),
           ),
         ),
-        title: Text(customer.name),
+        title: Row(
+          children: [
+            Text(customer.name),
+            if (isOverdue)
+              const Padding(
+                padding: EdgeInsets.only(left: 8.0),
+                child: Icon(Icons.warning, color: Colors.red, size: 16),
+              ),
+          ],
+        ),
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (customer.phone != null) Text('Phone: ${customer.phone}'),
             if (customer.email != null) Text('Email: ${customer.email}'),
             Text(
-              'Utang: ${CurrencyUtils.formatCurrency(customer.utangBalance)}',
+              'Balance: ${CurrencyUtils.formatCurrency(customer.balance)}',
               style: TextStyle(
-                color: customer.hasUtang ? Colors.orange : Colors.green,
+                color: isOverdue ? Colors.red : (customer.balance > 0 ? Colors.orange : Colors.green),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -57,7 +71,7 @@ class CustomerListItem extends StatelessWidget {
             ),
             const PopupMenuItem(
               value: 'utang',
-              child: Text('Manage Utang'),
+              child: Text('Manage Balance'),
             ),
             const PopupMenuItem(
               value: 'history',
@@ -87,7 +101,7 @@ class CustomerListItem extends StatelessWidget {
               case 'utang':
                 showDialog(
                   context: context,
-                  builder: (context) => UtangManagementDialog(customer: customer),
+                  builder: (context) => BalanceManagementDialog(customer: customer),
                 );
                 break;
               case 'history':

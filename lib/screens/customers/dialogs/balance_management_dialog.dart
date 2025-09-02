@@ -4,16 +4,16 @@ import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
 
-class UtangManagementDialog extends StatefulWidget {
+class BalanceManagementDialog extends StatefulWidget {
   final Customer customer;
 
-  const UtangManagementDialog({super.key, required this.customer});
+  const BalanceManagementDialog({super.key, required this.customer});
 
   @override
-  State<UtangManagementDialog> createState() => _UtangManagementDialogState();
+  State<BalanceManagementDialog> createState() => _BalanceManagementDialogState();
 }
 
-class _UtangManagementDialogState extends State<UtangManagementDialog> {
+class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
   final _paymentController = TextEditingController();
 
   @override
@@ -25,7 +25,7 @@ class _UtangManagementDialogState extends State<UtangManagementDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Manage Utang - ${widget.customer.name}'),
+      title: Text('Manage Balance - ${widget.customer.name}'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -40,11 +40,11 @@ class _UtangManagementDialogState extends State<UtangManagementDialog> {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text('Current Utang:'),
+                    const Text('Current Balance:'),
                     Text(
-                      CurrencyUtils.formatCurrency(widget.customer.utangBalance),
+                      CurrencyUtils.formatCurrency(widget.customer.balance),
                       style: TextStyle(
-                        color: widget.customer.utangBalance > 0
+                        color: widget.customer.balance > 0
                             ? Colors.red
                             : Colors.green,
                         fontWeight: FontWeight.bold,

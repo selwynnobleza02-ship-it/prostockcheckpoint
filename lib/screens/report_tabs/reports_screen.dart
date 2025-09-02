@@ -10,11 +10,13 @@ import 'package:prostock/screens/report_tabs/components/financial_report_tab.dar
 import 'package:prostock/screens/report_tabs/components/inventory_report_tab.dart';
 import 'package:prostock/screens/report_tabs/components/report_tabs.dart';
 import 'package:prostock/screens/report_tabs/components/sales_report_tab.dart';
-import 'package:prostock/services/firestore_service.dart';
+import 'package:prostock/services/firestore/inventory_service.dart';
+import 'package:prostock/services/firestore/sale_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/widgets/analytics_report_widget.dart';
 import 'package:prostock/widgets/stock_movement_report_widget.dart';
 import 'package:provider/provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ReportsScreen extends StatefulWidget {
   const ReportsScreen({super.key});
@@ -54,13 +56,15 @@ class _ReportsScreenState extends State<ReportsScreen>
       context,
       listen: false,
     ).loadMovements(refresh: refresh);
-    final losses = await FirestoreService.instance.getLosses();
+    final inventoryService = InventoryService(FirebaseFirestore.instance);
+    final saleService = SaleService(FirebaseFirestore.instance);
+    final losses = await inventoryService.getLosses();
 
     final List<SaleItem> allSaleItems = [];
     for (final sale in salesProvider.sales) {
       if (sale.id != null) {
         if (sale.isSynced == 1) {
-          final items = await FirestoreService.instance.getSaleItemsBySaleId(
+          final items = await saleService.getSaleItemsBySaleId(
             sale.id!,
           );
           allSaleItems.addAll(items);

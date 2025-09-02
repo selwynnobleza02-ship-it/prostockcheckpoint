@@ -1,3 +1,5 @@
+import 'package:prostock/widgets/sync_failure_dialog.dart';
+import 'package:prostock/providers/sync_failure_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:prostock/providers/theme_provider.dart';
 import 'package:prostock/screens/settings/components/about_screen.dart';
@@ -41,6 +43,25 @@ class SettingsScreen extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (context) => const PrinterSettingsScreen(),
                 ),
+              );
+            },
+          ),
+          const Divider(),
+          Consumer<SyncFailureProvider>(
+            builder: (context, syncFailureProvider, child) {
+              return ListTile(
+                leading: Badge(
+                  isLabelVisible: syncFailureProvider.failures.isNotEmpty,
+                  label: Text(syncFailureProvider.failures.length.toString()),
+                  child: const Icon(Icons.sync_problem_outlined),
+                ),
+                title: const Text('Sync Failures'),
+                onTap: () {
+                  showDialog(
+                    context: context,
+                    builder: (context) => const SyncFailureDialog(),
+                  );
+                },
               );
             },
           ),

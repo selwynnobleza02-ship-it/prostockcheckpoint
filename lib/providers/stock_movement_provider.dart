@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/services/firestore/inventory_service.dart';
 import '../models/stock_movement.dart';
-import '../services/firestore_service.dart';
 import '../utils/error_logger.dart';
 
 class StockMovementProvider with ChangeNotifier {
@@ -36,7 +36,8 @@ class StockMovementProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final result = await FirestoreService.instance.getStockMovements(
+      final inventoryService = InventoryService(FirebaseFirestore.instance);
+      final result = await inventoryService.getStockMovements(
         limit: _pageSize,
         lastDocument: _lastDocument,
       );

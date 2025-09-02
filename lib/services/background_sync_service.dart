@@ -1,13 +1,17 @@
 import 'dart:developer';
 
 import 'package:background_fetch/background_fetch.dart';
+import 'package:prostock/providers/sync_failure_provider.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:prostock/utils/error_logger.dart';
 
 const _backgroundFetchTaskId = 'com.prostock.background_fetch';
 
 class BackgroundSyncService {
-  static Future<void> init() async {
+  static late OfflineManager _offlineManager;
+
+  static Future<void> init(OfflineManager offlineManager) async {
+    _offlineManager = offlineManager;
     BackgroundFetch.configure(
           BackgroundFetchConfig(
             minimumFetchInterval: 15,
@@ -30,7 +34,7 @@ class BackgroundSyncService {
   static void _onBackgroundFetch(String taskId) async {
     if (taskId == _backgroundFetchTaskId) {
       try {
-        await OfflineManager.instance.syncPendingOperations();
+        await _offlineManager.syncPendingOperations();
       } catch (e, s) {
         ErrorLogger.logError(
           'Error in background fetch',
@@ -60,7 +64,12 @@ void backgroundFetchHeadlessTask(HeadlessTask task) async {
 
   if (taskId == _backgroundFetchTaskId) {
     try {
-      await OfflineManager.instance.syncPendingOperations();
+      // This is not ideal, but we need to create a new instance of OfflineManager
+      // to be able to sync in the background.
+      final syncFailureProvider = SyncFailureProvider();
+      final offlineManager = OfflineManager(syncFailureProvider);
+      await offlineManager.initialize();
+      await offlineManager.syncPendingOperations();
     } catch (e, s) {
       ErrorLogger.logError(
         'Error in background fetch headless task',

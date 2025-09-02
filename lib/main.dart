@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/providers/sync_failure_provider.dart';
 import 'package:prostock/providers/stock_movement_provider.dart';
 import 'package:prostock/providers/theme_provider.dart';
 import 'package:prostock/screens/settings/components/change_password_screen.dart';
@@ -27,15 +28,19 @@ void main() async {
   GlobalErrorHandler.initialize();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await OfflineManager.instance.initialize();
-  await BackgroundSyncService.init();
+  final syncFailureProvider = SyncFailureProvider();
+  final offlineManager = OfflineManager(syncFailureProvider);
+  await offlineManager.initialize();
+  await BackgroundSyncService.init(offlineManager);
 
-  runApp(const MyApp());
+  runApp(MyApp(offlineManager: offlineManager, syncFailureProvider: syncFailureProvider));
   BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  const MyApp({super.key, required this.offlineManager, required this.syncFailureProvider});
+  final OfflineManager offlineManager;
+  final SyncFailureProvider syncFailureProvider;
 
   @override
   Widget build(BuildContext context) {
@@ -43,20 +48,27 @@ class MyApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
-        ChangeNotifierProvider.value(value: OfflineManager.instance),
+        ChangeNotifierProvider.value(value: offlineManager),
+        ChangeNotifierProvider.value(value: syncFailureProvider),
         ChangeNotifierProvider(
           create: (context) =>
               InventoryProvider(offlineManager: context.read<OfflineManager>()),
         ),
-        ChangeNotifierProxyProvider<InventoryProvider, SalesProvider>(
+        ChangeNotifierProvider(create: (_) => CustomerProvider()),
+        ChangeNotifierProxyProvider2<InventoryProvider, CustomerProvider, SalesProvider>(
           create: (context) => SalesProvider(
             inventoryProvider: context.read<InventoryProvider>(),
+            offlineManager: context.read<OfflineManager>(),
+            customerProvider: context.read<CustomerProvider>(),
           ),
-          update: (context, inventoryProvider, previousSalesProvider) =>
+          update: (context, inventoryProvider, customerProvider, previousSalesProvider) =>
               previousSalesProvider ??
-              SalesProvider(inventoryProvider: inventoryProvider),
+              SalesProvider(
+                inventoryProvider: inventoryProvider,
+                offlineManager: context.read<OfflineManager>(),
+                customerProvider: customerProvider,
+              ),
         ),
-        ChangeNotifierProvider(create: (_) => CustomerProvider()),
         ChangeNotifierProxyProvider<CustomerProvider, CreditProvider>(
           create: (context) => CreditProvider(
             customerProvider: context.read<CustomerProvider>(),

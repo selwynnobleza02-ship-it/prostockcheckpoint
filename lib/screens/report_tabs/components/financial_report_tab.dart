@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
+import 'package:prostock/services/report_service.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
@@ -13,25 +14,27 @@ class FinancialReportTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final reportService = ReportService();
     return Consumer3<SalesProvider, InventoryProvider, CustomerProvider>(
       builder: (context, sales, inventory, customers, child) {
-        final totalRevenue = sales.sales.fold(
-          0.0,
-          (sum, sale) => sum + sale.totalAmount,
+        final totalRevenue = reportService.calculateTotalRevenue(sales.sales);
+        final totalCost = reportService.calculateTotalCost(inventory.products);
+        final totalLoss = reportService.calculateTotalLoss(losses);
+        final totalProfit = reportService.calculateGrossProfit(
+          totalRevenue,
+          totalCost,
+          totalLoss,
         );
-        final totalCost = inventory.products.fold(
-          0.0,
-          (sum, product) => sum + (product.cost * product.stock),
+        final outstandingUtang = reportService.calculateTotalBalance(
+          customers.customers,
         );
-        final totalLoss = losses.fold(
-          0.0,
-          (sum, loss) => sum + loss.totalCost,
+
+        final profitMargin = reportService.calculateProfitMargin(
+          totalProfit,
+          totalRevenue,
         );
-        final totalProfit = totalRevenue - totalCost - totalLoss;
-        final outstandingUtang = customers.customers.fold(
-          0.0,
-          (sum, c) => sum + c.utangBalance,
-        );
+
+        final roi = reportService.calculateRoi(totalProfit, totalCost);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -114,9 +117,7 @@ class FinancialReportTab extends StatelessWidget {
                         ),
                         Flexible(
                           child: Text(
-                            totalRevenue > 0
-                                ? '${(totalProfit / totalRevenue * 100).toStringAsFixed(1)}%'
-                                : '0.0%',
+                            '${profitMargin.toStringAsFixed(1)}%',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: totalProfit >= 0
@@ -140,9 +141,7 @@ class FinancialReportTab extends StatelessWidget {
                         ),
                         Flexible(
                           child: Text(
-                            totalCost > 0
-                                ? '${(totalProfit / totalCost * 100).toStringAsFixed(1)}%'
-                                : '0.0%',
+                            '${roi.toStringAsFixed(1)}%',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color: totalProfit >= 0

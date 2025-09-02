@@ -5,13 +5,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_user.dart';
 import '../models/user_role.dart';
 import '../models/user_activity.dart';
-import '../services/firestore_service.dart';
+import 'package:prostock/services/firestore/user_service.dart';
+import 'package:prostock/services/firestore/activity_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/password_helper.dart';
 import '../utils/error_logger.dart'; // Added ErrorLogger import for consistent logging
 
 class AuthProvider with ChangeNotifier {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-  final FirestoreService _firestoreService = FirestoreService.instance;
+  final UserService _userService = UserService(FirebaseFirestore.instance, FirebaseAuth.instance);
+  final ActivityService _activityService = ActivityService(FirebaseFirestore.instance);
 
   bool _isAuthenticated = false;
   AppUser? _currentUser;
@@ -35,7 +38,7 @@ class AuthProvider with ChangeNotifier {
       );
 
       if (credential.user != null) {
-        final user = await _firestoreService.getUserByEmail(email);
+        final user = await _userService.getUserByEmail(email);
         if (user != null) {
           _isAuthenticated = true;
           _currentUser = user;
@@ -121,7 +124,7 @@ class AuthProvider with ChangeNotifier {
         } else {
           // Fallback: get user data from Firestore
           try {
-            final userData = await _firestoreService.getUserByEmail(
+            final userData = await _userService.getUserByEmail(
               firebaseUser.email!,
             );
 
@@ -180,7 +183,7 @@ class AuthProvider with ChangeNotifier {
           timestamp: DateTime.now(),
         );
 
-        await _firestoreService.insertUserActivity(activity);
+        await _activityService.insertUserActivity(activity);
       }
     } catch (e) {
       ErrorLogger.logError(
@@ -200,7 +203,7 @@ class AuthProvider with ChangeNotifier {
     AppUser? newUser;
     try {
       // Check if username already exists
-      final existingUser = await _firestoreService.getUserByUsername(username);
+      final existingUser = await _userService.getUserByUsername(username);
       if (existingUser != null) {
         throw Exception('Username already exists');
       }
@@ -216,7 +219,7 @@ class AuthProvider with ChangeNotifier {
         createdAt: DateTime.now(),
       );
 
-      final userId = await _firestoreService.insertUser(newUser);
+      final userId = await _userService.insertUser(newUser);
       newUser.id = userId;
 
       // Create Firebase Auth account
@@ -235,7 +238,7 @@ class AuthProvider with ChangeNotifier {
       } catch (e) {
         // If Firebase Auth creation fails, delete the Firestore user
         if (newUser.id != null) {
-          await _firestoreService.deleteUser(newUser.id!);
+          await _userService.deleteUser(newUser.id!);
         }
         rethrow; // Re-throw the exception to be caught by the outer catch block
       }

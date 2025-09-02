@@ -73,19 +73,38 @@ class _POSScreenState extends State<POSScreen> {
       _isProcessingSale = true;
     });
     try {
+      DateTime? dueDate;
+      if (_paymentMethod == 'credit') {
+        dueDate = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now().add(const Duration(days: 30)),
+          firstDate: DateTime.now(),
+          lastDate: DateTime.now().add(const Duration(days: 365)),
+        );
+        if (dueDate == null) {
+          setState(() {
+            _isProcessingSale = false;
+          });
+          return;
+        }
+      }
+
       final salesProvider = Provider.of<SalesProvider>(context, listen: false);
       final receipt = await salesProvider.completeSale(
         customerId: _selectedCustomer?.id,
         paymentMethod: _paymentMethod,
+        dueDate: dueDate,
       );
       if (context.mounted) {
         if (receipt != null) {
+          if (!mounted) return;
           showDialog(
             context: context,
             barrierDismissible: false,
             builder: (context) => ReceiptDialog(receipt: receipt),
           );
         } else {
+          if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text(salesProvider.error ?? 'Sale failed'),
@@ -124,32 +143,34 @@ class _POSScreenState extends State<POSScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          Flexible(
-            flex: 3,
-            child: Column(
-              children: [
-                ProductSearchView(
-                  controller: _productSearchController,
-                  onChanged: (value) => _onProductSearchChanged(),
-                ),
-                const Expanded(child: ProductGridView()),
-              ],
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.6,
+              child: Column(
+                children: [
+                  ProductSearchView(
+                    controller: _productSearchController,
+                    onChanged: (value) => _onProductSearchChanged(),
+                  ),
+                  const Expanded(child: ProductGridView()),
+                ],
+              ),
             ),
-          ),
-          Flexible(
-            flex: 2,
-            child: CartView(
-              selectedCustomer: _selectedCustomer,
-              paymentMethod: _paymentMethod,
-              isProcessingSale: _isProcessingSale,
-              onCustomerChanged: _onCustomerChanged,
-              onPaymentMethodChanged: _onPaymentMethodChanged,
-              onCompleteSale: _completeSale,
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.4,
+              child: CartView(
+                selectedCustomer: _selectedCustomer,
+                paymentMethod: _paymentMethod,
+                isProcessingSale: _isProcessingSale,
+                onCustomerChanged: _onCustomerChanged,
+                onPaymentMethodChanged: _onPaymentMethodChanged,
+                onCompleteSale: _completeSale,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

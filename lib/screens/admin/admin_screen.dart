@@ -98,7 +98,7 @@ class _AdminScreenState extends State<AdminScreen>
           IconButton(
             icon: const Icon(Icons.delete_forever),
             onPressed: () async {
-              await OfflineManager.instance.clearCache();
+              await context.read<OfflineManager>().clearCache();
               if (!context.mounted) return;
               ScaffoldMessenger.of(
                 context,
