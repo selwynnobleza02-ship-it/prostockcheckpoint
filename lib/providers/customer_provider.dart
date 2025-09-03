@@ -165,7 +165,7 @@ class CustomerProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final oldCustomer = getCustomerById(customer.id!);
+      final oldCustomer = await getCustomerById(customer.id!);
       if (oldCustomer?.localImagePath != null &&
           oldCustomer!.localImagePath! != customer.localImagePath) {
         final imageFile = File(oldCustomer.localImagePath!);
@@ -207,7 +207,7 @@ class CustomerProvider with ChangeNotifier {
 
   Future<bool> deleteCustomer(String customerId) async {
     try {
-      final customer = getCustomerById(customerId);
+      final customer = await getCustomerById(customerId);
       if (customer?.localImagePath != null) {
         final imageFile = File(customer!.localImagePath!);
         if (await imageFile.exists()) {
@@ -283,10 +283,28 @@ class CustomerProvider with ChangeNotifier {
     }
   }
 
-  Customer? getCustomerById(String id) {
+  Future<Customer?> getCustomerById(String id) async {
     try {
-      return _customers.firstWhere((customer) => customer.id == id);
+      Customer? localCustomer;
+      try {
+        localCustomer = _customers.firstWhere((customer) => customer.id == id);
+      } catch (e) {
+        localCustomer = null;
+      }
+
+      if (localCustomer != null) {
+        return localCustomer;
+      }
+
+      final customerService = CustomerService(FirebaseFirestore.instance);
+      final customer = await customerService.getCustomerById(id);
+      return customer;
     } catch (e) {
+      ErrorLogger.logError(
+        'Error getting customer by id',
+        error: e,
+        context: 'CustomerProvider.getCustomerById',
+      );
       return null;
     }
   }

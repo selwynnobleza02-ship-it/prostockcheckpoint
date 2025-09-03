@@ -34,7 +34,7 @@ class _CustomerQRScannerState extends State<CustomerQRScanner> {
       setState(() {
         _isProcessing = true;
       });
-      log('Scanned QR code with value: ${barcode.rawValue}');
+      log('Scanned QR code with value: \${barcode.rawValue}');
       Navigator.of(context).pop(barcode.rawValue);
     }
   }

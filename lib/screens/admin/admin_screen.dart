@@ -165,8 +165,8 @@ class _AdminScreenState extends State<AdminScreen>
                           color: Colors.transparent,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
-                            splashColor: Colors.indigo.withValues(alpha: .3),
-                            highlightColor: Colors.indigo.withValues(alpha: .1),
+                            splashColor: Colors.indigo.withOpacity(0.3),
+                            highlightColor: Colors.indigo.withOpacity(0.1),
                             onTap: () => _onNavTap(index),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 100),

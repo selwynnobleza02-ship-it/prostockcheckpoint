@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/screens/customers/dialogs/customer_options_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
-import 'package:prostock/screens/customers/components/customer_details_dialog.dart';
 import 'package:prostock/screens/customers/components/customer_list.dart';
 import 'package:prostock/screens/customers/components/customer_qr_scanner.dart';
 import 'package:prostock/services/credit_check_service.dart';
@@ -75,17 +75,23 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
 
     if (customerName != null && customerName.isNotEmpty) {
-      final customerProvider =
-          Provider.of<CustomerProvider>(context, listen: false);
-      final Customer? customer =
-          await customerProvider.getCustomerByName(customerName);
+      if (!mounted) return;
+      final customerProvider = Provider.of<CustomerProvider>(
+        context,
+        listen: false,
+      );
+      final Customer? customer = await customerProvider.getCustomerByName(
+        customerName,
+      );
 
       if (customer != null) {
+        if (!mounted) return;
         showDialog(
           context: context,
-          builder: (context) => CustomerDetailsDialog(customer: customer),
+          builder: (context) => CustomerOptionsDialog(customer: customer),
         );
       } else {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('This customer does not exist.'),
@@ -150,9 +156,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
               ),
             ),
           ),
-          Expanded(
-            child: CustomerList(scrollController: _scrollController),
-          ),
+          Expanded(child: CustomerList(scrollController: _scrollController)),
         ],
       ),
       floatingActionButton: FloatingActionButton(

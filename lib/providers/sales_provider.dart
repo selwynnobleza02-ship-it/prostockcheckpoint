@@ -337,7 +337,7 @@ class SalesProvider with ChangeNotifier {
       }
 
       if (paymentMethod == 'credit') {
-        final customer = _customerProvider.getCustomerById(customerId!);
+        final customer = await _customerProvider.getCustomerById(customerId!);
         if (customer == null) {
           _error = 'Customer not found';
           _isLoading = false;
