@@ -36,7 +36,7 @@ class ValidationConstants {
 /// Constants for defining UI element properties like spacing, radius, etc.
 class UiConstants {
   // Durations
-  static const Duration debounceDuration = Duration(milliseconds: 300);
+  static const Duration debounceDuration = Duration(milliseconds: 200);
 
   // Padding and Spacing
   static const double spacingSmall = 8.0;
