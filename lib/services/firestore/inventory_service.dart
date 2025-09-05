@@ -64,9 +64,18 @@ class InventoryService {
   Future<PaginatedResult<StockMovement>> getStockMovements({
     int limit = 20,
     DocumentSnapshot? lastDocument,
+    DateTime? startDate,
+    DateTime? endDate,
   }) async {
     try {
       Query query = stockMovements.orderBy('createdAt', descending: true);
+
+      if (startDate != null) {
+        query = query.where('createdAt', isGreaterThanOrEqualTo: startDate);
+      }
+      if (endDate != null) {
+        query = query.where('createdAt', isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
+      }
 
       if (lastDocument != null) {
         query = query.startAfterDocument(lastDocument);

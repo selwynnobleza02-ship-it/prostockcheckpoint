@@ -20,6 +20,7 @@ class POSScreen extends StatefulWidget {
 }
 
 class _POSScreenState extends State<POSScreen> {
+  final GlobalKey<CartViewState> _cartViewKey = GlobalKey<CartViewState>();
   Customer? _selectedCustomer;
   String _paymentMethod = 'cash';
   final TextEditingController _productSearchController =
@@ -88,20 +89,28 @@ class _POSScreenState extends State<POSScreen> {
           return;
         }
       }
-
+      if (!mounted) return;
       final salesProvider = Provider.of<SalesProvider>(context, listen: false);
       final receipt = await salesProvider.completeSale(
         customerId: _selectedCustomer?.id,
         paymentMethod: _paymentMethod,
         dueDate: dueDate,
       );
+
+      final cashTendered = _cartViewKey.currentState?.getCashTendered();
+      final change = _cartViewKey.currentState?.getChange();
+
       if (context.mounted) {
         if (receipt != null) {
           if (!mounted) return;
           showDialog(
             context: context,
             barrierDismissible: false,
-            builder: (context) => ReceiptDialog(receipt: receipt),
+            builder: (context) => ReceiptDialog(
+              receipt: receipt,
+              cashTendered: double.tryParse(cashTendered ?? '0.0') ?? 0.0,
+              change: change ?? 0.0,
+            ),
           );
         } else {
           if (!mounted) return;
@@ -161,6 +170,7 @@ class _POSScreenState extends State<POSScreen> {
             SizedBox(
               height: MediaQuery.of(context).size.height * 0.4,
               child: CartView(
+                key: _cartViewKey,
                 selectedCustomer: _selectedCustomer,
                 paymentMethod: _paymentMethod,
                 isProcessingSale: _isProcessingSale,

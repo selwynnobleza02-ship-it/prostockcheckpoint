@@ -9,7 +9,7 @@ import 'package:prostock/utils/currency_utils.dart';
 
 import 'package:provider/provider.dart';
 
-class CartView extends StatelessWidget {
+class CartView extends StatefulWidget {
   final Customer? selectedCustomer;
   final String paymentMethod;
   final bool isProcessingSale;
@@ -26,6 +26,46 @@ class CartView extends StatelessWidget {
     required this.onPaymentMethodChanged,
     required this.onCompleteSale,
   });
+
+  @override
+  State<CartView> createState() => CartViewState();
+}
+
+class CartViewState extends State<CartView> {
+  final TextEditingController _cashTenderedController = TextEditingController();
+  double _change = 0.0;
+
+  String getCashTendered() {
+    return _cashTenderedController.text;
+  }
+
+  double getChange() {
+    return _change;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _cashTenderedController.addListener(_calculateChange);
+  }
+
+  @override
+  void dispose() {
+    _cashTenderedController.removeListener(_calculateChange);
+    _cashTenderedController.dispose();
+    super.dispose();
+  }
+
+  void _calculateChange() {
+    final total = Provider.of<SalesProvider>(
+      context,
+      listen: false,
+    ).currentSaleTotal;
+    final cashTendered = double.tryParse(_cashTenderedController.text) ?? 0.0;
+    setState(() {
+      _change = cashTendered - total;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -55,7 +95,7 @@ class CartView extends StatelessWidget {
           Consumer<CustomerProvider>(
             builder: (context, provider, child) {
               return DropdownButtonFormField<Customer>(
-                initialValue: selectedCustomer,
+                initialValue: widget.selectedCustomer,
                 decoration: const InputDecoration(
                   labelText: 'Customer',
                   border: OutlineInputBorder(),
@@ -81,13 +121,13 @@ class CartView extends StatelessWidget {
                     ),
                   ),
                 ],
-                onChanged: onCustomerChanged,
+                onChanged: widget.onCustomerChanged,
               );
             },
           ),
           const SizedBox(height: UiConstants.spacingSmall),
           DropdownButtonFormField<String>(
-            initialValue: paymentMethod,
+            initialValue: widget.paymentMethod,
             decoration: const InputDecoration(
               labelText: 'Payment Method',
               border: OutlineInputBorder(),
@@ -102,18 +142,18 @@ class CartView extends StatelessWidget {
               const DropdownMenuItem(value: 'cash', child: Text('Cash')),
               DropdownMenuItem(
                 value: 'credit',
-                enabled: selectedCustomer != null,
+                enabled: widget.selectedCustomer != null,
                 child: Text(
                   'Credit',
                   style: TextStyle(
-                    color: selectedCustomer != null
+                    color: widget.selectedCustomer != null
                         ? Colors.black
                         : Colors.grey,
                   ),
                 ),
               ),
             ],
-            onChanged: onPaymentMethodChanged,
+            onChanged: widget.onPaymentMethodChanged,
           ),
         ],
       ),
@@ -121,70 +161,101 @@ class CartView extends StatelessWidget {
   }
 
   Widget _buildCartItems(BuildContext context) {
-    return ListView.builder(
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      itemCount: context.watch<SalesProvider>().currentSaleItems.length,
-      itemBuilder: (context, index) {
-        final item = context.watch<SalesProvider>().currentSaleItems[index];
-        final product = context.watch<InventoryProvider>().products.firstWhere(
-          (p) => p.id == item.productId,
-          orElse: () => Product(
-            name: 'Unknown Product',
-            cost: 0,
-            stock: 0,
-            createdAt: DateTime.now(),
-            updatedAt: DateTime.now(),
-          ),
-        );
-
-        return ListTile(
-          dense: true,
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: UiConstants.spacingSmall,
-            vertical: 2,
-          ),
-          title: Text(
-            product.name,
-            style: const TextStyle(fontSize: UiConstants.fontSizeSmall),
-            overflow: TextOverflow.ellipsis,
-          ),
-          subtitle: Text(
-            'Qty: ${item.quantity}',
-            style: const TextStyle(fontSize: UiConstants.fontSizeExtraSmall),
-          ),
-          trailing: SizedBox(
-            width: 80,
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Expanded(
-                  child: Text(
-                    CurrencyUtils.formatCurrency(item.totalPrice),
-                    style: const TextStyle(
-                      fontSize: UiConstants.fontSizeExtraSmall,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
+    return Consumer<SalesProvider>(
+      builder: (context, salesProvider, child) {
+        if (salesProvider.currentSaleItems.isEmpty) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(UiConstants.spacingMedium),
+              child: Text(
+                'No items in cart',
+                style: TextStyle(
+                  color: Colors.grey,
+                  fontSize: UiConstants.fontSizeMedium,
                 ),
-                SizedBox(
-                  width: UiConstants.spacingLarge,
-                  child: IconButton(
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    icon: const Icon(
-                      Icons.remove,
-                      size: UiConstants.spacingMedium,
-                    ),
-                    onPressed: () {
-                      context.read<SalesProvider>().removeItemFromCurrentSale(
-                        index,
-                      );
-                    },
-                  ),
-                ),
-              ],
+              ),
             ),
-          ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          itemCount: salesProvider.currentSaleItems.length,
+          itemBuilder: (context, index) {
+            final item = salesProvider.currentSaleItems[index];
+            final product = context
+                .watch<InventoryProvider>()
+                .products
+                .firstWhere(
+                  (p) => p.id == item.productId,
+                  orElse: () => Product(
+                    name: 'Unknown Product',
+                    cost: 0,
+                    stock: 0,
+                    createdAt: DateTime.now(),
+                    updatedAt: DateTime.now(),
+                  ),
+                );
+
+            return Card(
+              margin: const EdgeInsets.symmetric(
+                horizontal: UiConstants.spacingSmall,
+                vertical: 2,
+              ),
+              child: ListTile(
+                dense: true,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: UiConstants.spacingSmall,
+                  vertical: 2,
+                ),
+                title: Text(
+                  product.name,
+                  style: const TextStyle(fontSize: UiConstants.fontSizeSmall),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  'Qty: ${item.quantity}',
+                  style: const TextStyle(
+                    fontSize: UiConstants.fontSizeExtraSmall,
+                  ),
+                ),
+                trailing: SizedBox(
+                  width: 80,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          CurrencyUtils.formatCurrency(item.totalPrice),
+                          style: const TextStyle(
+                            fontSize: UiConstants.fontSizeExtraSmall,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                      SizedBox(
+                        width: UiConstants.spacingLarge,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          icon: const Icon(
+                            Icons.remove_circle_outline,
+                            size: UiConstants.spacingMedium,
+                            color: Colors.red,
+                          ),
+                          onPressed: () {
+                            salesProvider.removeItemFromCurrentSale(index);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         );
       },
     );
@@ -192,9 +263,21 @@ class CartView extends StatelessWidget {
 
   Widget _buildCartFooter(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(UiConstants.spacingSmall),
+      padding: const EdgeInsets.symmetric(
+        horizontal: UiConstants.spacingSmall,
+        vertical: 8,
+      ),
       decoration: BoxDecoration(
+        color: Colors.white,
         border: Border(top: BorderSide(color: Colors.grey[300]!)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 1,
+            blurRadius: 2,
+            offset: const Offset(0, -1),
+          ),
+        ],
       ),
       child: Consumer<SalesProvider>(
         builder: (context, provider, child) {
@@ -206,25 +289,66 @@ class CartView extends StatelessWidget {
                 children: [
                   const Text(
                     'Total:',
-                    style: TextStyle(
-                      fontSize: UiConstants.fontSizeMedium,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
-                  Flexible(
-                    child: Text(
-                      CurrencyUtils.formatCurrency(provider.currentSaleTotal),
-                      style: const TextStyle(
-                        fontSize: UiConstants.fontSizeMedium,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
-                      overflow: TextOverflow.ellipsis,
+                  Text(
+                    CurrencyUtils.formatCurrency(provider.currentSaleTotal),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: UiConstants.spacingSmall),
+              if (widget.paymentMethod == 'cash') ...[
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextFormField(
+                        controller: _cashTenderedController,
+                        keyboardType: const TextInputType.numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration: const InputDecoration(
+                          labelText: 'Cash Tendered',
+                          border: OutlineInputBorder(),
+                          isDense: true,
+                          prefixText: '₱ ',
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        color: _change >= 0 ? Colors.blue[50] : Colors.red[50],
+                        border: Border.all(
+                          color: _change >= 0 ? Colors.blue : Colors.red,
+                        ),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: Text(
+                        'Change: ${CurrencyUtils.formatCurrency(_change)}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: _change >= 0 ? Colors.blue : Colors.red,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
@@ -233,46 +357,49 @@ class CartView extends StatelessWidget {
                           ? null
                           : () {
                               provider.clearCurrentSale();
+                              _cashTenderedController.clear();
                             },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.grey,
-                        padding: const EdgeInsets.symmetric(
-                          vertical: UiConstants.spacingSmall,
-                        ),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                       child: const Text(
                         'Clear',
-                        style: TextStyle(fontSize: UiConstants.fontSizeSmall),
+                        style: TextStyle(fontSize: 12),
                       ),
                     ),
                   ),
-                  const SizedBox(width: UiConstants.spacingSmall),
+                  const SizedBox(width: 8),
                   Expanded(
                     flex: 2,
                     child: ElevatedButton(
                       onPressed:
-                          provider.currentSaleItems.isEmpty || isProcessingSale
+                          provider.currentSaleItems.isEmpty ||
+                              widget.isProcessingSale ||
+                              (widget.paymentMethod == 'cash' &&
+                                  (double.tryParse(
+                                            _cashTenderedController.text,
+                                          ) ??
+                                          0.0) <
+                                      provider.currentSaleTotal)
                           ? null
-                          : onCompleteSale,
+                          : widget.onCompleteSale,
                       style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: UiConstants.spacingSmall,
-                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
-                      child: isProcessingSale
+                      child: widget.isProcessingSale
                           ? const SizedBox(
-                              width: UiConstants.iconSizeSmall,
-                              height: UiConstants.iconSizeSmall,
+                              width: 16,
+                              height: 16,
                               child: CircularProgressIndicator(
                                 color: Colors.white,
-                                strokeWidth: UiConstants.strokeWidthSmall,
+                                strokeWidth: 2,
                               ),
                             )
                           : const Text(
                               'Checkout',
-                              style: TextStyle(
-                                fontSize: UiConstants.fontSizeSmall,
-                              ),
+                              style: TextStyle(fontSize: 12),
                             ),
                     ),
                   ),

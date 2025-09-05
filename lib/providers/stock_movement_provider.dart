@@ -23,11 +23,15 @@ class StockMovementProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadMovements({bool refresh = false}) async {
+  Future<void> loadMovements({
+    bool refresh = false,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     if (_isLoading) return;
 
     _isLoading = true;
-    if (refresh) {
+    if (refresh || startDate != null || endDate != null) {
       _movements = [];
       _lastDocument = null;
       _hasMoreData = true;
@@ -40,9 +44,16 @@ class StockMovementProvider with ChangeNotifier {
       final result = await inventoryService.getStockMovements(
         limit: _pageSize,
         lastDocument: _lastDocument,
+        startDate: startDate,
+        endDate: endDate,
       );
 
-      _movements.addAll(result.items);
+      if (refresh) {
+        _movements = result.items;
+      } else {
+        _movements.addAll(result.items);
+      }
+      
       _lastDocument = result.lastDocument;
       _hasMoreData = result.items.length == _pageSize;
     } catch (e) {

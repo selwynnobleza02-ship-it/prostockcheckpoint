@@ -5,8 +5,15 @@ import '../utils/currency_utils.dart';
 
 class ReceiptDialog extends StatelessWidget {
   final Receipt receipt;
+  final double? cashTendered;
+  final double? change;
 
-  const ReceiptDialog({super.key, required this.receipt});
+  const ReceiptDialog({
+    super.key,
+    required this.receipt,
+    this.cashTendered,
+    this.change,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -250,6 +257,32 @@ class ReceiptDialog extends StatelessWidget {
                       ),
                     ],
                   ),
+                  if (cashTendered != null && cashTendered! > 0) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Cash Tendered:', style: TextStyle(fontSize: 14)),
+                        Text(
+                          CurrencyUtils.formatCurrency(cashTendered!),
+                          style: const TextStyle(fontSize: 14),
+                        ),
+                      ],
+                    ),
+                  ],
+                  if (change != null && change! > 0) ...[
+                    const SizedBox(height: 4),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text('Change:', style: TextStyle(fontSize: 14)),
+                        Text(
+                          CurrencyUtils.formatCurrency(change!),
+                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
