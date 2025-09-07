@@ -3,6 +3,7 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/models/offline_operation.dart';
+import 'package:prostock/providers/auth_provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/services/firestore/sale_service.dart';
 import 'package:prostock/services/local_database_service.dart';
@@ -12,6 +13,7 @@ import '../models/sale.dart';
 import '../models/product.dart';
 import '../models/receipt.dart';
 import '../utils/currency_utils.dart';
+import '../models/sale_item.dart';
 
 import '../utils/error_logger.dart';
 import 'inventory_provider.dart';
@@ -37,9 +39,10 @@ class SalesProvider with ChangeNotifier {
     required InventoryProvider inventoryProvider,
     required OfflineManager offlineManager,
     required CustomerProvider customerProvider,
-  })  : _inventoryProvider = inventoryProvider,
-        _offlineManager = offlineManager,
-        _customerProvider = customerProvider;
+    required AuthProvider authProvider,
+  }) : _inventoryProvider = inventoryProvider,
+       _offlineManager = offlineManager,
+       _customerProvider = customerProvider;
 
   List<Sale> get sales => _sales;
   List<SaleItem> get currentSaleItems => _currentSaleItems;
@@ -220,7 +223,7 @@ class SalesProvider with ChangeNotifier {
     } else {
       _currentSaleItems.add(
         SaleItem(
-          saleId: '', 
+          saleId: '',
           productId: product.id!,
           quantity: quantity,
           unitPrice: product.price,
@@ -270,9 +273,7 @@ class SalesProvider with ChangeNotifier {
       _inventoryProvider.increaseVisualStock(product.id!, currentItem.quantity);
       _currentSaleItems.removeAt(index);
     } else {
-      final availableStock = _inventoryProvider.getVisualStock(
-        product.id!,
-      ); 
+      final availableStock = _inventoryProvider.getVisualStock(product.id!);
       if (quantityDifference > availableStock) {
         _error =
             'Insufficient stock for ${product.name}. Available: $availableStock';
@@ -283,7 +284,10 @@ class SalesProvider with ChangeNotifier {
       if (quantityDifference > 0) {
         _inventoryProvider.decreaseVisualStock(product.id!, quantityDifference);
       } else {
-        _inventoryProvider.increaseVisualStock(product.id!, -quantityDifference);
+        _inventoryProvider.increaseVisualStock(
+          product.id!,
+          -quantityDifference,
+        );
       }
 
       _currentSaleItems[index] = currentItem.copyWith(
@@ -360,15 +364,13 @@ class SalesProvider with ChangeNotifier {
         status: 'completed',
         createdAt: DateTime.now(),
         dueDate: dueDate,
+        userId: '',
       );
 
       if (_offlineManager.isOnline) {
         log('Online sale');
         final saleService = SaleService(FirebaseFirestore.instance);
-        final saleId = await saleService.insertSale(
-          sale,
-          productsInSale,
-        );
+        final saleId = await saleService.insertSale(sale, productsInSale);
 
         for (final item in _currentSaleItems) {
           final saleItem = SaleItem(
@@ -394,7 +396,10 @@ class SalesProvider with ChangeNotifier {
         }
 
         if (paymentMethod == 'credit') {
-          await _customerProvider.updateCustomerBalance(customerId!, currentSaleTotal);
+          await _customerProvider.updateCustomerBalance(
+            customerId!,
+            currentSaleTotal,
+          );
         }
 
         final receipt = _createReceipt(saleId, customerId, paymentMethod);
@@ -434,7 +439,10 @@ class SalesProvider with ChangeNotifier {
         }
 
         if (paymentMethod == 'credit') {
-          _customerProvider.updateLocalCustomerBalance(customerId!, currentSaleTotal);
+          _customerProvider.updateLocalCustomerBalance(
+            customerId!,
+            currentSaleTotal,
+          );
         }
 
         final receipt = _createReceipt(saleId, customerId, paymentMethod);

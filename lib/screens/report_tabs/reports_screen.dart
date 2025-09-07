@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
-import 'package:prostock/models/sale.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
@@ -16,6 +15,7 @@ import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/widgets/analytics_report_widget.dart';
 import 'package:prostock/widgets/stock_movement_report_widget.dart';
 import 'package:provider/provider.dart';
+import 'package:prostock/models/sale_item.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -64,9 +64,7 @@ class _ReportsScreenState extends State<ReportsScreen>
     for (final sale in salesProvider.sales) {
       if (sale.id != null) {
         if (sale.isSynced == 1) {
-          final items = await saleService.getSaleItemsBySaleId(
-            sale.id!,
-          );
+          final items = await saleService.getSaleItemsBySaleId(sale.id!);
           allSaleItems.addAll(items);
         } else {
           final localItems = await LocalDatabaseService.instance.getSaleItems(

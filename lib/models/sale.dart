@@ -2,6 +2,7 @@ import 'package:prostock/utils/app_constants.dart';
 
 class Sale {
   late final String? id;
+  final String userId;
   final String? customerId;
   final double totalAmount;
   final String paymentMethod;
@@ -12,6 +13,7 @@ class Sale {
 
   Sale({
     this.id,
+    required this.userId,
     this.customerId,
     required this.totalAmount,
     required this.paymentMethod,
@@ -58,6 +60,7 @@ class Sale {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
+      'user_id': userId,
       'customer_id': customerId,
       'total_amount': totalAmount,
       'payment_method': paymentMethod,
@@ -75,6 +78,7 @@ class Sale {
     }
     return Sale(
       id: map['id']?.toString(),
+      userId: map['user_id']?.toString() ?? '',
       customerId: map['customer_id']?.toString(),
       totalAmount: totalAmount.toDouble(),
       paymentMethod: map['payment_method'] ?? '',
@@ -89,6 +93,7 @@ class Sale {
 
   Sale copyWith({
     String? id,
+    String? userId,
     String? customerId,
     double? totalAmount,
     String? paymentMethod,
@@ -99,6 +104,7 @@ class Sale {
   }) {
     return Sale(
       id: id ?? this.id,
+      userId: userId ?? this.userId,
       customerId: customerId ?? this.customerId,
       totalAmount: totalAmount ?? this.totalAmount,
       paymentMethod: paymentMethod ?? this.paymentMethod,
@@ -106,89 +112,6 @@ class Sale {
       createdAt: createdAt ?? this.createdAt,
       dueDate: dueDate ?? this.dueDate,
       isSynced: isSynced ?? this.isSynced,
-    );
-  }
-}
-
-class SaleItem {
-  final String? id;
-  late final String saleId;
-  final String productId;
-  final int quantity;
-  final double unitPrice;
-  final double totalPrice;
-
-  SaleItem({
-    this.id,
-    required this.saleId,
-    required this.productId,
-    required this.quantity,
-    required this.unitPrice,
-    required this.totalPrice,
-  }) {
-    _validateSaleItem();
-  }
-
-  void _validateSaleItem() {
-    if (quantity <= 0) {
-      throw ArgumentError('Quantity must be greater than zero');
-    }
-    if (quantity > ValidationConstants.maxSaleQuantity) {
-      throw ArgumentError('Quantity cannot exceed 1000 items');
-    }
-    if (unitPrice <= 0) {
-      throw ArgumentError('Unit price must be greater than zero');
-    }
-    if (totalPrice <= 0) {
-      throw ArgumentError('Total price must be greater than zero');
-    }
-    // Validate that totalPrice matches quantity * unitPrice
-    final expectedTotal = quantity * unitPrice;
-    if ((totalPrice - expectedTotal).abs() > 0.01) {
-      throw ArgumentError('Total price does not match quantity × unit price');
-    }
-  }
-
-  bool get isValidCalculation =>
-      (totalPrice - (quantity * unitPrice)).abs() <= 0.01;
-
-  Map<String, dynamic> toMap() {
-    return {
-      'id': id,
-      'sale_id': saleId,
-      'product_id': productId,
-      'quantity': quantity,
-      'unit_price': unitPrice,
-      'total_price': totalPrice,
-    };
-  }
-
-  factory SaleItem.fromMap(Map<String, dynamic> map) {
-    return SaleItem(
-      id: map['id']?.toString(),
-      saleId: map['sale_id']?.toString() ?? '',
-      productId: map['product_id']?.toString() ?? '',
-      quantity: map['quantity'] ?? 0,
-      unitPrice: (map['unit_price'] ?? 0).toDouble(),
-      totalPrice: (map['total_price'] ?? 0).toDouble(),
-    );
-  }
-
-  SaleItem copyWith({
-    String? id,
-    String? saleId,
-    String? productId,
-    int? quantity,
-    double? unitPrice,
-    double? totalPrice,
-  }) {
-    return SaleItem(
-      id: id ?? this.id,
-      saleId: saleId ?? this.saleId,
-      productId: productId ?? this.productId,
-      quantity: quantity ?? this.quantity,
-      unitPrice: unitPrice ?? this.unitPrice,
-      totalPrice: totalPrice ?? this.totalPrice,
     );
   }
 }

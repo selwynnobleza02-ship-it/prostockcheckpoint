@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/receipt.dart';
 import 'package:prostock/models/sale.dart';
+import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/services/firestore/customer_service.dart';
 import 'package:prostock/services/firestore/product_service.dart';
 import 'package:prostock/services/firestore/sale_service.dart';
@@ -26,11 +27,7 @@ Widget buildSummaryCard(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(
-                  icon,
-                  color: color,
-                  size: 28,
-                ),
+                Icon(icon, color: color, size: 28),
                 const SizedBox(width: 8),
                 Expanded(
                   child: GestureDetector(
@@ -81,9 +78,7 @@ Widget buildSummaryCard(
                         ),
                         if (_formatLargeNumber(value) != value)
                           Padding(
-                            padding: const EdgeInsets.only(
-                              top: 2,
-                            ),
+                            padding: const EdgeInsets.only(top: 2),
                             child: Text(
                               'Tap for details',
                               style: TextStyle(
@@ -104,10 +99,7 @@ Widget buildSummaryCard(
             Flexible(
               child: Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey,
-                ),
+                style: const TextStyle(fontSize: 13, color: Colors.grey),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -147,9 +139,7 @@ Future<void> showHistoricalReceipt(BuildContext context, Sale sale) async {
 
     List<SaleItem> saleItems = [];
     if (sale.isSynced == 1) {
-      saleItems = await saleService.getSaleItemsBySaleId(
-        sale.id!,
-      );
+      saleItems = await saleService.getSaleItemsBySaleId(sale.id!);
     } else {
       final localItems = await LocalDatabaseService.instance.getSaleItems(
         sale.id!,
@@ -159,17 +149,13 @@ Future<void> showHistoricalReceipt(BuildContext context, Sale sale) async {
 
     String? customerName;
     if (sale.customerId != null) {
-      final customer = await customerService.getCustomerById(
-        sale.customerId!,
-      );
+      final customer = await customerService.getCustomerById(sale.customerId!);
       customerName = customer?.name;
     }
 
     List<ReceiptItem> receiptItems = [];
     for (final saleItem in saleItems) {
-      final product = await productService.getProductById(
-        saleItem.productId,
-      );
+      final product = await productService.getProductById(saleItem.productId);
       receiptItems.add(
         ReceiptItem(
           productName: product?.name ?? 'Unknown Product',

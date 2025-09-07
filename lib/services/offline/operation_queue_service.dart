@@ -1,6 +1,6 @@
-
 import 'package:prostock/models/offline_operation.dart';
 import 'package:prostock/models/sale.dart';
+import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/utils/error_logger.dart';
 

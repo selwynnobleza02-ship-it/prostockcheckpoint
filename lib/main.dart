@@ -56,18 +56,20 @@ class MyApp extends StatelessWidget {
               InventoryProvider(offlineManager: context.read<OfflineManager>()),
         ),
         ChangeNotifierProvider(create: (_) => CustomerProvider()),
-        ChangeNotifierProxyProvider2<InventoryProvider, CustomerProvider, SalesProvider>(
+        ChangeNotifierProxyProvider3<InventoryProvider, CustomerProvider, AuthProvider, SalesProvider>(
           create: (context) => SalesProvider(
             inventoryProvider: context.read<InventoryProvider>(),
             offlineManager: context.read<OfflineManager>(),
             customerProvider: context.read<CustomerProvider>(),
+            authProvider: context.read<AuthProvider>(),
           ),
-          update: (context, inventoryProvider, customerProvider, previousSalesProvider) =>
+          update: (context, inventoryProvider, customerProvider, authProvider, previousSalesProvider) =>
               previousSalesProvider ??
               SalesProvider(
                 inventoryProvider: inventoryProvider,
                 offlineManager: context.read<OfflineManager>(),
                 customerProvider: customerProvider,
+                authProvider: authProvider,
               ),
         ),
         ChangeNotifierProxyProvider<CustomerProvider, CreditProvider>(

@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/models/offline_operation.dart';
 import 'package:prostock/models/sale.dart';
+import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/models/sync_failure.dart';
 import 'package:prostock/providers/sync_failure_provider.dart';
 import 'package:prostock/services/local_database_service.dart';
@@ -17,7 +17,11 @@ class SyncService {
   final SyncFailureProvider _syncFailureProvider;
   static const int maxRetries = 3;
 
-  SyncService(this._queueService, this._localDatabaseService, this._syncFailureProvider);
+  SyncService(
+    this._queueService,
+    this._localDatabaseService,
+    this._syncFailureProvider,
+  );
 
   Future<void> syncPendingOperations() async {
     final operationsToSync = await _queueService.getPendingOperations();

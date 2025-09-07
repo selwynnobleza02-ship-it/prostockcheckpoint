@@ -3,6 +3,7 @@ import 'package:prostock/models/credit_transaction.dart';
 import 'package:prostock/models/paginated_result.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/models/sale.dart';
+import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/services/firestore/firestore_exception.dart';
 import 'package:prostock/utils/app_constants.dart';
 import 'package:prostock/utils/constants.dart';
