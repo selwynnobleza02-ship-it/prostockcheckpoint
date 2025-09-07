@@ -6,6 +6,7 @@ import '../../providers/inventory_provider.dart';
 import '../../models/customer.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../widgets/receipt_dialog.dart';
+import '../../widgets/confirmation_dialog.dart';
 import 'dart:async';
 
 import 'components/cart_view.dart';
@@ -70,6 +71,15 @@ class _POSScreenState extends State<POSScreen> {
   }
 
   Future<void> _completeSale() async {
+    final confirmed = await showConfirmationDialog(
+      context: context,
+      title: 'Complete Sale',
+      content: 'Are you sure you want to complete this sale?',
+      confirmText: 'Complete',
+    );
+
+    if (confirmed != true) return;
+
     setState(() {
       _isProcessingSale = true;
     });

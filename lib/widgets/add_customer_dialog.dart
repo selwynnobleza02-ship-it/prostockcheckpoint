@@ -6,6 +6,7 @@ import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/services/cloudinary_service.dart';
 import 'package:prostock/utils/error_logger.dart';
+import 'package:prostock/widgets/confirmation_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -145,6 +146,16 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
 
   Future<void> _saveCustomer() async {
     if (!_formKey.currentState!.validate()) return;
+
+    final confirmed = await showConfirmationDialog(
+      context: context,
+      title: _isEditMode ? 'Update Customer' : 'Add Customer',
+      content: _isEditMode
+          ? 'Are you sure you want to save changes to ${widget.customer!.name}?': 'Are you sure you want to add this customer?',
+      confirmText: _isEditMode ? 'Save' : 'Add',
+    );
+
+    if (confirmed != true) return;
 
     setState(() {
       _isLoading = true;

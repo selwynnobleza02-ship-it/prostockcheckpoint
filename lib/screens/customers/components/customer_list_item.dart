@@ -3,7 +3,7 @@ import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/screens/customers/dialogs/balance_management_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
-import 'package:prostock/screens/customers/dialogs/delete_confirmation_dialog.dart';
+import 'package:prostock/widgets/confirmation_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/transaction_history_dialog.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/add_customer_dialog.dart';
@@ -82,7 +82,7 @@ class CustomerListItem extends StatelessWidget {
               child: Text('Delete'),
             ),
           ],
-          onSelected: (value) {
+          onSelected: (value) async {
             switch (value) {
               case 'view':
                 showDialog(
@@ -111,10 +111,40 @@ class CustomerListItem extends StatelessWidget {
                 );
                 break;
               case 'delete':
-                showDialog(
+                final confirmed = await showConfirmationDialog(
                   context: context,
-                  builder: (context) => DeleteConfirmationDialog(customer: customer),
+                  title: 'Delete Customer',
+                  content: 'Are you sure you want to delete ${customer.name}? This action cannot be undone.',
+                  confirmText: 'Delete',
                 );
+                if (confirmed == true) {
+                  final provider = Provider.of<CustomerProvider>(
+                    context,
+                    listen: false,
+                  );
+                  final success = await provider.deleteCustomer(customer.id!);
+                  if (context.mounted) {
+                    if (success) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Customer "${customer.name}" deleted successfully!',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Failed to delete customer. ${provider.error ?? ''}',
+                          ),
+                          backgroundColor: Colors.red,
+                        ),
+                      );
+                    }
+                  }
+                }
                 break;
             }
           },
