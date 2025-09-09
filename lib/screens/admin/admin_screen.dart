@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:prostock/screens/admin/user_sales_screen.dart';
+import 'package:prostock/screens/admin/activity_screen.dart';
 import 'package:prostock/screens/settings/settings_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
@@ -23,7 +23,7 @@ class _AdminScreenState extends State<AdminScreen>
   late List<Animation<double>> _scaleAnimations;
 
   final List<Widget> _screens = [
-    const UserSalesScreen(),
+    const ActivityScreen(),
     const POSScreen(),
     const InventoryScreen(),
     const CustomersScreen(),

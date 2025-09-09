@@ -45,22 +45,22 @@ class SaleItem {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'sale_id': saleId,
-      'product_id': productId,
+      'saleId': saleId,
+      'productId': productId,
       'quantity': quantity,
-      'unit_price': unitPrice,
-      'total_price': totalPrice,
+      'unitPrice': unitPrice,
+      'totalPrice': totalPrice,
     };
   }
 
   factory SaleItem.fromMap(Map<String, dynamic> map) {
     return SaleItem(
       id: map['id']?.toString(),
-      saleId: map['sale_id']?.toString() ?? '',
-      productId: map['product_id']?.toString() ?? '',
+      saleId: map['saleId']?.toString() ?? '',
+      productId: map['productId']?.toString() ?? '',
       quantity: map['quantity'] ?? 0,
-      unitPrice: (map['unit_price'] ?? 0).toDouble(),
-      totalPrice: (map['total_price'] ?? 0).toDouble(),
+      unitPrice: (map['unitPrice'] ?? 0).toDouble(),
+      totalPrice: (map['totalPrice'] ?? 0).toDouble(),
     );
   }
 

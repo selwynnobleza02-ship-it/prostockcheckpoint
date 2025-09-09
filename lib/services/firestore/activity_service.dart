@@ -15,6 +15,20 @@ class ActivityService {
   CollectionReference get users =>
       _firestore.collection(AppConstants.usersCollection);
 
+  Stream<List<UserActivity>> getActivitiesStream({String? userId}) {
+    Query query = activities.orderBy('timestamp', descending: true);
+    if (userId != null) {
+      query = query.where('user_id', isEqualTo: userId);
+    }
+    return query.snapshots().map((snapshot) {
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        data['id'] = doc.id;
+        return UserActivity.fromMap(data);
+      }).toList();
+    });
+  }
+
   Future<void> logActivity(
     String userId,
     String action,
@@ -28,7 +42,7 @@ class ActivityService {
           : <String, dynamic>{};
 
       await activities.add({
-        'userId': userId,
+        'user_id': userId,
         'username': username, // Denormalized username
         'action': action,
         'details': details,
@@ -59,7 +73,7 @@ class ActivityService {
   }) async {
     try {
       final snapshot = await activities
-          .where('userId', isEqualTo: userId)
+          .where('user_id', isEqualTo: userId)
           .orderBy('timestamp', descending: true)
           .limit(limit)
           .get();
@@ -89,7 +103,7 @@ class ActivityService {
         final activityData = activityDoc.data() as Map<String, dynamic>;
         activityData['id'] = activityDoc.id;
         // Get username
-        final userId = activityData['userId'];
+        final userId = activityData['user_id'];
         final userDoc = await users.doc(userId).get();
         if (userDoc.exists) {
           final userData = userDoc.data() as Map<String, dynamic>;
@@ -118,7 +132,7 @@ class ActivityService {
           .where('timestamp', isLessThanOrEqualTo: Timestamp.fromDate(end));
 
       if (userId != null) {
-        query = query.where('userId', isEqualTo: userId);
+        query = query.where('user_id', isEqualTo: userId);
       }
 
       final snapshot = await query.orderBy('timestamp', descending: true).get();
@@ -157,7 +171,7 @@ class ActivityService {
       }
 
       Query query = activities
-          .where('userId', whereIn: userIds)
+          .where('user_id', whereIn: userIds)
           .orderBy('timestamp', descending: true);
 
       if (lastDocument != null) {

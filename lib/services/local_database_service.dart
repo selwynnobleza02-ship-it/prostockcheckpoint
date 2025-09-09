@@ -20,11 +20,10 @@ class LocalDatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 1, onCreate: _createDB);
+    return await openDatabase(path, version: 3, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future _createDB(Database db, int version) async {
-    const idType = 'INTEGER PRIMARY KEY AUTOINCREMENT';
     const textType = 'TEXT NOT NULL';
     const boolType = 'BOOLEAN NOT NULL';
     const integerType = 'INTEGER NOT NULL';
@@ -32,7 +31,7 @@ class LocalDatabaseService {
 
     await db.execute('''
 CREATE TABLE customers (
-  id $idType,
+  id TEXT PRIMARY KEY,
   name $textType,
   email $textType,
   phoneNumber $textType,
@@ -70,6 +69,31 @@ CREATE TABLE sale_items (
   totalPrice $doubleType
 )
 ''');
+  }
+
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await db.execute('''
+CREATE TABLE customers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  phoneNumber TEXT NOT NULL,
+  address TEXT NOT NULL,
+  balance REAL NOT NULL,
+  creditLimit REAL NOT NULL,
+  lastActivity TEXT NOT NULL,
+  localImagePath TEXT NOT NULL,
+  imageUrl TEXT NOT NULL,
+  createdAt TEXT NOT NULL,
+  updatedAt TEXT NOT NULL
+)
+''');
+      await db.execute("ALTER TABLE sale_items ADD COLUMN saleId TEXT NOT NULL DEFAULT ''");
+    }
+    if (oldVersion < 3) {
+      // If you need to make more changes in the future, you can add them here.
+    }
   }
 
   Future<List<Map<String, dynamic>>> getSales() async {

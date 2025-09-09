@@ -265,4 +265,17 @@ class AuthProvider with ChangeNotifier {
       return false;
     }
   }
+
+  Future<List<AppUser>> getAllUsers() async {
+    try {
+      return await _userService.getAllUsers();
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error getting all users',
+        error: e,
+        context: 'AuthProvider.getAllUsers',
+      );
+      return [];
+    }
+  }
 }

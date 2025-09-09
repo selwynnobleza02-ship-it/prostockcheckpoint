@@ -1,5 +1,5 @@
 class UserActivity {
-  final int? id;
+  final String? id;
   final String userId;
   final String action;
   final String? productName;

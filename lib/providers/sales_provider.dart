@@ -28,6 +28,7 @@ class SalesProvider with ChangeNotifier {
   final InventoryProvider _inventoryProvider;
   final OfflineManager _offlineManager;
   final CustomerProvider _customerProvider;
+  final AuthProvider _authProvider;
 
   final Map<String, List<Sale>> _cache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
@@ -40,9 +41,10 @@ class SalesProvider with ChangeNotifier {
     required OfflineManager offlineManager,
     required CustomerProvider customerProvider,
     required AuthProvider authProvider,
-  }) : _inventoryProvider = inventoryProvider,
-       _offlineManager = offlineManager,
-       _customerProvider = customerProvider;
+  })  : _inventoryProvider = inventoryProvider,
+        _offlineManager = offlineManager,
+        _customerProvider = customerProvider,
+        _authProvider = authProvider;
 
   List<Sale> get sales => _sales;
   List<SaleItem> get saleItems => _saleItems;
@@ -327,6 +329,8 @@ class SalesProvider with ChangeNotifier {
     _error = null;
     notifyListeners();
 
+    Receipt? receipt;
+
     try {
       log('Completing sale...');
       final List<Product> productsInSale = [];
@@ -334,14 +338,10 @@ class SalesProvider with ChangeNotifier {
         final product = _inventoryProvider.getProductById(item.productId);
         if (product == null) {
           _error = 'Product not found: \${item.productId}';
-          _isLoading = false;
-          notifyListeners();
           return null;
         }
         if (product.stock < item.quantity) {
           _error = 'Insufficient stock for product: \${product.name}';
-          _isLoading = false;
-          notifyListeners();
           return null;
         }
         productsInSale.add(product);
@@ -351,17 +351,18 @@ class SalesProvider with ChangeNotifier {
         final customer = await _customerProvider.getCustomerById(customerId!);
         if (customer == null) {
           _error = 'Customer not found';
-          _isLoading = false;
-          notifyListeners();
           return null;
         }
 
         if (customer.balance + currentSaleTotal > customer.creditLimit) {
           _error = 'Credit limit exceeded';
-          _isLoading = false;
-          notifyListeners();
           return null;
         }
+      }
+
+      final currentUser = _authProvider.currentUser;
+      if (currentUser == null || currentUser.id == null) {
+        throw Exception('User not authenticated or user ID is null');
       }
 
       final sale = Sale(
@@ -371,7 +372,7 @@ class SalesProvider with ChangeNotifier {
         status: 'completed',
         createdAt: DateTime.now(),
         dueDate: dueDate,
-        userId: '',
+        userId: currentUser.id!,
       );
 
       if (_offlineManager.isOnline) {
@@ -396,8 +397,6 @@ class SalesProvider with ChangeNotifier {
           );
           if (!stockReduced) {
             _error = 'Failed to reduce stock for product: \${item.productId}';
-            _isLoading = false;
-            notifyListeners();
             return null;
           }
         }
@@ -409,13 +408,7 @@ class SalesProvider with ChangeNotifier {
           );
         }
 
-        final receipt = _createReceipt(saleId, customerId, paymentMethod);
-
-        _currentSaleItems.clear();
-        await loadSales();
-        _isLoading = false;
-        notifyListeners();
-        return receipt;
+        receipt = _createReceipt(saleId, customerId, paymentMethod);
       } else {
         log('Offline sale');
         final saleId = const Uuid().v4();
@@ -452,23 +445,28 @@ class SalesProvider with ChangeNotifier {
           );
         }
 
-        final receipt = _createReceipt(saleId, customerId, paymentMethod);
-
-        _currentSaleItems.clear();
-        _isLoading = false;
-        notifyListeners();
-        return receipt;
+        receipt = _createReceipt(saleId, customerId, paymentMethod);
       }
+
+                await _authProvider.logActivity(
+                  'COMPLETE_SALE',
+                  details: 'Sale completed with total: ${receipt.total}',
+                  amount: receipt.total,
+                );
+      _currentSaleItems.clear();
+      await loadSales();
+      return receipt;
     } catch (e) {
       _error = 'Error completing sale: \${e.toString()}';
-      _isLoading = false;
-      notifyListeners();
       ErrorLogger.logError(
         'Error completing sale',
         error: e,
         context: 'SalesProvider.completeSale',
       );
       return null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 

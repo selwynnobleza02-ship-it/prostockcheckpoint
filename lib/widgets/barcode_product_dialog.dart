@@ -166,6 +166,7 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
 
             // Category Dropdown
             DropdownButtonFormField<String>(
+              isExpanded: true, // Added to allow the dropdown to expand
               initialValue: _selectedCategory,
               decoration: const InputDecoration(
                 labelText: 'Category',
@@ -173,7 +174,13 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
                 prefixIcon: Icon(Icons.category),
               ),
               items: _categories.map((category) {
-                return DropdownMenuItem(value: category, child: Text(category));
+                return DropdownMenuItem(
+                  value: category,
+                  child: Text(
+                    category,
+                    overflow: TextOverflow.ellipsis, // Handle long text
+                  ),
+                );
               }).toList(),
               onChanged: (value) {
                 setState(() {
