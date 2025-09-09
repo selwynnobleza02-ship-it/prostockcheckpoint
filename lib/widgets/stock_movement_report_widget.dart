@@ -97,11 +97,7 @@ class _StockMovementReportWidgetState extends State<StockMovementReportWidget> {
                 );
               }
 
-              return RefreshIndicator(
-                onRefresh: () async {
-                  _loadMovements();
-                },
-                child: ListView.builder(
+              return ListView.builder(
                   itemCount: movements.length,
                   itemBuilder: (context, index) {
                     final movement = movements[index];
@@ -148,8 +144,7 @@ class _StockMovementReportWidgetState extends State<StockMovementReportWidget> {
                       ),
                     );
                   },
-                ),
-              );
+                );
             },
           ),
         ),

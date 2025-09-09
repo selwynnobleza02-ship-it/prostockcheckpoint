@@ -17,9 +17,7 @@ class SalesReportTab extends StatelessWidget {
         final totalSales = reportService.calculateTotalSales(provider.sales);
         final todaySales = reportService.calculateTodaySales(provider.sales);
 
-        return RefreshIndicator(
-          onRefresh: () => provider.loadSales(refresh: true),
-          child: SingleChildScrollView(
+        return SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             padding: const EdgeInsets.all(16),
             child: Column(
@@ -94,8 +92,7 @@ class SalesReportTab extends StatelessWidget {
                   ),
               ],
             ),
-          ),
-        );
+          );
       },
     );
   }

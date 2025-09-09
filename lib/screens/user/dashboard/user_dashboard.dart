@@ -167,8 +167,10 @@ class UserDashboard extends StatelessWidget {
 
     try {
       final activityService = ActivityService(FirebaseFirestore.instance);
-      final activities = await activityService
-          .getUserActivitiesPaginated(userId: userId, limit: 10);
+      final activities = await activityService.getUserActivitiesPaginated(
+        role: 'user',
+        limit: 10,
+      );
       return activities.items.map((activity) => activity.toMap()).toList();
     } catch (e) {
       return [];

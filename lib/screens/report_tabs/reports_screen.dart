@@ -94,6 +94,12 @@ class _ReportsScreenState extends State<ReportsScreen>
     return Scaffold(
       appBar: AppBar(
         title: const Text('Reports'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _loadData(refresh: true),
+          ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           isScrollable: true,

@@ -17,9 +17,9 @@ class OperationQueueService {
           .map((item) => SaleItem.fromMap(item as Map<String, dynamic>))
           .toList();
 
-      await _localDatabaseService.insertSale(sale.toMap());
+      await _localDatabaseService.insertSale(sale);
       for (final item in saleItems) {
-        await _localDatabaseService.insertSaleItem(item.toMap());
+        await _localDatabaseService.insertSaleItem(item);
       }
     }
 

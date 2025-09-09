@@ -2,6 +2,7 @@ import 'package:prostock/models/customer.dart';
 import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/models/sale.dart';
+import 'package:prostock/models/sale_item.dart';
 
 class ReportService {
   // Sales calculations
@@ -37,11 +38,15 @@ class ReportService {
     return calculateTotalSales(sales);
   }
 
-  double calculateTotalCost(List<Product> products) {
-    return products.fold(
-      0.0,
-      (sum, product) => sum + (product.cost * product.stock),
-    );
+  double calculateTotalCost(List<SaleItem> saleItems, List<Product> products) {
+    final productMap = {for (var p in products) p.id: p};
+    return saleItems.fold(0.0, (sum, item) {
+      final product = productMap[item.productId];
+      if (product != null) {
+        return sum + (item.quantity * product.cost);
+      }
+      return sum;
+    });
   }
 
   double calculateTotalLoss(List<Loss> losses) {
@@ -83,5 +88,38 @@ class ReportService {
       0.0,
       (sum, product) => sum + (product.price * product.stock),
     );
+  }
+
+  List<Product> getTopSellingProducts(
+    List<SaleItem> saleItems,
+    List<Product> products,
+  ) {
+    final productSaleCount = <String, int>{};
+    for (final item in saleItems) {
+      productSaleCount.update(item.productId, (value) => value + item.quantity,
+          ifAbsent: () => item.quantity);
+    }
+
+    final sortedProductIds = productSaleCount.keys.toList(
+      growable: false,
+    )..sort((a, b) => productSaleCount[b]!.compareTo(productSaleCount[a]!));
+
+    final productMap = {for (var p in products) p.id: p};
+    final topProducts = sortedProductIds
+        .map((id) => productMap[id])
+        .where((p) => p != null)
+        .cast<Product>()
+        .toList();
+
+    return topProducts;
+  }
+
+  Map<String, double> getLossBreakdown(List<Loss> losses) {
+    final breakdown = <String, double>{};
+    for (final loss in losses) {
+      breakdown.update(loss.reason, (value) => value + loss.totalCost,
+          ifAbsent: () => loss.totalCost);
+    }
+    return breakdown;
   }
 }

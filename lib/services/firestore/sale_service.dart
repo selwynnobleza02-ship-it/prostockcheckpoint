@@ -229,6 +229,42 @@ class SaleService {
     }
   }
 
+  Future<List<SaleItem>> getSaleItemsBySaleIds(
+    List<String> saleIds,
+  ) async {
+    if (saleIds.isEmpty) {
+      return [];
+    }
+
+    try {
+      final List<SaleItem> allSaleItems = [];
+      final saleIdBatches = _splitList(saleIds, 30);
+
+      for (final batch in saleIdBatches) {
+        final snapshot =
+            await saleItems.where('saleId', whereIn: batch).get();
+        final items = snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          data['id'] = doc.id;
+          return SaleItem.fromMap(data);
+        }).toList();
+        allSaleItems.addAll(items);
+      }
+
+      return allSaleItems;
+    } catch (e) {
+      throw FirestoreException('Failed to get sale items by sale IDs: $e');
+    }
+  }
+
+  List<List<T>> _splitList<T>(List<T> list, int size) {
+    final chunks = <List<T>>[];
+    for (var i = 0; i < list.length; i += size) {
+      chunks.add(list.sublist(i, i + size > list.length ? list.length : i + size));
+    }
+    return chunks;
+  }
+
   Future<PaginatedResult<Sale>> getSalesPaginated({
     int limit = ApiConstants.salesHistoryLimit,
     DocumentSnapshot? lastDocument,

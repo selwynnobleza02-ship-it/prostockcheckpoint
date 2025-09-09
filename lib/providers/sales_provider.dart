@@ -10,16 +10,16 @@ import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:uuid/uuid.dart';
 import '../models/sale.dart';
+import '../models/sale_item.dart';
 import '../models/product.dart';
 import '../models/receipt.dart';
 import '../utils/currency_utils.dart';
-import '../models/sale_item.dart';
-
 import '../utils/error_logger.dart';
 import 'inventory_provider.dart';
 
 class SalesProvider with ChangeNotifier {
   List<Sale> _sales = [];
+  List<SaleItem> _saleItems = [];
   final List<SaleItem> _currentSaleItems = [];
   bool _isLoading = false;
   String? _error;
@@ -45,6 +45,7 @@ class SalesProvider with ChangeNotifier {
        _customerProvider = customerProvider;
 
   List<Sale> get sales => _sales;
+  List<SaleItem> get saleItems => _saleItems;
   List<SaleItem> get currentSaleItems => _currentSaleItems;
   bool get isLoading => _isLoading;
   String? get error => _error;
@@ -117,6 +118,12 @@ class SalesProvider with ChangeNotifier {
       _sales = mergedSalesMap.values.toList();
       _sales.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       log('SalesProvider: Merged ${_sales.length} total sales.');
+
+      if (_sales.isNotEmpty) {
+        final saleIds = _sales.map((s) => s.id!).toList();
+        final saleService = SaleService(FirebaseFirestore.instance);
+        _saleItems = await saleService.getSaleItemsBySaleIds(saleIds);
+      }
 
       _setCachedData(cacheKey, _sales);
     } catch (e) {

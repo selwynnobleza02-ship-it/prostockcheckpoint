@@ -82,6 +82,13 @@ class CreditProvider with ChangeNotifier {
       return false;
     }
 
+    final customer = await customerProvider.getCustomerById(customerId);
+    if (customer != null && amount > customer.balance) {
+      _error = 'Payment amount cannot exceed the current balance.';
+      notifyListeners();
+      return false;
+    }
+
     _isLoading = true;
     _error = null;
     notifyListeners();

@@ -22,8 +22,22 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
     super.dispose();
   }
 
+  void _showErrorSnackBar(String message) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final creditProvider = Provider.of<CreditProvider>(context, listen: false);
+    final bool canPay = widget.customer.balance > 0;
+
     return AlertDialog(
       title: Text('Manage Balance - ${widget.customer.name}'),
       content: Column(
@@ -67,6 +81,7 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
               border: OutlineInputBorder(),
               helperText: 'Enter amount customer is paying',
             ),
+            enabled: canPay,
           ),
         ],
       ),
@@ -76,44 +91,47 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
           child: const Text('Cancel'),
         ),
         ElevatedButton(
-          onPressed: () async {
-            final amount = double.tryParse(_paymentController.text);
-            if (amount != null && amount > 0) {
-              final creditProvider = Provider.of<CreditProvider>(
-                context,
-                listen: false,
-              );
+          onPressed: canPay
+              ? () async {
+                  final amount = double.tryParse(_paymentController.text);
+                  if (amount == null || amount <= 0) {
+                    _showErrorSnackBar(
+                      'Payment amount must be a valid number greater than zero.',
+                    );
+                    return;
+                  }
 
-              final success = await creditProvider.recordPayment(
-                widget.customer.id!,
-                amount,
-                description: 'Payment received from ${widget.customer.name}',
-              );
+                  if (amount > widget.customer.balance) {
+                    _showErrorSnackBar(
+                      'Payment amount cannot exceed the current balance.',
+                    );
+                    return;
+                  }
 
-              if (success) {
-                if (context.mounted) {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Payment of ₱${amount.toStringAsFixed(2)} recorded successfully',
-                      ),
-                      backgroundColor: Colors.green,
-                    ),
+                  final success = await creditProvider.recordPayment(
+                    widget.customer.id!,
+                    amount,
+                    description:
+                        'Payment received from ${widget.customer.name}',
                   );
+
+                  if (success) {
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            'Payment of ₱${amount.toStringAsFixed(2)} recorded successfully',
+                          ),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                    }
+                  } else {
+                    _showErrorSnackBar('Failed to record payment.');
+                  }
                 }
-              } else {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Failed to record payment'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                }
-              }
-            }
-          },
+              : null,
           child: const Text('Record Payment'),
         ),
       ],

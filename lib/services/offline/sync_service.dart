@@ -180,10 +180,10 @@ class SyncService {
             .toList();
 
         unawaited(
-          _localDatabaseService.insertSale(sale.copyWith(isSynced: 1).toMap()),
+          _localDatabaseService.insertSale(sale.copyWith(isSynced: 1)),
         );
         for (final item in saleItems) {
-          unawaited(_localDatabaseService.insertSaleItem(item.toMap()));
+          unawaited(_localDatabaseService.insertSaleItem(item));
         }
 
         final List<Map<String, dynamic>> operations = [];

@@ -134,13 +134,30 @@ class ActivityService {
   }
 
   Future<PaginatedResult<UserActivity>> getUserActivitiesPaginated({
-    required String userId,
+    String? userId,
+    String? role,
     int limit = ApiConstants.productSearchLimit,
     DocumentSnapshot? lastDocument,
   }) async {
+    if (userId == null && role == null) {
+      throw ArgumentError('Either userId or role must be provided.');
+    }
+
     try {
+      List<String> userIds = [];
+      if (role != null) {
+        final usersSnapshot =
+            await users.where('role', isEqualTo: role).get();
+        userIds = usersSnapshot.docs.map((doc) => doc.id).toList();
+        if (userIds.isEmpty) {
+          return PaginatedResult(items: [], lastDocument: null);
+        }
+      } else if (userId != null) {
+        userIds.add(userId);
+      }
+
       Query query = activities
-          .where('userId', isEqualTo: userId)
+          .where('userId', whereIn: userIds)
           .orderBy('timestamp', descending: true);
 
       if (lastDocument != null) {
