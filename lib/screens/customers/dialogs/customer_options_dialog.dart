@@ -4,6 +4,7 @@ import 'package:prostock/models/customer.dart';
 import 'package:prostock/screens/customers/dialogs/balance_management_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/transaction_history_dialog.dart';
+import 'package:prostock/screens/pos/pos_screen.dart';
 
 class CustomerOptionsDialog extends StatelessWidget {
   final Customer customer;
@@ -49,6 +50,21 @@ class CustomerOptionsDialog extends StatelessWidget {
               );
             },
             child: const Text('Transaction History'),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => POSScreen(
+                    customer: customer,
+                    paymentMethod: 'credit',
+                  ),
+                ),
+              );
+            },
+            child: const Text('Utang'),
           ),
         ],
       ),

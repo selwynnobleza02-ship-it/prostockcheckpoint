@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/services/report_service.dart';
@@ -351,7 +352,11 @@ class CustomersReportTab extends StatelessWidget {
                           ],
                         ),
                         onTap: () {
-                          // TODO: Navigate to customer details or payment screen
+                          showDialog(
+                            context: context,
+                            builder: (context) =>
+                                CustomerDetailsDialog(customer: customerData),
+                          );
                         },
                       ),
                     );

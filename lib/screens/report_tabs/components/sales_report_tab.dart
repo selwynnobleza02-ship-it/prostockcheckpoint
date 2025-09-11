@@ -274,7 +274,7 @@ class SalesReportTab extends StatelessWidget {
                           children: [
                             const SizedBox(height: 4),
                             Text(
-                              '${_formatDate(sale.createdAt)}',
+                              _formatDate(sale.createdAt),
                               style: TextStyle(color: Colors.grey.shade600),
                             ),
                             Text(

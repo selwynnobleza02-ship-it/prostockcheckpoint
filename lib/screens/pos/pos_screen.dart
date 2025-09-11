@@ -14,7 +14,10 @@ import 'components/product_grid_view.dart';
 import 'components/product_search_view.dart';
 
 class POSScreen extends StatefulWidget {
-  const POSScreen({super.key});
+  final Customer? customer;
+  final String? paymentMethod;
+
+  const POSScreen({super.key, this.customer, this.paymentMethod});
 
   @override
   State<POSScreen> createState() => _POSScreenState();
@@ -32,6 +35,10 @@ class _POSScreenState extends State<POSScreen> {
   @override
   void initState() {
     super.initState();
+    _selectedCustomer = widget.customer;
+    if (widget.paymentMethod != null) {
+      _paymentMethod = widget.paymentMethod!;
+    }
     _productSearchController.addListener(_onProductSearchChanged);
   }
 
@@ -84,9 +91,9 @@ class _POSScreenState extends State<POSScreen> {
       _isProcessingSale = true;
     });
     try {
-      DateTime? dueDate;
-      if (_paymentMethod == 'credit') {
-        dueDate = await showDatePicker(
+          if (!mounted) return;
+          DateTime? dueDate;
+          if (_paymentMethod == 'credit') {        dueDate = await showDatePicker(
           context: context,
           initialDate: DateTime.now().add(const Duration(days: 30)),
           firstDate: DateTime.now(),

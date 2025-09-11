@@ -277,7 +277,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           if (isConnected && address != null) ...[
             Card(
               elevation: 2,
-              color: Colors.green.withOpacity(0.1),
+              color: Colors.green.withAlpha(26),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Column(
@@ -362,7 +362,7 @@ class _PrinterSettingsScreenState extends State<PrinterSettingsScreen> {
           ] else ...[
             Card(
               elevation: 2,
-              color: Colors.grey.withOpacity(0.1),
+              color: Colors.grey.withAlpha(26),
               child: Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Row(

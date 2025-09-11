@@ -295,7 +295,7 @@ class SaleService {
       query = query.limit(limit);
 
       final snapshot = await query.get();
-      print('SaleService: Fetched ${snapshot.docs.length} sales documents.');
+
 
       final salesList = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;

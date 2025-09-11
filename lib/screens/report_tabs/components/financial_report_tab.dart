@@ -45,11 +45,15 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
       initialDateRange: initialDateRange,
     );
 
+    if (!mounted) return; // This check is already here
+
     if (newDateRange != null) {
       setState(() {
         _startDate = newDateRange.start;
         _endDate = newDateRange.end;
       });
+      // Add another mounted check here
+      if (!context.mounted) return;
       Provider.of<SalesProvider>(
         context,
         listen: false,
@@ -148,7 +152,6 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                   ),
                 ],
               ),
-
 
               // UPDATED: Expanded grid with new metrics
               GridView.count(

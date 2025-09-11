@@ -117,9 +117,8 @@ class _RetailCreditAppState extends State<RetailCreditApp> {
               seedColor: Colors.blue,
               brightness: Brightness.dark,
               // Customize dark theme colors
-              background: Colors.grey[900],
-              surface: Colors.grey[850],
-              onSurface: Colors.white,
+              surface: Colors.grey[900],
+              surfaceContainer: Colors.grey[850],
             ),
             cardColor: Colors.grey[800],
             useMaterial3: true,

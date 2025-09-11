@@ -24,43 +24,61 @@ class LocalDatabaseService {
   }
 
   Future _createDB(Database db, int version) async {
+    await _createTables(db);
+  }
+
+  Future<void> _createTables(Database db) async {
     const textType = 'TEXT NOT NULL';
-    const boolType = 'BOOLEAN NOT NULL';
     const integerType = 'INTEGER NOT NULL';
     const doubleType = 'REAL NOT NULL';
 
     await db.execute('''
-CREATE TABLE customers (
+CREATE TABLE IF NOT EXISTS customers (
   id TEXT PRIMARY KEY,
-  name $textType,
-  email $textType,
-  phoneNumber $textType,
-  address $textType,
-  balance $doubleType,
-  creditLimit $doubleType,
-  lastActivity $textType,
-  localImagePath $textType,
-  imageUrl $textType,
-  createdAt $textType,
-  updatedAt $textType
+  name TEXT NOT NULL,
+  phone TEXT,
+  email TEXT,
+  address TEXT,
+  imageUrl TEXT,
+  localImagePath TEXT,
+  balance REAL NOT NULL,
+  credit_limit REAL NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
 )
 ''');
 
     await db.execute('''
-CREATE TABLE sales (
-  id $textType,
-  customerId $textType,
-  totalAmount $doubleType,
-  paymentMethod $textType,
-  status $textType,
-  createdAt $textType,
-  dueDate $textType,
-  userId $textType
+CREATE TABLE IF NOT EXISTS products (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  barcode TEXT,
+  cost REAL NOT NULL,
+  stock INTEGER NOT NULL,
+  min_stock INTEGER NOT NULL,
+  category TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL
 )
 ''');
 
     await db.execute('''
-CREATE TABLE sale_items (
+CREATE TABLE IF NOT EXISTS sales (
+  id TEXT NOT NULL,
+  user_id TEXT NOT NULL,
+  customer_id TEXT,
+  total_amount REAL NOT NULL,
+  payment_method TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  due_date TEXT,
+  is_synced INTEGER NOT NULL DEFAULT 0
+)
+''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS sale_items (
   id $textType,
   saleId $textType,
   productId $textType,
@@ -72,27 +90,21 @@ CREATE TABLE sale_items (
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    await _createTables(db); // Ensure all tables exist
+
     if (oldVersion < 2) {
-      await db.execute('''
-CREATE TABLE customers (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phoneNumber TEXT NOT NULL,
-  address TEXT NOT NULL,
-  balance REAL NOT NULL,
-  creditLimit REAL NOT NULL,
-  lastActivity TEXT NOT NULL,
-  localImagePath TEXT NOT NULL,
-  imageUrl TEXT NOT NULL,
-  createdAt TEXT NOT NULL,
-  updatedAt TEXT NOT NULL
-)
-''');
-      await db.execute("ALTER TABLE sale_items ADD COLUMN saleId TEXT NOT NULL DEFAULT ''");
+      try {
+        await db.execute("ALTER TABLE sale_items ADD COLUMN saleId TEXT NOT NULL DEFAULT ''");
+      } catch (e) {
+        // Column might already exist, ignore
+      }
     }
     if (oldVersion < 3) {
-      // If you need to make more changes in the future, you can add them here.
+      try {
+        await db.execute("ALTER TABLE sales ADD COLUMN is_synced INTEGER NOT NULL DEFAULT 0");
+      } catch (e) {
+        // Column might already exist, ignore
+      }
     }
   }
 

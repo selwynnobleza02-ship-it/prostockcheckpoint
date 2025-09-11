@@ -71,7 +71,6 @@ class Product {
       'id': id,
       'name': name,
       'barcode': barcode,
-      'price': price,
       'cost': cost,
       'stock': stock,
       'min_stock': minStock,

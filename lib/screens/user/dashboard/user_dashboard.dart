@@ -46,7 +46,7 @@ class UserDashboard extends StatelessWidget {
                 Text(
                   'Make sales and manage inventory',
                   style: TextStyle(
-                    color: Colors.white.withOpacity(0.9),
+                    color: Colors.white.withAlpha(230),
                     fontSize: 16,
                   ),
                 ),

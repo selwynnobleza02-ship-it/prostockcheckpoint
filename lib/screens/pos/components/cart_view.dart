@@ -272,7 +272,7 @@ class CartViewState extends State<CartView> {
         border: Border(top: BorderSide(color: Colors.grey[300]!)),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
+            color: Colors.grey.withAlpha(26),
             spreadRadius: 1,
             blurRadius: 2,
             offset: const Offset(0, -1),

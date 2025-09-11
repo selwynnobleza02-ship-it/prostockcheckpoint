@@ -83,6 +83,9 @@ class CustomerListItem extends StatelessWidget {
             ),
           ],
           onSelected: (value) async {
+            // Check context.mounted before any async operations that use context
+            if (!context.mounted) return;
+
             switch (value) {
               case 'view':
                 showDialog(
@@ -118,6 +121,8 @@ class CustomerListItem extends StatelessWidget {
                   confirmText: 'Delete',
                 );
                 if (confirmed == true) {
+                  // Check context.mounted again after the await call
+                  if (!context.mounted) return;
                   final provider = Provider.of<CustomerProvider>(
                     context,
                     listen: false,

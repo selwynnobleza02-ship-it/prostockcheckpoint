@@ -3,6 +3,7 @@ import 'package:prostock/providers/sync_failure_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:prostock/providers/theme_provider.dart';
 import 'package:prostock/screens/settings/components/about_screen.dart';
+import 'package:prostock/screens/settings/components/user_management_screen.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import 'components/change_password_screen.dart';
@@ -42,6 +43,17 @@ class SettingsScreen extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => const PrinterSettingsScreen(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.people_outline),
+            title: const Text('User Management'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const UserManagementScreen(),
                 ),
               );
             },

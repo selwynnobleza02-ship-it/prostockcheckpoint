@@ -1,7 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class AboutScreen extends StatelessWidget {
   const AboutScreen({super.key});
+
+  Future<void> _launchURL(String url) async {
+    final Uri uri = Uri.parse(url);
+    if (!await launchUrl(uri)) {
+      throw 'Could not launch $url';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -18,21 +26,15 @@ class AboutScreen extends StatelessWidget {
           const Divider(),
           ListTile(
             title: const Text('Help & Support'),
-            onTap: () {
-              // TODO: Implement link to help and support page
-            },
+            onTap: () => _launchURL('https://your-support-page.com'),
           ),
           ListTile(
             title: const Text('Privacy Policy'),
-            onTap: () {
-              // TODO: Implement link to privacy policy page
-            },
+            onTap: () => _launchURL('https://your-privacy-policy.com'),
           ),
           ListTile(
             title: const Text('Terms of Service'),
-            onTap: () {
-              // TODO: Implement link to terms of service page
-            },
+            onTap: () => _launchURL('https://your-terms-of-service.com'),
           ),
         ],
       ),

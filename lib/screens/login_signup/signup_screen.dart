@@ -19,6 +19,9 @@ class _SignupScreenState extends State<SignupScreen> {
   UserRole _selectedRole = UserRole.user;
   bool _isLoading = false;
   bool _isPasswordVisible = false; // New state for password visibility
+  String? _usernameError;
+  String? _emailError;
+  String? _passwordError;
 
   @override
   void dispose() {
@@ -56,12 +59,13 @@ class _SignupScreenState extends State<SignupScreen> {
                 const SizedBox(height: 40),
                 TextFormField(
                   controller: _usernameController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Username',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.person),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.person),
                     filled: true,
                     fillColor: Colors.white70,
+                    errorText: _usernameError,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -73,12 +77,13 @@ class _SignupScreenState extends State<SignupScreen> {
                 const SizedBox(height: 20),
                 TextFormField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Email',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.email),
                     filled: true,
                     fillColor: Colors.white70,
+                    errorText: _emailError,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -110,6 +115,7 @@ class _SignupScreenState extends State<SignupScreen> {
                         });
                       },
                     ),
+                    errorText: _passwordError,
                   ),
                   obscureText: !_isPasswordVisible,
                   validator: (value) {
@@ -156,31 +162,45 @@ class _SignupScreenState extends State<SignupScreen> {
                             if (_formKey.currentState!.validate()) {
                               setState(() {
                                 _isLoading = true;
+                                _usernameError = null;
+                                _emailError = null;
+                                _passwordError = null;
                               });
-                              try {
-                                final authProvider = context
-                                    .read<AuthProvider>();
-                                await authProvider.createUser(
-                                  _usernameController.text,
-                                  _emailController.text,
-                                  _passwordController.text,
-                                  _selectedRole,
-                                );
+                              final authProvider =
+                                  context.read<AuthProvider>();
+                              final success = await authProvider.createUser(
+                                _usernameController.text,
+                                _emailController.text,
+                                _passwordController.text,
+                                _selectedRole,
+                              );
+
+                              if (success) {
                                 if (context.mounted) {
                                   Navigator.of(
                                     context,
                                   ).pushReplacementNamed('/login');
                                 }
-                              } catch (e) {
-                                if (mounted) {
-                                  _showErrorSnackBar(e.toString());
-                                }
-                              } finally {
-                                if (mounted) {
-                                  setState(() {
-                                    _isLoading = false;
-                                  });
-                                }
+                              } else {
+                                if (!mounted) return;
+                                final errorMessage = authProvider.error ?? 'Signup failed';
+                                setState(() {
+                                  if (errorMessage.contains('Username already exists')) {
+                                    _usernameError = 'Username already exists.';
+                                  } else if (errorMessage.contains('email-already-in-use') ||
+                                      errorMessage.contains('invalid-email')) {
+                                    _emailError = 'Invalid email or email already in use.';
+                                  } else if (errorMessage.contains('weak-password')) {
+                                    _passwordError = 'The password is too weak.';
+                                  } else {
+                                    _showErrorSnackBar(errorMessage);
+                                  }
+                                });
+                              }
+                              if (mounted) {
+                                setState(() {
+                                  _isLoading = false;
+                                });
                               }
                             }
                           },

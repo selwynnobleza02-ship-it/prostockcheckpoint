@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/screens/login_signup/forgot_password_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/utils/app_constants.dart';
 import '../../providers/auth_provider.dart';
@@ -18,6 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _passwordController = TextEditingController();
   bool _isLoading = false; // New state for loading indicator
   bool _isPasswordVisible = false; // New state for password visibility
+  String? _emailError;
+  String? _passwordError;
 
   @override
   void dispose() {
@@ -54,12 +57,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: UiConstants.spacingExtraLarge),
                 TextFormField(
                   controller: _emailController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     labelText: 'Email',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.email),
+                    border: const OutlineInputBorder(),
+                    prefixIcon: const Icon(Icons.email),
                     filled: true,
                     fillColor: Colors.white70,
+                    errorText: _emailError,
                   ),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
@@ -89,6 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         });
                       },
                     ),
+                    errorText: _passwordError,
                   ),
                   obscureText: !_isPasswordVisible,
                   validator: (value) {
@@ -102,47 +107,56 @@ class _LoginScreenState extends State<LoginScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed:
-                        _isLoading // Disable button when loading
+                    onPressed: _isLoading
                         ? null
                         : () async {
                             if (_formKey.currentState!.validate()) {
                               setState(() {
                                 _isLoading = true;
+                                _emailError = null;
+                                _passwordError = null;
                               });
-                              try {
-                                final authProvider = context
-                                    .read<AuthProvider>();
-                                final success = await authProvider.login(
-                                  _emailController.text,
-                                  _passwordController.text,
-                                );
+                              final authProvider = context.read<AuthProvider>();
+                              final success = await authProvider.login(
+                                _emailController.text,
+                                _passwordController.text,
+                              );
 
-                                if (success) {
-                                  // Check if the widget is still mounted
-                                  final userRole = authProvider.userRole;
-                                  if (!context.mounted) return;
-                                  if (userRole == UserRole.admin) {
-                                    Navigator.of(
-                                      context,
-                                    ).pushReplacementNamed('/admin');
-                                  } else {
-                                    Navigator.of(
-                                      context,
-                                    ).pushReplacementNamed('/user');
-                                  }
+                              if (success) {
+                                // Check if the widget is still mounted
+                                final userRole = authProvider.userRole;
+                                if (!context.mounted) return;
+                                if (userRole == UserRole.admin) {
+                                  Navigator.of(
+                                    context,
+                                  ).pushReplacementNamed('/admin');
                                 } else {
-                                  if (!mounted) return;
-                                  _showErrorSnackBar(
-                                    authProvider.error ?? 'Login failed',
-                                  );
+                                  Navigator.of(
+                                    context,
+                                  ).pushReplacementNamed('/user');
                                 }
-                              } finally {
-                                if (!mounted) {
-                                  setState(() {
-                                    _isLoading = false;
-                                  });
-                                }
+                              } else {
+                                if (!mounted) return;
+                                final errorMessage =
+                                    authProvider.error ?? 'Login failed';
+                                setState(() {
+                                  if (errorMessage.contains('user-not-found') ||
+                                      errorMessage.contains('invalid-email')) {
+                                    _emailError =
+                                        'Invalid email or user not found.';
+                                  } else if (errorMessage.contains(
+                                    'wrong-password',
+                                  )) {
+                                    _passwordError = 'Incorrect password.';
+                                  } else {
+                                    _showErrorSnackBar(errorMessage);
+                                  }
+                                });
+                              }
+                              if (mounted) {
+                                setState(() {
+                                  _isLoading = false;
+                                });
                               }
                             }
                           },
@@ -158,8 +172,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       backgroundColor: Colors.blueAccent,
                       foregroundColor: Colors.white,
                     ),
-                    child:
-                        _isLoading // Show loading indicator
+                    child: _isLoading
                         ? const SizedBox(
                             width: UiConstants.iconSizeSmall,
                             height: UiConstants.iconSizeSmall,
@@ -187,6 +200,20 @@ class _LoginScreenState extends State<LoginScreen> {
                   child: const Text(
                     'Create Account',
                     style: TextStyle(fontSize: UiConstants.fontSizeMedium),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => const ForgotPasswordScreen(),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(foregroundColor: Colors.grey),
+                  child: const Text(
+                    'Forgot Password?',
+                    style: TextStyle(fontSize: UiConstants.fontSizeSmall),
                   ),
                 ),
               ],

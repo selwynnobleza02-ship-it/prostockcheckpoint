@@ -194,7 +194,7 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<void> createUser(
+  Future<bool> createUser(
     String username,
     String email,
     String password,
@@ -205,7 +205,8 @@ class AuthProvider with ChangeNotifier {
       // Check if username already exists
       final existingUser = await _userService.getUserByUsername(username);
       if (existingUser != null) {
-        throw Exception('Username already exists');
+        _error = 'Username already exists';
+        return false;
       }
 
       final hashedPassword = PasswordHelper.hashPassword(password);
@@ -232,37 +233,56 @@ class AuthProvider with ChangeNotifier {
         if (credential.user != null) {
           await credential.user!.updateDisplayName(username);
           await logActivity('CREATE_USER', details: 'User $username created');
+          return true;
         } else {
-          throw Exception('Failed to create Firebase Auth user');
+          _error = 'Failed to create Firebase Auth user';
+          return false;
         }
       } catch (e) {
         // If Firebase Auth creation fails, delete the Firestore user
         if (newUser.id != null) {
           await _userService.deleteUser(newUser.id!);
         }
-        rethrow; // Re-throw the exception to be caught by the outer catch block
+        _error = e.toString();
+        return false;
       }
-    } catch (e) {
+    } on FirebaseAuthException catch (e) {
+      _error = e.message;
       ErrorLogger.logError(
         'Error creating user',
         error: e,
         context: 'AuthProvider.createUser',
-      ); // Replaced print with ErrorLogger
-      rethrow;
+      );
+      return false;
+    } catch (e) {
+      _error = e.toString();
+      ErrorLogger.logError(
+        'Error creating user',
+        error: e,
+        context: 'AuthProvider.createUser',
+      );
+      return false;
     }
   }
 
-  Future<bool> resetPassword(String email) async {
+  Future<String?> sendPasswordResetEmail(String email) async {
     try {
       await _firebaseAuth.sendPasswordResetEmail(email: email);
-      return true;
+      return null;
+    } on FirebaseAuthException catch (e) {
+      ErrorLogger.logError(
+        'Error sending password reset email',
+        error: e,
+        context: 'AuthProvider.sendPasswordResetEmail',
+      );
+      return e.message;
     } catch (e) {
       ErrorLogger.logError(
         'Error sending password reset email',
         error: e,
-        context: 'AuthProvider.resetPassword',
-      ); // Replaced print with ErrorLogger
-      return false;
+        context: 'AuthProvider.sendPasswordResetEmail',
+      );
+      return 'An unexpected error occurred.';
     }
   }
 

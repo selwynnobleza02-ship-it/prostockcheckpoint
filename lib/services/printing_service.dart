@@ -308,6 +308,12 @@ class PrintingService with ChangeNotifier {
       'Date: ${receipt.formattedTimestamp}',
       styles: const PosStyles(align: PosAlign.center),
     );
+    if (receipt.customerName != null && receipt.customerName!.isNotEmpty) {
+      bytes += generator.text(
+        'Customer: ${receipt.customerName}',
+        styles: const PosStyles(align: PosAlign.center),
+      );
+    }
     bytes += generator.hr();
 
     // Items

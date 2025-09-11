@@ -142,7 +142,7 @@ class _AdminScreenState extends State<AdminScreen>
           color: Colors.white,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.1),
+              color: Colors.black.withAlpha(26),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -165,8 +165,8 @@ class _AdminScreenState extends State<AdminScreen>
                           color: Colors.transparent,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
-                            splashColor: Colors.indigo.withOpacity(0.3),
-                            highlightColor: Colors.indigo.withOpacity(0.1),
+                            splashColor: Colors.indigo.withAlpha(77),
+                            highlightColor: Colors.indigo.withAlpha(26),
                             onTap: () => _onNavTap(index),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 100),
