@@ -37,6 +37,26 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  void _showVerificationDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Verify Your Email'),
+        content: const Text(
+            'A verification email has been sent to your email address. Please verify your email to login.'),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              Navigator.of(context).pushReplacementNamed('/login');
+            },
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -177,9 +197,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
                               if (success) {
                                 if (context.mounted) {
-                                  Navigator.of(
-                                    context,
-                                  ).pushReplacementNamed('/login');
+                                  _showVerificationDialog();
                                 }
                               } else {
                                 if (!mounted) return;

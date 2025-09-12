@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
 import 'package:prostock/models/paginated_result.dart';
 import 'package:prostock/models/user_activity.dart';
 import 'package:prostock/services/firestore/firestore_exception.dart';
@@ -15,11 +16,27 @@ class ActivityService {
   CollectionReference get users =>
       _firestore.collection(AppConstants.usersCollection);
 
-  Stream<List<UserActivity>> getActivitiesStream({String? userId}) {
+  Stream<List<UserActivity>> getActivitiesStream({
+    String? userId,
+    DateTimeRange? dateRange,
+    List<String>? activityTypes,
+  }) {
     Query query = activities.orderBy('timestamp', descending: true);
+
     if (userId != null) {
       query = query.where('user_id', isEqualTo: userId);
     }
+
+    if (dateRange != null) {
+      query = query
+          .where('timestamp', isGreaterThanOrEqualTo: dateRange.start)
+          .where('timestamp', isLessThanOrEqualTo: dateRange.end);
+    }
+
+    if (activityTypes != null && activityTypes.isNotEmpty) {
+      query = query.where('action', whereIn: activityTypes);
+    }
+
     return query.snapshots().map((snapshot) {
       return snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
@@ -160,8 +177,7 @@ class ActivityService {
     try {
       List<String> userIds = [];
       if (role != null) {
-        final usersSnapshot =
-            await users.where('role', isEqualTo: role).get();
+        final usersSnapshot = await users.where('role', isEqualTo: role).get();
         userIds = usersSnapshot.docs.map((doc) => doc.id).toList();
         if (userIds.isEmpty) {
           return PaginatedResult(items: [], lastDocument: null);

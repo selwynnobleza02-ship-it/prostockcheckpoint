@@ -189,6 +189,38 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                   ),
                 ),
+                const SizedBox(height: UiConstants.spacingLarge),
+                const Row(
+                  children: [
+                    Expanded(child: Divider()),
+                    Padding(
+                      padding: EdgeInsets.symmetric(
+                          horizontal: UiConstants.spacingSmall),
+                      child: Text('Or sign in with'),
+                    ),
+                    Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: UiConstants.spacingLarge),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () {},
+                    icon: const Icon(Icons.g_mobiledata, color: Colors.red),
+                    label: const Text('Sign in with Google'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          vertical: UiConstants.spacingMedium),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(
+                          UiConstants.borderRadiusStandard,
+                        ),
+                      ),
+                      backgroundColor: Colors.white,
+                      foregroundColor: Colors.black,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: UiConstants.spacingSmall),
                 TextButton(
                   onPressed: () {

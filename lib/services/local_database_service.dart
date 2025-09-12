@@ -20,7 +20,7 @@ class LocalDatabaseService {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, filePath);
 
-    return await openDatabase(path, version: 3, onCreate: _createDB, onUpgrade: _onUpgrade);
+    return await openDatabase(path, version: 4, onCreate: _createDB, onUpgrade: _onUpgrade);
   }
 
   Future _createDB(Database db, int version) async {
@@ -87,11 +87,23 @@ CREATE TABLE IF NOT EXISTS sale_items (
   totalPrice $doubleType
 )
 ''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS offline_operations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  operation_id TEXT NOT NULL,
+  operation_type TEXT NOT NULL,
+  collection_name TEXT NOT NULL,
+  document_id TEXT,
+  data TEXT NOT NULL,
+  timestamp TEXT NOT NULL,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  version INTEGER
+)
+''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    await _createTables(db); // Ensure all tables exist
-
     if (oldVersion < 2) {
       try {
         await db.execute("ALTER TABLE sale_items ADD COLUMN saleId TEXT NOT NULL DEFAULT ''");
@@ -105,6 +117,21 @@ CREATE TABLE IF NOT EXISTS sale_items (
       } catch (e) {
         // Column might already exist, ignore
       }
+    }
+    if (oldVersion < 4) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS offline_operations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  operation_id TEXT NOT NULL,
+  operation_type TEXT NOT NULL,
+  collection_name TEXT NOT NULL,
+  document_id TEXT,
+  data TEXT NOT NULL,
+  timestamp TEXT NOT NULL,
+  retry_count INTEGER NOT NULL DEFAULT 0,
+  version INTEGER
+)
+''');
     }
   }
 

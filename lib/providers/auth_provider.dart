@@ -38,6 +38,12 @@ class AuthProvider with ChangeNotifier {
       );
 
       if (credential.user != null) {
+        if (!credential.user!.emailVerified) {
+          await _firebaseAuth.signOut();
+          _error = 'Please verify your email before logging in.';
+          return false;
+        }
+
         final user = await _userService.getUserByEmail(email);
         if (user != null) {
           _isAuthenticated = true;
@@ -231,8 +237,11 @@ class AuthProvider with ChangeNotifier {
         );
 
         if (credential.user != null) {
+          await credential.user!.sendEmailVerification();
           await credential.user!.updateDisplayName(username);
           await logActivity('CREATE_USER', details: 'User $username created');
+          _error =
+              'A verification email has been sent to your email address. Please verify your email to login.';
           return true;
         } else {
           _error = 'Failed to create Firebase Auth user';
