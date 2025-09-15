@@ -135,14 +135,25 @@ class UserService {
   Future<List<AppUser>> getAllUsers() async {
     try {
       final snapshot = await users.orderBy('username').get();
-
-      final usersList = snapshot.docs.map((doc) {
+      return snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         data['id'] = doc.id;
         return AppUser.fromMap(data);
       }).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to get all users: $e');
+    }
+  }
 
-      return usersList;
+  Stream<List<AppUser>> getAllUsersStream() {
+    try {
+      return users.orderBy('username').snapshots().map((snapshot) {
+        return snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          data['id'] = doc.id;
+          return AppUser.fromMap(data);
+        }).toList();
+      });
     } catch (e) {
       throw FirestoreException('Failed to get all users: $e');
     }

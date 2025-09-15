@@ -138,6 +138,20 @@ class ActivityService {
     }
   }
 
+  Stream<List<UserActivity>> getAllUserActivitiesStream() {
+    try {
+      return activities.orderBy('timestamp', descending: true).snapshots().map((snapshot) {
+        return snapshot.docs.map((doc) {
+          final data = doc.data() as Map<String, dynamic>;
+          data['id'] = doc.id;
+          return UserActivity.fromMap(data);
+        }).toList();
+      });
+    } catch (e) {
+      throw FirestoreException('Failed to get all user activities: $e');
+    }
+  }
+
   Future<List<UserActivity>> getActivitiesByDateRange(
     DateTime start,
     DateTime end, {

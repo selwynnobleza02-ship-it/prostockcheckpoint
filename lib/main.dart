@@ -23,6 +23,8 @@ import 'screens/login_signup/signup_screen.dart';
 import 'screens/user/user_screen.dart';
 import 'screens/splash_screen.dart'; // Added import for SplashScreen
 import 'package:background_fetch/background_fetch.dart';
+import 'package:prostock/services/firestore/activity_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -47,6 +49,9 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
+        Provider<ActivityService>(
+          create: (_) => ActivityService(FirebaseFirestore.instance),
+        ),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider.value(value: offlineManager),

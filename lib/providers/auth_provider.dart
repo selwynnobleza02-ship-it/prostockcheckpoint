@@ -295,16 +295,56 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<List<AppUser>> getAllUsers() async {
+  Stream<List<AppUser>> getAllUsers() {
     try {
-      return await _userService.getAllUsers();
+      return _userService.getAllUsersStream();
     } catch (e) {
       ErrorLogger.logError(
         'Error getting all users',
         error: e,
         context: 'AuthProvider.getAllUsers',
       );
+      return Stream.value([]);
+    }
+  }
+
+  Future<List<AppUser>> getAllUsersList() async {
+    try {
+      return await _userService.getAllUsers();
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error getting all users',
+        error: e,
+        context: 'AuthProvider.getAllUsersList',
+      );
       return [];
+    }
+  }
+
+  Future<void> updateUserRole(AppUser user, UserRole newRole) async {
+    try {
+      final updatedUser = user.copyWith(role: newRole);
+      await _userService.updateUser(updatedUser);
+      notifyListeners();
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error updating user role',
+        error: e,
+        context: 'AuthProvider.updateUserRole',
+      );
+    }
+  }
+
+  Future<void> deleteUser(AppUser user) async {
+    try {
+      await _userService.deleteUser(user.id!);
+      notifyListeners();
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error deleting user',
+        error: e,
+        context: 'AuthProvider.deleteUser',
+      );
     }
   }
 }
