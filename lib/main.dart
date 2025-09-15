@@ -1,3 +1,6 @@
+import 'package:prostock/services/credit_check_service.dart';
+import 'package:prostock/services/local_database_service.dart';
+import 'package:prostock/services/notification_service.dart';
 import 'package:prostock/services/printing_service.dart';
 import 'package:flutter/material.dart';
 import 'package:prostock/providers/sync_failure_provider.dart';
@@ -35,7 +38,14 @@ void main() async {
   final syncFailureProvider = SyncFailureProvider();
   final offlineManager = OfflineManager(syncFailureProvider);
   await offlineManager.initialize();
-  await BackgroundSyncService.init(offlineManager);
+
+  final notificationService = NotificationService();
+  await notificationService.init();
+
+  final localDatabaseService = LocalDatabaseService.instance;
+  final creditCheckService = CreditCheckService(localDatabaseService, notificationService);
+
+  await BackgroundSyncService.init(offlineManager, creditCheckService);
 
   runApp(MyApp(offlineManager: offlineManager, syncFailureProvider: syncFailureProvider));
   BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);

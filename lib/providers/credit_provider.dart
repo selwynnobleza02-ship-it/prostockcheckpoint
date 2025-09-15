@@ -3,11 +3,9 @@ import 'package:prostock/models/credit_transaction.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
-import 'package:prostock/services/credit_check_service.dart';
 import 'package:prostock/services/firestore/credit_service.dart';
 
 class CreditProvider with ChangeNotifier {
-  final CreditCheckService _creditCheckService = CreditCheckService();
   final CustomerProvider _customerProvider;
   final SalesProvider _salesProvider;
   final CreditService _creditService;
@@ -36,10 +34,16 @@ class CreditProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    _overdueCustomers = _creditCheckService.getOverdueCustomers(
-      _customerProvider.customers,
-      _salesProvider.sales,
-    );
+    final today = DateTime.now();
+    final overdueSales = _salesProvider.sales.where((sale) {
+      return sale.dueDate != null && sale.dueDate!.isBefore(today);
+    }).toList();
+
+    final customerIds = overdueSales.map((sale) => sale.customerId).toSet();
+
+    _overdueCustomers = _customerProvider.customers
+        .where((customer) => customerIds.contains(customer.id))
+        .toList();
 
     _isLoading = false;
     _isInitialized = true;

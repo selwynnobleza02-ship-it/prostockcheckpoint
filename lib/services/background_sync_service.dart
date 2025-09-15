@@ -2,6 +2,9 @@ import 'dart:developer';
 
 import 'package:background_fetch/background_fetch.dart';
 import 'package:prostock/providers/sync_failure_provider.dart';
+import 'package:prostock/services/credit_check_service.dart';
+import 'package:prostock/services/local_database_service.dart';
+import 'package:prostock/services/notification_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:prostock/utils/error_logger.dart';
 
@@ -9,9 +12,11 @@ const _backgroundFetchTaskId = 'com.prostock.background_fetch';
 
 class BackgroundSyncService {
   static late OfflineManager _offlineManager;
+  static late CreditCheckService _creditCheckService;
 
-  static Future<void> init(OfflineManager offlineManager) async {
+  static Future<void> init(OfflineManager offlineManager, CreditCheckService creditCheckService) async {
     _offlineManager = offlineManager;
+    _creditCheckService = creditCheckService;
     BackgroundFetch.configure(
           BackgroundFetchConfig(
             minimumFetchInterval: 15,
@@ -35,6 +40,7 @@ class BackgroundSyncService {
     if (taskId == _backgroundFetchTaskId) {
       try {
         await _offlineManager.syncPendingOperations();
+        await _creditCheckService.checkDuePaymentsAndNotify();
       } catch (e, s) {
         ErrorLogger.logError(
           'Error in background fetch',
@@ -68,8 +74,12 @@ void backgroundFetchHeadlessTask(HeadlessTask task) async {
       // to be able to sync in the background.
       final syncFailureProvider = SyncFailureProvider();
       final offlineManager = OfflineManager(syncFailureProvider);
+      final localDatabaseService = LocalDatabaseService.instance;
+      final notificationService = NotificationService();
+      final creditCheckService = CreditCheckService(localDatabaseService, notificationService);
       await offlineManager.initialize();
       await offlineManager.syncPendingOperations();
+      await creditCheckService.checkDuePaymentsAndNotify();
     } catch (e, s) {
       ErrorLogger.logError(
         'Error in background fetch headless task',

@@ -17,9 +17,7 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('User Management'),
-      ),
+      appBar: AppBar(title: const Text('User Management')),
       body: SingleChildScrollView(
         child: Padding(
           padding: const EdgeInsets.all(16.0),
@@ -56,7 +54,9 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                           final user = users[index];
                           return ListTile(
                             title: Text(user.email),
-                            subtitle: Text(user.role.toString().split('.').last),
+                            subtitle: Text(
+                              user.role.toString().split('.').last,
+                            ),
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -70,7 +70,8 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                                 ),
                                 IconButton(
                                   icon: const Icon(Icons.vpn_key),
-                                  onPressed: () => _resetPassword(context, user),
+                                  onPressed: () =>
+                                      _resetPassword(context, user),
                                 ),
                               ],
                             ),
@@ -161,12 +162,15 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
   void _resetPassword(BuildContext context, AppUser user) async {
     final authProvider = context.read<AuthProvider>();
     final error = await authProvider.sendPasswordResetEmail(user.email);
+    if (!context.mounted) return;
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(error == null
-              ? 'Password reset email sent to \${user.email}'
-              : 'Failed to send password reset email: $error'),
+          content: Text(
+            error == null
+                ? 'Password reset email sent to \${user.email}'
+                : 'Failed to send password reset email: $error',
+          ),
         ),
       );
     }

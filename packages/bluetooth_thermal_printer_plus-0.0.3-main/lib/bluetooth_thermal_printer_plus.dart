@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class BluetoothThermalPrinter {
@@ -19,7 +20,9 @@ class BluetoothThermalPrinter {
       final List? result = await _channel.invokeMethod('bluetothLinked');
       items = result;
     } on PlatformException catch (e) {
-      print("Bluetooth paired failure: '${e.message}'.");
+      if (kDebugMode) {
+        print("Bluetooth paired failure: '${e.message}'.");
+      }
     }
 
     return items;
@@ -31,7 +34,9 @@ class BluetoothThermalPrinter {
       final String? result = await _channel.invokeMethod('connectionStatus');
       return result;
     } on PlatformException catch (e) {
-      print("Failed to write bytes: '${e.message}'.");
+      if (kDebugMode) {
+        print("Failed to write bytes: '${e.message}'.");
+      }
       return "false";
     }
   }
@@ -42,7 +47,9 @@ class BluetoothThermalPrinter {
     try {
       result = await _channel.invokeMethod('connectPrinter', mac);
     } on PlatformException catch (e) {
-      print("Failed to connect: '${e.message}'.");
+      if (kDebugMode) {
+        print("Failed to connect: '${e.message}'.");
+      }
     }
     return result;
   }
@@ -53,7 +60,9 @@ class BluetoothThermalPrinter {
     try {
       result = await _channel.invokeMethod('disconnectPrinter');
     } on PlatformException catch (e) {
-      print("Failed to disconnect: '${e.message}'.");
+      if (kDebugMode) {
+        print("Failed to disconnect: '${e.message}'.");
+      }
     }
     return result;
   }
@@ -64,7 +73,9 @@ class BluetoothThermalPrinter {
       final String? result = await _channel.invokeMethod('writeBytes', bytes);
       return result;
     } on PlatformException catch (e) {
-      print("Failed to write bytes: '${e.message}'.");
+      if (kDebugMode) {
+        print("Failed to write bytes: '${e.message}'.");
+      }
       return "false";
     }
   }
@@ -75,7 +86,9 @@ class BluetoothThermalPrinter {
       final String? result = await _channel.invokeMethod('printText', text);
       return result;
     } on PlatformException catch (e) {
-      print("Failed to writeText: '${e.message}'.");
+      if (kDebugMode) {
+        print("Failed to writeText: '${e.message}'.");
+      }
       return "false";
     }
   }
@@ -86,7 +99,9 @@ class BluetoothThermalPrinter {
       final int? result = await _channel.invokeMethod('getBatteryLevel');
       return result;
     } on PlatformException catch (e) {
-      print("Failed to get battery level: '${e.message}'.");
+      if (kDebugMode) {
+        print("Failed to get battery level: '${e.message}'.");
+      }
       return -1;
     }
   }
