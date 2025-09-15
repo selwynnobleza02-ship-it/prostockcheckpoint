@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
 import '../models/product.dart';
+import 'add_product_dialog.dart';
 import 'barcode_product_dialog.dart';
 import 'receive_stock_dialog.dart';
 
@@ -713,7 +714,10 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
       }
     } else if (action == 'view_details') {
       if (mounted) {
-        Navigator.pop(context);
+        showDialog(
+          context: context,
+          builder: (context) => AddProductDialog(product: product),
+        );
       }
     } else {
       await cameraController.start();

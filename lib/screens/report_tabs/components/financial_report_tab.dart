@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/providers/stock_movement_provider.dart';
 import 'package:prostock/services/report_service.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
@@ -29,7 +30,10 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<SalesProvider>(context, listen: false).loadSales();
+      final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+      final stockMovementProvider = Provider.of<StockMovementProvider>(context, listen: false);
+      salesProvider.loadSales();
+      stockMovementProvider.loadAllMovements();
     });
   }
 
@@ -45,28 +49,29 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
       initialDateRange: initialDateRange,
     );
 
-    if (!mounted) return; // This check is already here
+    if (!mounted) return; 
 
     if (newDateRange != null) {
       setState(() {
         _startDate = newDateRange.start;
         _endDate = newDateRange.end;
       });
-      // Add another mounted check here
+      
       if (!context.mounted) return;
-      Provider.of<SalesProvider>(
-        context,
-        listen: false,
-      ).loadSales(startDate: _startDate, endDate: _endDate, refresh: true);
+      final salesProvider = Provider.of<SalesProvider>(context,listen: false,);
+      final stockMovementProvider = Provider.of<StockMovementProvider>(context, listen: false);
+
+      salesProvider.loadSales(startDate: _startDate, endDate: _endDate, refresh: true);
+      stockMovementProvider.loadAllMovements(startDate: _startDate, endDate: _endDate);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final reportService = ReportService();
-    return Consumer3<SalesProvider, InventoryProvider, CustomerProvider>(
-      builder: (context, sales, inventory, customers, child) {
-        if (sales.isLoading) {
+    return Consumer4<SalesProvider, InventoryProvider, CustomerProvider, StockMovementProvider>(
+      builder: (context, sales, inventory, customers, stockMovements, child) {
+        if (sales.isLoading || stockMovements.isLoading) {
           return const Center(child: CircularProgressIndicator());
         }
 
@@ -113,12 +118,15 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
           totalRevenue,
           totalCost,
         );
-        final inventoryValue = reportService.calculateTotalInventoryValue(
-          inventory.products,
-        );
+
+        // Corrected Inventory Turnover Calculation
+        final endingInventoryValue = reportService.calculateTotalInventoryValue(inventory.products);
+        final beginningInventoryValue = reportService.calculateBeginningInventoryValue(inventory.products, stockMovements.allMovements);
+        final averageInventoryValue = (beginningInventoryValue + endingInventoryValue) / 2;
+
         final inventoryTurnover = reportService.calculateInventoryTurnover(
           totalCost,
-          inventoryValue,
+          averageInventoryValue,
         );
         final potentialProfit = reportService.calculatePotentialInventoryProfit(
           inventory.products,

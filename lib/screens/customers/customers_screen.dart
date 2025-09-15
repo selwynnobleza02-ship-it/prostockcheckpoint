@@ -1,12 +1,12 @@
+import 'package:prostock/screens/customers/dialogs/overdue_customers_list_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:prostock/screens/customers/dialogs/customer_options_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
+import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
-import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/screens/customers/components/customer_list.dart';
 import 'package:prostock/screens/customers/components/customer_qr_scanner.dart';
-import 'package:prostock/services/credit_check_service.dart';
 import 'package:prostock/widgets/add_customer_dialog.dart';
 import 'dart:async';
 
@@ -28,7 +28,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CustomerProvider>(context, listen: false).loadCustomers();
-      Provider.of<SalesProvider>(context, listen: false).loadSales();
+      Provider.of<CreditProvider>(context, listen: false).fetchOverdueCustomers();
     });
 
     _scrollController.addListener(() {
@@ -104,14 +104,6 @@ class _CustomersScreenState extends State<CustomersScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final customerProvider = Provider.of<CustomerProvider>(context);
-    final salesProvider = Provider.of<SalesProvider>(context);
-    final creditCheckService = CreditCheckService();
-    final overdueCustomers = creditCheckService.getOverdueCustomers(
-      customerProvider.customers,
-      salesProvider.sales,
-    );
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Customers'),
@@ -128,36 +120,51 @@ class _CustomersScreenState extends State<CustomersScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          if (overdueCustomers.isNotEmpty)
-            Container(
-              color: Colors.red,
-              padding: const EdgeInsets.all(8.0),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning, color: Colors.white),
-                  const SizedBox(width: 8.0),
-                  Text(
-                    '${overdueCustomers.length} customer(s) with overdue balance',
-                    style: const TextStyle(color: Colors.white),
+      body: Consumer<CreditProvider>(
+        builder: (context, creditProvider, child) {
+          final overdueCustomers = creditProvider.overdueCustomers;
+          return Column(
+            children: [
+              if (overdueCustomers.isNotEmpty)
+                GestureDetector(
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => OverdueCustomersListDialog(
+                        overdueCustomers: overdueCustomers,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    color: Colors.red,
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning, color: Colors.white),
+                        const SizedBox(width: 8.0),
+                        Text(
+                          '${overdueCustomers.length} customer(s) with overdue balance',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    ),
                   ),
-                ],
+                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Search customers...',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
               ),
-            ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: TextField(
-              controller: _searchController,
-              decoration: const InputDecoration(
-                hintText: 'Search customers...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          Expanded(child: CustomerList(scrollController: _scrollController)),
-        ],
+              Expanded(child: CustomerList(scrollController: _scrollController)),
+            ],
+          );
+        },
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {

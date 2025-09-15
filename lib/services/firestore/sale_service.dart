@@ -112,8 +112,8 @@ class SaleService {
           customerId: customerId,
           amount: totalAmount,
           type: 'credit',
-          description: 'POS Utang',
-          createdAt: DateTime.now(),
+          notes: 'POS Utang',
+          date: DateTime.now(),
         );
         transaction.set(creditTransactionRef, creditTransaction.toMap());
 
@@ -379,8 +379,7 @@ class SaleService {
 
       return snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return CreditTransaction.fromMap(data);
+        return CreditTransaction.fromMap(data, doc.id);
       }).toList();
     } catch (e) {
       throw FirestoreException('Failed to get all credit transactions: $e');
@@ -398,8 +397,7 @@ class SaleService {
 
       return snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
-        data['id'] = doc.id;
-        return CreditTransaction.fromMap(data);
+        return CreditTransaction.fromMap(data, doc.id);
       }).toList();
     } catch (e) {
       throw FirestoreException(

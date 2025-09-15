@@ -4,23 +4,39 @@ import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
 
-class TransactionHistoryDialog extends StatelessWidget {
+class TransactionHistoryDialog extends StatefulWidget {
   final Customer customer;
 
   const TransactionHistoryDialog({super.key, required this.customer});
 
   @override
+  State<TransactionHistoryDialog> createState() => _TransactionHistoryDialogState();
+}
+
+class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<CreditProvider>(context, listen: false)
+          .getTransactionsByCustomer(widget.customer.id!);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('${customer.name} - Transaction History'),
+      title: Text('${widget.customer.name} - Transaction History'),
       content: SizedBox(
         width: double.maxFinite,
         height: 400,
         child: Consumer<CreditProvider>(
           builder: (context, provider, child) {
-            final transactions = provider.getTransactionsByCustomer(
-              customer.id!,
-            );
+            final transactions = provider.transactions;
+
+            if (provider.isLoading) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
             if (transactions.isEmpty) {
               return const Center(child: Text('No transactions found'));
@@ -47,9 +63,9 @@ class TransactionHistoryDialog extends StatelessWidget {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(transaction.description ?? 'No description'),
+                      Text(transaction.notes ?? 'No description'),
                       Text(
-                        '${transaction.createdAt.day}/${transaction.createdAt.month}/${transaction.createdAt.year}',
+                        '${transaction.date.day}/${transaction.date.month}/${transaction.date.year}',
                         style: const TextStyle(
                           fontSize: 12,
                           color: Colors.grey,

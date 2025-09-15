@@ -65,28 +65,34 @@ Widget buildSummaryCard(
                       crossAxisAlignment: CrossAxisAlignment.end,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text(
-                          _formatLargeNumber(value),
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            color: color,
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            _formatLargeNumber(value),
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: color,
+                            ),
+                            textAlign: TextAlign.right,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          textAlign: TextAlign.right,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                         if (_formatLargeNumber(value) != value)
                           Padding(
                             padding: const EdgeInsets.only(top: 2),
-                            child: Text(
-                              'Tap for details',
-                              style: TextStyle(
-                                fontSize: 9,
-                                color: Colors.grey.shade600,
-                                fontStyle: FontStyle.italic,
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              child: Text(
+                                'Tap for details',
+                                style: TextStyle(
+                                  fontSize: 9,
+                                  color: Colors.grey.shade600,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                textAlign: TextAlign.right,
                               ),
-                              textAlign: TextAlign.right,
                             ),
                           ),
                       ],

@@ -10,6 +10,7 @@ import 'package:prostock/utils/global_error_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:prostock/services/background_sync_service.dart';
+import 'package:prostock/services/firestore/credit_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'firebase_options.dart';
 import 'providers/inventory_provider.dart';
@@ -52,6 +53,9 @@ class MyApp extends StatelessWidget {
         Provider<ActivityService>(
           create: (_) => ActivityService(FirebaseFirestore.instance),
         ),
+        Provider<CreditService>(
+          create: (_) => CreditService(),
+        ),
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider.value(value: offlineManager),
@@ -77,13 +81,19 @@ class MyApp extends StatelessWidget {
                 authProvider: authProvider,
               ),
         ),
-        ChangeNotifierProxyProvider<CustomerProvider, CreditProvider>(
+        ChangeNotifierProxyProvider2<CustomerProvider, SalesProvider, CreditProvider>(
           create: (context) => CreditProvider(
             customerProvider: context.read<CustomerProvider>(),
+            salesProvider: context.read<SalesProvider>(),
+            creditService: context.read<CreditService>(),
           ),
-          update: (context, customerProvider, previousCreditProvider) =>
+          update: (context, customerProvider, salesProvider, previousCreditProvider) =>
               previousCreditProvider ??
-              CreditProvider(customerProvider: customerProvider),
+              CreditProvider(
+                customerProvider: customerProvider,
+                salesProvider: salesProvider,
+                creditService: context.read<CreditService>(),
+              ),
         ),
         ChangeNotifierProvider(create: (_) => StockMovementProvider()),
         ChangeNotifierProvider(create: (_) => PrintingService()),

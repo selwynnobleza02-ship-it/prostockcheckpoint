@@ -1,134 +1,79 @@
 import 'package:flutter/material.dart';
-import 'package:prostock/services/firestore/sale_service.dart';
-import '../models/credit_transaction.dart';
-import '../utils/error_logger.dart'; // Import ErrorLogger
-import 'customer_provider.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/models/credit_transaction.dart';
+import 'package:prostock/models/customer.dart';
+import 'package:prostock/providers/customer_provider.dart';
+import 'package:prostock/providers/sales_provider.dart';
+import 'package:prostock/services/credit_check_service.dart';
+import 'package:prostock/services/firestore/credit_service.dart';
 
 class CreditProvider with ChangeNotifier {
-  final CustomerProvider customerProvider;
+  final CreditCheckService _creditCheckService = CreditCheckService();
+  final CustomerProvider _customerProvider;
+  final SalesProvider _salesProvider;
+  final CreditService _creditService;
+
+  List<Customer> _overdueCustomers = [];
+  List<Customer> get overdueCustomers => _overdueCustomers;
+
   List<CreditTransaction> _transactions = [];
-  bool _isLoading = false;
-  String? _error;
-
-  CreditProvider({required this.customerProvider});
-
   List<CreditTransaction> get transactions => _transactions;
+
+  bool _isLoading = false;
   bool get isLoading => _isLoading;
-  String? get error => _error;
+  bool _isInitialized = false;
 
-  void clearError() {
-    _error = null;
-    notifyListeners();
-  }
+  CreditProvider({
+    required CustomerProvider customerProvider,
+    required SalesProvider salesProvider,
+    required CreditService creditService,
+  })  : _customerProvider = customerProvider,
+        _salesProvider = salesProvider,
+        _creditService = creditService;
 
-  Future<void> loadTransactions() async {
+  Future<void> fetchOverdueCustomers() async {
+    if (_isInitialized) return;
+
     _isLoading = true;
-    _error = null;
     notifyListeners();
 
-    try {
-      final saleService = SaleService(FirebaseFirestore.instance);
-      _transactions = await saleService.getAllCreditTransactions();
-    } catch (e) {
-      _error = 'Failed to load transactions: ${e.toString()}';
-      ErrorLogger.logError(
-        'Error loading transactions',
-        error: e,
-        context: 'CreditProvider.loadTransactions',
-      );
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
+    _overdueCustomers = _creditCheckService.getOverdueCustomers(
+      _customerProvider.customers,
+      _salesProvider.sales,
+    );
+
+    _isLoading = false;
+    _isInitialized = true;
+    notifyListeners();
   }
 
-  Future<void> addCreditTransaction(CreditTransaction transaction) async {
-    try {
-      final saleService = SaleService(FirebaseFirestore.instance);
-      final id = await saleService.insertCreditTransaction(
-        transaction,
-      );
-      final newTransaction = CreditTransaction(
-        id: id,
-        customerId: transaction.customerId,
-        amount: transaction.amount,
-        type: transaction.type,
-        description: transaction.description,
-        createdAt: transaction.createdAt,
-      );
-      _transactions.add(newTransaction);
-      notifyListeners();
-    } catch (e) {
-      _error = 'Failed to add transaction: ${e.toString()}';
-      ErrorLogger.logError(
-        'Error adding credit transaction',
-        error: e,
-        context: 'CreditProvider.addCreditTransaction',
-      );
-      notifyListeners();
-      rethrow;
-    }
-  }
-
-  Future<bool> recordPayment(
-    String customerId,
-    double amount, {
-    String? description,
+  Future<bool> recordPayment({
+    required String customerId,
+    required double amount,
+    required String notes,
   }) async {
-    if (amount <= 0) {
-      _error = 'Invalid payment amount';
-      notifyListeners();
-      return false;
-    }
-
-    final customer = await customerProvider.getCustomerById(customerId);
-    if (customer != null && amount > customer.balance) {
-      _error = 'Payment amount cannot exceed the current balance.';
-      notifyListeners();
-      return false;
-    }
-
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
     try {
       final transaction = CreditTransaction(
         customerId: customerId,
         amount: amount,
+        date: DateTime.now(),
         type: 'payment',
-        description: description ?? 'Payment received',
-        createdAt: DateTime.now(),
+        notes: notes,
       );
-
-      await addCreditTransaction(transaction);
-
-      await customerProvider.updateCustomerBalance(customerId, -amount);
-
-      _isLoading = false;
-      notifyListeners();
+      await _creditService.recordPayment(transaction);
+      await _customerProvider.updateCustomerBalance(customerId, -amount);
       return true;
     } catch (e) {
-      _error = 'Failed to record payment: ${e.toString()}';
-      _isLoading = false;
-      notifyListeners();
-      ErrorLogger.logError(
-        'Error recording payment',
-        error: e,
-        context: 'CreditProvider.recordPayment',
-      );
       return false;
     }
   }
 
-  List<CreditTransaction> getTransactionsByCustomer(String customerId) {
-    return _transactions.where((t) => t.customerId == customerId).toList()
-      ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
-  }
+  Future<void> getTransactionsByCustomer(String customerId) async {
+    _isLoading = true;
+    notifyListeners();
 
-  void clearTransactions() {
-    _transactions.clear();
+    _transactions = await _creditService.getTransactionsByCustomer(customerId);
+
+    _isLoading = false;
     notifyListeners();
   }
 }

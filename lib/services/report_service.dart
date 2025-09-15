@@ -3,6 +3,7 @@ import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/models/stock_movement.dart';
 
 class ReportService {
   // Sales calculations
@@ -142,6 +143,30 @@ class ReportService {
       0.0,
       (sum, product) => sum + (product.cost * product.stock),
     );
+  }
+
+  double calculateBeginningInventoryValue(
+    List<Product> currentProducts,
+    List<StockMovement> movements,
+  ) {
+    final movementQuantities = <String, int>{};
+
+    for (final movement in movements) {
+      movementQuantities.update(
+        movement.productId,
+        (value) => value + movement.quantity,
+        ifAbsent: () => movement.quantity,
+      );
+    }
+
+    double beginningValue = 0.0;
+    for (final product in currentProducts) {
+      final quantityMoved = movementQuantities[product.id] ?? 0;
+      final beginningStock = product.stock - quantityMoved;
+      beginningValue += beginningStock * product.cost;
+    }
+
+    return beginningValue > 0 ? beginningValue : 0.0;
   }
 
   /// Calculate total inventory value using selling price (for retail/market value)

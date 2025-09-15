@@ -74,7 +74,10 @@ class InventoryService {
         query = query.where('createdAt', isGreaterThanOrEqualTo: startDate);
       }
       if (endDate != null) {
-        query = query.where('createdAt', isLessThanOrEqualTo: endDate.add(const Duration(days: 1)));
+        query = query.where(
+          'createdAt',
+          isLessThanOrEqualTo: endDate.add(const Duration(days: 1)),
+        );
       }
 
       if (lastDocument != null) {
@@ -95,6 +98,31 @@ class InventoryService {
       );
     } catch (e) {
       throw FirestoreException('Failed to get paginated stock movements: $e');
+    }
+  }
+
+  Future<List<StockMovement>> getAllStockMovements({
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    try {
+      Query query = stockMovements.orderBy('createdAt', descending: true);
+
+      if (startDate != null) {
+        query = query.where('createdAt', isGreaterThanOrEqualTo: startDate);
+      }
+      if (endDate != null) {
+        query = query.where(
+          'createdAt',
+          isLessThanOrEqualTo: endDate.add(const Duration(days: 1)),
+        );
+      }
+
+      final snapshot = await query.get();
+
+      return snapshot.docs.map(_stockMovementFromDocument).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to get all stock movements: $e');
     }
   }
 
