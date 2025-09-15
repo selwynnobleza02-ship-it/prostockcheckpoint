@@ -3,7 +3,6 @@ import 'package:provider/provider.dart';
 import 'package:prostock/models/app_user.dart';
 import 'package:prostock/models/user_role.dart';
 import 'package:prostock/providers/auth_provider.dart';
-import 'package:prostock/screens/settings/components/system_monitoring_widget.dart';
 import 'package:prostock/screens/settings/components/app_update_widget.dart';
 
 class UserManagementScreen extends StatefulWidget {
@@ -82,8 +81,6 @@ class _UserManagementScreenState extends State<UserManagementScreen> {
                   );
                 },
               ),
-              const SizedBox(height: 20),
-              const SystemMonitoringWidget(),
               const SizedBox(height: 20),
               const AppUpdateWidget(),
             ],

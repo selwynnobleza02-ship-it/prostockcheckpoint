@@ -39,7 +39,7 @@ class _AdminScreenState extends State<AdminScreen>
   ];
 
   final List<String> _labels = [
-    'Activity',
+    'Activity & Monitoring',
     'POS',
     'Items',
     'Clients',
