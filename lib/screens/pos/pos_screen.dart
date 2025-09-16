@@ -91,20 +91,15 @@ class _POSScreenState extends State<POSScreen> {
       _isProcessingSale = true;
     });
     try {
-          if (!mounted) return;
-          DateTime? dueDate;
-          if (_paymentMethod == 'credit') {        dueDate = await showDatePicker(
+      if (!mounted) return;
+      DateTime? dueDate;
+      if (_paymentMethod == 'credit') {
+        dueDate = await showDatePicker(
           context: context,
           initialDate: DateTime.now().add(const Duration(days: 30)),
           firstDate: DateTime.now(),
           lastDate: DateTime.now().add(const Duration(days: 365)),
         );
-        if (dueDate == null) {
-          setState(() {
-            _isProcessingSale = false;
-          });
-          return;
-        }
       }
       if (!mounted) return;
       final salesProvider = Provider.of<SalesProvider>(context, listen: false);

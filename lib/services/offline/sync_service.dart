@@ -103,6 +103,11 @@ class SyncService {
               .collection(collection)
               .doc(docId);
           batch.update(docRef, data);
+        } else if (type == AppConstants.operationDelete) {
+          final docRef = FirebaseFirestore.instance
+              .collection(collection)
+              .doc(docId);
+          batch.delete(docRef);
         }
       }
 
@@ -167,11 +172,14 @@ class SyncService {
       case OperationType.insertCreditTransaction:
       case OperationType.insertLoss:
       case OperationType.insertPriceHistory:
+      case OperationType.logActivity:
         return [_getInsertOperation(operation)];
       case OperationType.updateProduct:
       case OperationType.updateCustomer:
       case OperationType.updateCustomerBalance:
         return [_getUpdateOperation(operation)];
+      case OperationType.deleteCustomer:
+        return [_getDeleteOperation(operation)];
       case OperationType.createSaleTransaction:
         final saleMap = operation.data['sale'] as Map<String, dynamic>;
         final sale = Sale.fromMap(saleMap);
@@ -231,6 +239,14 @@ class SyncService {
       'collection': operation.collectionName,
       'docId': operation.documentId,
       'data': operation.data,
+    };
+  }
+
+  Map<String, dynamic> _getDeleteOperation(OfflineOperation operation) {
+    return {
+      'type': AppConstants.operationDelete,
+      'collection': operation.collectionName,
+      'docId': operation.documentId,
     };
   }
 }

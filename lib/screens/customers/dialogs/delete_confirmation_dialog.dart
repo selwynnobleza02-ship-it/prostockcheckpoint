@@ -26,7 +26,7 @@ class DeleteConfirmationDialog extends StatelessWidget {
               context,
               listen: false,
             );
-            final success = await provider.deleteCustomer(customer.id!);
+            final success = await provider.deleteCustomer(customer.id);
             if (context.mounted) {
               Navigator.pop(context);
               if (success) {

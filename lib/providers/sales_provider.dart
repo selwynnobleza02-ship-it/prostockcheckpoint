@@ -123,8 +123,13 @@ class SalesProvider with ChangeNotifier {
 
       if (_sales.isNotEmpty) {
         final saleIds = _sales.map((s) => s.id!).toList();
-        final saleService = SaleService(FirebaseFirestore.instance);
-        _saleItems = await saleService.getSaleItemsBySaleIds(saleIds);
+        if (_offlineManager.isOnline) {
+          final saleService = SaleService(FirebaseFirestore.instance);
+          _saleItems = await saleService.getSaleItemsBySaleIds(saleIds);
+        } else {
+          final localSaleItems = await LocalDatabaseService.instance.getSaleItemsBySaleIds(saleIds);
+          _saleItems = localSaleItems.map((item) => SaleItem.fromMap(item)).toList();
+        }
       }
 
       _setCachedData(cacheKey, _sales);
@@ -448,13 +453,15 @@ class SalesProvider with ChangeNotifier {
         receipt = _createReceipt(saleId, customerId, paymentMethod);
       }
 
-                await _authProvider.logActivity(
-                  'COMPLETE_SALE',
-                  details: 'Sale completed with total: ${receipt.total}',
-                  amount: receipt.total,
-                );
+      // Don't await these, let them run in the background
+      _authProvider.logActivity(
+        'COMPLETE_SALE',
+        details: 'Sale completed with total: ${receipt.total}',
+        amount: receipt.total,
+      );
+      loadSales(); // No await
+
       _currentSaleItems.clear();
-      await loadSales();
       return receipt;
     } catch (e) {
       _error = 'Error completing sale: \${e.toString()}';

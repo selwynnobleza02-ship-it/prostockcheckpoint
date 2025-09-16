@@ -151,7 +151,8 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
       context: context,
       title: _isEditMode ? 'Update Customer' : 'Add Customer',
       content: _isEditMode
-          ? 'Are you sure you want to save changes to ${widget.customer!.name}?': 'Are you sure you want to add this customer?',
+          ? 'Are you sure you want to save changes to ${widget.customer!.name}?'
+          : 'Are you sure you want to add this customer?',
       confirmText: _isEditMode ? 'Save' : 'Add',
     );
 

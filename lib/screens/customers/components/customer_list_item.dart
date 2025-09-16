@@ -16,17 +16,21 @@ class CustomerListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final customerProvider = Provider.of<CustomerProvider>(context, listen: false);
-    final isOverdue = customerProvider.overdueCustomers.any((c) => c.id == customer.id);
+    final customerProvider = Provider.of<CustomerProvider>(
+      context,
+      listen: false,
+    );
+    final isOverdue = customerProvider.overdueCustomers.any(
+      (c) => c.id == customer.id,
+    );
 
     return Card(
-      margin: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 4,
-      ),
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: isOverdue ? Colors.red : (customer.balance > 0 ? Colors.orange : Colors.green),
+          backgroundColor: isOverdue
+              ? Colors.red
+              : (customer.balance > 0 ? Colors.orange : Colors.green),
           child: Text(
             customer.name.substring(0, 1).toUpperCase(),
             style: const TextStyle(
@@ -53,7 +57,9 @@ class CustomerListItem extends StatelessWidget {
             Text(
               'Balance: ${CurrencyUtils.formatCurrency(customer.balance)}',
               style: TextStyle(
-                color: isOverdue ? Colors.red : (customer.balance > 0 ? Colors.orange : Colors.green),
+                color: isOverdue
+                    ? Colors.red
+                    : (customer.balance > 0 ? Colors.orange : Colors.green),
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -61,26 +67,14 @@ class CustomerListItem extends StatelessWidget {
         ),
         trailing: PopupMenuButton(
           itemBuilder: (context) => [
-            const PopupMenuItem(
-              value: 'view',
-              child: Text('View Details'),
-            ),
-            const PopupMenuItem(
-              value: 'edit',
-              child: Text('Edit'),
-            ),
-            const PopupMenuItem(
-              value: 'utang',
-              child: Text('Manage Balance'),
-            ),
+            const PopupMenuItem(value: 'view', child: Text('View Details')),
+            const PopupMenuItem(value: 'edit', child: Text('Edit')),
+            const PopupMenuItem(value: 'utang', child: Text('Manage Balance')),
             const PopupMenuItem(
               value: 'history',
               child: Text('Transaction History'),
             ),
-            const PopupMenuItem(
-              value: 'delete',
-              child: Text('Delete'),
-            ),
+            const PopupMenuItem(value: 'delete', child: Text('Delete')),
           ],
           onSelected: (value) async {
             // Check context.mounted before any async operations that use context
@@ -90,34 +84,36 @@ class CustomerListItem extends StatelessWidget {
               case 'view':
                 showDialog(
                   context: context,
-                  builder: (context) => CustomerDetailsDialog(customer: customer),
+                  builder: (context) =>
+                      CustomerDetailsDialog(customer: customer),
                 );
                 break;
               case 'edit':
                 showDialog(
                   context: context,
-                  builder: (context) => AddCustomerDialog(
-                    customer: customer,
-                  ),
+                  builder: (context) => AddCustomerDialog(customer: customer),
                 );
                 break;
               case 'utang':
                 showDialog(
                   context: context,
-                  builder: (context) => BalanceManagementDialog(customer: customer),
+                  builder: (context) =>
+                      BalanceManagementDialog(customer: customer),
                 );
                 break;
               case 'history':
                 showDialog(
                   context: context,
-                  builder: (context) => TransactionHistoryDialog(customer: customer),
+                  builder: (context) =>
+                      TransactionHistoryDialog(customer: customer),
                 );
                 break;
               case 'delete':
                 final confirmed = await showConfirmationDialog(
                   context: context,
                   title: 'Delete Customer',
-                  content: 'Are you sure you want to delete ${customer.name}? This action cannot be undone.',
+                  content:
+                      'Are you sure you want to delete ${customer.name}? This action cannot be undone.',
                   confirmText: 'Delete',
                 );
                 if (confirmed == true) {
@@ -127,7 +123,7 @@ class CustomerListItem extends StatelessWidget {
                     context,
                     listen: false,
                   );
-                  final success = await provider.deleteCustomer(customer.id!);
+                  final success = await provider.deleteCustomer(customer.id);
                   if (context.mounted) {
                     if (success) {
                       ScaffoldMessenger.of(context).showSnackBar(

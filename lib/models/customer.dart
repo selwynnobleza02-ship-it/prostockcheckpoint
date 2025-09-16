@@ -1,7 +1,8 @@
 import 'package:prostock/utils/app_constants.dart';
+import 'package:uuid/uuid.dart';
 
 class Customer {
-  final String? id;
+  final String id;
   final String name;
   final String? phone;
   final String? email;
@@ -14,7 +15,7 @@ class Customer {
   final DateTime updatedAt;
 
   Customer({
-    this.id,
+    String? id,
     required this.name,
     this.phone,
     this.email,
@@ -25,7 +26,7 @@ class Customer {
     this.creditLimit = 0,
     required this.createdAt,
     required this.updatedAt,
-  }) {
+  }) : id = id ?? const Uuid().v4() {
     _validateCustomer();
   }
 

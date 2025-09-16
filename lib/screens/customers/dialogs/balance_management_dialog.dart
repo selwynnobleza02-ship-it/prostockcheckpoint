@@ -10,7 +10,8 @@ class BalanceManagementDialog extends StatefulWidget {
   const BalanceManagementDialog({super.key, required this.customer});
 
   @override
-  State<BalanceManagementDialog> createState() => _BalanceManagementDialogState();
+  State<BalanceManagementDialog> createState() =>
+      _BalanceManagementDialogState();
 }
 
 class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
@@ -25,10 +26,7 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
   void _showErrorSnackBar(String message) {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(message),
-          backgroundColor: Colors.red,
-        ),
+        SnackBar(content: Text(message), backgroundColor: Colors.red),
       );
     }
   }
@@ -72,9 +70,7 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
           const SizedBox(height: 16),
           TextField(
             controller: _paymentController,
-            keyboardType: const TextInputType.numberWithOptions(
-              decimal: true,
-            ),
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
             decoration: const InputDecoration(
               labelText: 'Payment Amount',
               prefixText: '₱ ',
@@ -109,10 +105,9 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
                   }
 
                   final success = await creditProvider.recordPayment(
-                    customerId: widget.customer.id!,
+                    customerId: widget.customer.id,
                     amount: amount,
-                    notes:
-                        'Payment received from ${widget.customer.name}',
+                    notes: 'Payment received from ${widget.customer.name}',
                   );
 
                   if (success) {

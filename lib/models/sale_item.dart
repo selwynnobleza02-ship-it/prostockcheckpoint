@@ -1,7 +1,8 @@
 import 'package:prostock/utils/app_constants.dart';
+import 'package:uuid/uuid.dart';
 
 class SaleItem {
-  final String? id;
+  final String id;
   late final String saleId;
   final String productId;
   final int quantity;
@@ -9,13 +10,13 @@ class SaleItem {
   final double totalPrice;
 
   SaleItem({
-    this.id,
+    String? id,
     required this.saleId,
     required this.productId,
     required this.quantity,
     required this.unitPrice,
     required this.totalPrice,
-  }) {
+  }) : id = id ?? const Uuid().v4() {
     _validateSaleItem();
   }
 

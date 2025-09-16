@@ -66,15 +66,19 @@ class MyApp extends StatelessWidget {
         Provider<CreditService>(
           create: (_) => CreditService(),
         ),
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider.value(value: offlineManager),
         ChangeNotifierProvider.value(value: syncFailureProvider),
+        ChangeNotifierProvider(
+          create: (context) => AuthProvider(context.read<OfflineManager>()),
+        ),
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(
           create: (context) =>
               InventoryProvider(offlineManager: context.read<OfflineManager>()),
         ),
-        ChangeNotifierProvider(create: (_) => CustomerProvider()),
+        ChangeNotifierProvider(
+          create: (context) => CustomerProvider(context.read<OfflineManager>()),
+        ),
         ChangeNotifierProxyProvider3<InventoryProvider, CustomerProvider, AuthProvider, SalesProvider>(
           create: (context) => SalesProvider(
             inventoryProvider: context.read<InventoryProvider>(),

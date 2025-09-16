@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+import 'package:prostock/models/offline_operation.dart';
+import 'package:prostock/services/offline_manager.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/app_user.dart';
 import '../models/user_role.dart';
@@ -15,10 +17,13 @@ class AuthProvider with ChangeNotifier {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
   final UserService _userService = UserService(FirebaseFirestore.instance, FirebaseAuth.instance);
   final ActivityService _activityService = ActivityService(FirebaseFirestore.instance);
+  final OfflineManager _offlineManager;
 
   bool _isAuthenticated = false;
   AppUser? _currentUser;
   User? _firebaseUser;
+
+  AuthProvider(this._offlineManager);
 
   bool get isAuthenticated => _isAuthenticated;
   AppUser? get currentUser => _currentUser;
@@ -189,7 +194,18 @@ class AuthProvider with ChangeNotifier {
           timestamp: DateTime.now(),
         );
 
-        await _activityService.insertUserActivity(activity);
+        if (_offlineManager.isOnline) {
+          await _activityService.insertUserActivity(activity);
+        } else {
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              type: OperationType.logActivity,
+              collectionName: 'activities',
+              data: activity.toMap(),
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
       }
     } catch (e) {
       ErrorLogger.logError(

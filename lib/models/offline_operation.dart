@@ -7,11 +7,13 @@ enum OperationType {
   updateProduct,
   insertCustomer,
   updateCustomer,
+  deleteCustomer,
   createSaleTransaction,
   insertCreditTransaction,
   updateCustomerBalance,
   insertLoss,
   insertPriceHistory,
+  logActivity, // Added for offline activity logging
 }
 
 /// Offline Operation Model - Serializable operation container

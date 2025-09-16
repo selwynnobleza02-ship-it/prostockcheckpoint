@@ -155,6 +155,15 @@ CREATE TABLE IF NOT EXISTS offline_operations (
     return await db.query('sale_items', where: 'saleId = ?', whereArgs: [saleId]);
   }
 
+  Future<List<Map<String, dynamic>>> getSaleItemsBySaleIds(List<String> saleIds) async {
+    final db = await instance.database;
+    if (saleIds.isEmpty) {
+      return [];
+    }
+    final ids = saleIds.map((id) => '?').join(',');
+    return await db.query('sale_items', where: 'saleId IN ($ids)', whereArgs: saleIds);
+  }
+
   Future close() async {
     final db = await instance.database;
     db.close();

@@ -10,7 +10,8 @@ class TransactionHistoryDialog extends StatefulWidget {
   const TransactionHistoryDialog({super.key, required this.customer});
 
   @override
-  State<TransactionHistoryDialog> createState() => _TransactionHistoryDialogState();
+  State<TransactionHistoryDialog> createState() =>
+      _TransactionHistoryDialogState();
 }
 
 class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
@@ -18,8 +19,10 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<CreditProvider>(context, listen: false)
-          .getTransactionsByCustomer(widget.customer.id!);
+      Provider.of<CreditProvider>(
+        context,
+        listen: false,
+      ).getTransactionsByCustomer(widget.customer.id);
     });
   }
 

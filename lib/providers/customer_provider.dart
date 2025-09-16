@@ -2,12 +2,13 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/models/offline_operation.dart';
 import 'package:prostock/services/firestore/customer_service.dart';
+import 'package:prostock/services/offline_manager.dart';
 import '../models/customer.dart';
 import '../services/cloudinary_service.dart';
 import '../utils/error_logger.dart';
 import 'package:prostock/services/local_database_service.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 
 class CustomerProvider with ChangeNotifier {
   List<Customer> _customers = [];
@@ -15,6 +16,7 @@ class CustomerProvider with ChangeNotifier {
   String? _error;
 
   final LocalDatabaseService _localDatabaseService = LocalDatabaseService.instance;
+  final OfflineManager _offlineManager;
   final Map<String, List<Customer>> _cache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
   static const Duration _cacheExpiry = Duration(minutes: 5);
@@ -22,6 +24,8 @@ class CustomerProvider with ChangeNotifier {
   DocumentSnapshot? _lastDocument;
   bool _hasMoreData = true;
   String? _currentSearchQuery;
+
+  CustomerProvider(this._offlineManager);
 
   List<Customer> get customers => _customers;
   bool get isLoading => _isLoading;
@@ -42,10 +46,7 @@ class CustomerProvider with ChangeNotifier {
   }) async {
     if (_isLoading) return;
 
-    final connectivityResult = await (Connectivity().checkConnectivity());
-    final isOnline = !connectivityResult.contains(ConnectivityResult.none);
-
-    if (!refresh && !isOnline) {
+    if (!refresh && !_offlineManager.isOnline) {
       await _loadCustomersFromLocalDB();
       return;
     }
@@ -188,26 +189,34 @@ class CustomerProvider with ChangeNotifier {
 
     try {
       final db = await _localDatabaseService.database;
-      final id = await db.insert('customers', customer.toMap());
+      await db.insert('customers', customer.toMap());
+      _customers.add(customer);
 
-      final newCustomer = customer.copyWith(id: id.toString());
-      _customers.add(newCustomer);
-
-      final connectivityResult = await (Connectivity().checkConnectivity());
-      final isOnline = !connectivityResult.contains(ConnectivityResult.none);
-
-      if (isOnline) {
+      if (_offlineManager.isOnline) {
         final customerService = CustomerService(FirebaseFirestore.instance);
         final firestoreId = await customerService.insertCustomer(customer);
-        final finalCustomer = newCustomer.copyWith(id: firestoreId);
-        _customers.removeLast();
-        _customers.add(finalCustomer);
-        await db.update('customers', finalCustomer.toMap(), where: 'id = ?', whereArgs: [id]);
+        final finalCustomer = customer.copyWith(id: firestoreId);
+        final index = _customers.indexWhere((c) => c.id == customer.id);
+        if (index != -1) {
+          _customers[index] = finalCustomer;
+        }
+        await db.update('customers', finalCustomer.toMap(), where: 'id = ?', whereArgs: [customer.id]);
+      } else {
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: customer.id,
+            type: OperationType.insertCustomer,
+            collectionName: 'customers',
+            documentId: customer.id,
+            data: customer.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
       }
 
       _isLoading = false;
       notifyListeners();
-      return newCustomer;
+      return customer;
     } catch (e) {
       _error = 'Failed to add customer: ${e.toString()}';
       _isLoading = false;
@@ -235,11 +244,8 @@ class CustomerProvider with ChangeNotifier {
         _customers[index] = customer;
       }
 
-      final connectivityResult = await (Connectivity().checkConnectivity());
-      final isOnline = !connectivityResult.contains(ConnectivityResult.none);
-
-      if (isOnline) {
-        final oldCustomer = await getCustomerById(customer.id!);
+      if (_offlineManager.isOnline) {
+        final oldCustomer = await getCustomerById(customer.id);
         if (oldCustomer?.localImagePath != null &&
             oldCustomer!.localImagePath! != customer.localImagePath) {
           final imageFile = File(oldCustomer.localImagePath!);
@@ -259,6 +265,17 @@ class CustomerProvider with ChangeNotifier {
 
         final customerService = CustomerService(FirebaseFirestore.instance);
         await customerService.updateCustomer(customer);
+      } else {
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: customer.id,
+            type: OperationType.updateCustomer,
+            collectionName: 'customers',
+            documentId: customer.id,
+            data: customer.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
       }
 
       _isLoading = false;
@@ -291,10 +308,7 @@ class CustomerProvider with ChangeNotifier {
 
       _customers.removeWhere((c) => c.id == customerId);
 
-      final connectivityResult = await (Connectivity().checkConnectivity());
-      final isOnline = !connectivityResult.contains(ConnectivityResult.none);
-
-      if (isOnline) {
+      if (_offlineManager.isOnline) {
         if (customer?.localImagePath != null) {
           final imageFile = File(customer!.localImagePath!);
           if (await imageFile.exists()) {
@@ -311,6 +325,17 @@ class CustomerProvider with ChangeNotifier {
         }
         final customerService = CustomerService(FirebaseFirestore.instance);
         await customerService.deleteCustomer(customerId);
+      } else {
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: customerId,
+            type: OperationType.deleteCustomer,
+            collectionName: 'customers',
+            documentId: customerId,
+            data: {}, // No data needed for delete
+            timestamp: DateTime.now(),
+          ),
+        );
       }
 
       notifyListeners();
@@ -342,8 +367,25 @@ class CustomerProvider with ChangeNotifier {
         updatedAt: DateTime.now(),
       );
 
-      final customerService = CustomerService(FirebaseFirestore.instance);
-      await customerService.updateCustomer(updatedCustomer);
+      if (_offlineManager.isOnline) {
+        final customerService = CustomerService(FirebaseFirestore.instance);
+        await customerService.updateCustomer(updatedCustomer);
+      } else {
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: updatedCustomer.id,
+            type: OperationType.updateCustomerBalance,
+            collectionName: 'customers',
+            documentId: updatedCustomer.id,
+            data: {'balance': updatedCustomer.balance, 'updated_at': updatedCustomer.updatedAt.toIso8601String()},
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+      
+      final db = await _localDatabaseService.database;
+      await db.update('customers', {'balance': updatedCustomer.balance, 'updated_at': updatedCustomer.updatedAt.toIso8601String()}, where: 'id = ?', whereArgs: [customerId]);
+
       _customers[customerIndex] = updatedCustomer;
       notifyListeners();
       return true;
