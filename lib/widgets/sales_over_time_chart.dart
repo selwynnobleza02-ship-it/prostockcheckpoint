@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
+import 'package:prostock/utils/chart_utils.dart';
 import '../models/sale.dart';
+import 'filter_toggle_buttons.dart';
 
 class SalesOverTimeChart extends StatefulWidget {
   final List<Sale> sales;
@@ -36,37 +37,16 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
                   ),
                   const SizedBox(height: 8),
 
-                  /// Filter Buttons (Daily / Monthly / Yearly)
-                  Center(
-                    child: ToggleButtons(
-                      isSelected: [
-                        _selectedFilter == "Daily",
-                        _selectedFilter == "Monthly",
-                        _selectedFilter == "Yearly",
-                      ],
-                      onPressed: (index) {
-                        setState(() {
-                          _selectedFilter = [
-                            "Daily",
-                            "Monthly",
-                            "Yearly",
-                          ][index];
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      selectedColor: Colors.white,
-                      fillColor: Colors.blue,
-                      color: Colors.blueGrey,
-                      constraints: const BoxConstraints(
-                        minHeight: 36,
-                        minWidth: 70,
-                      ),
-                      children: const [
-                        Text("Daily"),
-                        Text("Monthly"),
-                        Text("Yearly"),
-                      ],
-                    ),
+                  /// Filter Buttons
+                  FilterToggleButtons(
+                    selectedFilter: _selectedFilter,
+                    onFilterChanged: (filter) {
+                      setState(() {
+                        _selectedFilter = filter;
+                      });
+                    },
+                    fillColor: Colors.blue,
+                    color: Colors.blueGrey,
                   ),
                 ],
               ),
@@ -148,25 +128,12 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
   List<FlSpot> _getChartSpots() {
     if (widget.sales.isEmpty) return [const FlSpot(0, 0)];
 
-    final Map<DateTime, double> groupedSales = {};
-
-    for (final sale in widget.sales) {
-      DateTime key;
-
-      if (_selectedFilter == "Daily") {
-        key = DateTime(
-          sale.createdAt.year,
-          sale.createdAt.month,
-          sale.createdAt.day,
-        );
-      } else if (_selectedFilter == "Monthly") {
-        key = DateTime(sale.createdAt.year, sale.createdAt.month);
-      } else {
-        key = DateTime(sale.createdAt.year);
-      }
-
-      groupedSales[key] = (groupedSales[key] ?? 0) + sale.totalAmount;
-    }
+    final groupedSales = ChartUtils.groupDataByFilter<Sale>(
+      widget.sales,
+      _selectedFilter,
+      (sale) => sale.createdAt,
+      (sale) => sale.totalAmount,
+    );
 
     final sortedKeys = groupedSales.keys.toList()..sort();
 
@@ -188,15 +155,7 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
     if (value.toInt() >= groupedKeys.length) return const SizedBox.shrink();
 
     final date = groupedKeys[value.toInt()];
-    String text;
-
-    if (_selectedFilter == "Daily") {
-      text = DateFormat('MM/dd').format(date);
-    } else if (_selectedFilter == "Monthly") {
-      text = DateFormat('MMM yy').format(date);
-    } else {
-      text = DateFormat('yyyy').format(date);
-    }
+    final text = ChartUtils.formatBottomTitle(date, _selectedFilter);
 
     return SideTitleWidget(
       meta: meta,
@@ -206,23 +165,12 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
   }
 
   List<DateTime> _getSortedKeys() {
-    final Map<DateTime, double> groupedSales = {};
-
-    for (final sale in widget.sales) {
-      DateTime key;
-      if (_selectedFilter == "Daily") {
-        key = DateTime(
-          sale.createdAt.year,
-          sale.createdAt.month,
-          sale.createdAt.day,
-        );
-      } else if (_selectedFilter == "Monthly") {
-        key = DateTime(sale.createdAt.year, sale.createdAt.month);
-      } else {
-        key = DateTime(sale.createdAt.year);
-      }
-      groupedSales[key] = (groupedSales[key] ?? 0) + sale.totalAmount;
-    }
+    final groupedSales = ChartUtils.groupDataByFilter<Sale>(
+      widget.sales,
+      _selectedFilter,
+      (sale) => sale.createdAt,
+      (sale) => sale.totalAmount,
+    );
     return groupedSales.keys.toList()..sort();
   }
 

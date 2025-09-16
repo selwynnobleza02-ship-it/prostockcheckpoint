@@ -213,7 +213,11 @@ class PrintingService with ChangeNotifier {
     }
   }
 
-  Future<bool> printReceipt(Receipt receipt) async {
+  Future<bool> printReceipt(
+    Receipt receipt, {
+    double? cashTendered,
+    double? change,
+  }) async {
     if (!_isConnected) {
       if (kDebugMode) {
         print('Cannot print receipt: No printer connected');
@@ -222,7 +226,11 @@ class PrintingService with ChangeNotifier {
     }
 
     try {
-      final List<int> bytes = await _generateReceiptTicket(receipt);
+      final List<int> bytes = await _generateReceiptTicket(
+        receipt,
+        cashTendered: cashTendered,
+        change: change,
+      );
       await BluetoothThermalPrinter.writeBytes(bytes);
       if (kDebugMode) {
         print('Receipt printed successfully');
@@ -281,53 +289,63 @@ class PrintingService with ChangeNotifier {
     return bytes;
   }
 
-  Future<List<int>> _generateReceiptTicket(Receipt receipt) async {
+  Future<List<int>> _generateReceiptTicket(
+    Receipt receipt, {
+    double? cashTendered,
+    double? change,
+  }) async {
     final profile = await CapabilityProfile.load();
     final generator = Generator(_paperSize, profile);
     List<int> bytes = [];
 
     // Header
     bytes += generator.text(
-      'ProStock POS',
-      styles: const PosStyles(
-        align: PosAlign.center,
-        height: PosTextSize.size2,
-        width: PosTextSize.size2,
-        bold: true,
-      ),
+      'RETAIL CREDIT MANAGER',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
     );
     bytes += generator.feed(1);
-    bytes += generator.hr();
-
-    // Receipt info
     bytes += generator.text(
-      'Receipt: ${receipt.receiptNumber}',
+      'Receipt: ${receipt.formattedReceiptNumber}',
       styles: const PosStyles(align: PosAlign.center),
     );
     bytes += generator.text(
-      'Date: ${receipt.formattedTimestamp}',
+      receipt.formattedTimestamp,
       styles: const PosStyles(align: PosAlign.center),
     );
-    if (receipt.customerName != null && receipt.customerName!.isNotEmpty) {
-      bytes += generator.text(
-        'Customer: ${receipt.customerName}',
-        styles: const PosStyles(align: PosAlign.center),
-      );
-    }
     bytes += generator.hr();
 
-    // Items
+    // Customer and Payment Info - Single line format for 58mm
+    bytes += generator.text(
+      'Customer: ${receipt.customerName ?? 'Walk-in Customer'}',
+      styles: const PosStyles(align: PosAlign.left),
+    );
+    bytes += generator.text(
+      'Payment: ${receipt.paymentMethod.toUpperCase()}',
+      styles: const PosStyles(align: PosAlign.left),
+    );
+    bytes += generator.hr();
+
+    // Items - Simplified format for 58mm
+    bytes += generator.text(
+      'ITEMS',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
+    );
+    bytes += generator.hr(ch: '-');
+
+    // Each item on multiple lines for better readability on 58mm
     for (final item in receipt.items) {
+      // Product name
+      bytes += generator.text(
+        item.productName,
+        styles: const PosStyles(bold: true),
+      );
+
+      // Quantity, price, and total on one line
       bytes += generator.row([
         PosColumn(
-          text: item.productName,
-          width: 6,
+          text: '${item.quantity} x PHP${item.unitPrice.toStringAsFixed(2)}',
+          width: 8,
           styles: const PosStyles(align: PosAlign.left),
-        ),
-        PosColumn(
-          text: 'x${item.quantity}',
-          width: 2,
-          styles: const PosStyles(align: PosAlign.center),
         ),
         PosColumn(
           text: 'PHP${item.totalPrice.toStringAsFixed(2)}',
@@ -335,32 +353,69 @@ class PrintingService with ChangeNotifier {
           styles: const PosStyles(align: PosAlign.right),
         ),
       ]);
+      bytes += generator.feed(1);
     }
 
     bytes += generator.hr();
 
-    // Total
+    // Totals - Right aligned for 58mm
+    bytes += generator.row([
+      PosColumn(
+        text: 'Subtotal',
+        width: 8,
+        styles: const PosStyles(align: PosAlign.left),
+      ),
+      PosColumn(
+        text: 'PHP${receipt.subtotal.toStringAsFixed(2)}',
+        width: 4,
+        styles: const PosStyles(align: PosAlign.right),
+      ),
+    ]);
+
     bytes += generator.row([
       PosColumn(
         text: 'TOTAL',
         width: 8,
-        styles: const PosStyles(
-          height: PosTextSize.size2,
-          width: PosTextSize.size2,
-          bold: true,
-        ),
+        styles: const PosStyles(align: PosAlign.left, bold: true),
       ),
       PosColumn(
         text: 'PHP${receipt.total.toStringAsFixed(2)}',
         width: 4,
-        styles: const PosStyles(
-          height: PosTextSize.size2,
-          width: PosTextSize.size2,
-          align: PosAlign.right,
-          bold: true,
-        ),
+        styles: const PosStyles(align: PosAlign.right, bold: true),
       ),
     ]);
+
+    // Cash and change information
+    if (cashTendered != null && cashTendered > 0) {
+      bytes += generator.row([
+        PosColumn(
+          text: 'Cash Tendered',
+          width: 8,
+          styles: const PosStyles(align: PosAlign.left),
+        ),
+        PosColumn(
+          text: 'PHP${cashTendered.toStringAsFixed(2)}',
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]);
+    }
+
+    if (change != null && change > 0) {
+      bytes += generator.row([
+        PosColumn(
+          text: 'Change',
+          width: 8,
+          styles: const PosStyles(align: PosAlign.left, bold: true),
+        ),
+        PosColumn(
+          text: 'PHP${change.toStringAsFixed(2)}',
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right, bold: true),
+        ),
+      ]);
+    }
+
     bytes += generator.hr(ch: '=');
 
     // Footer
@@ -369,12 +424,7 @@ class PrintingService with ChangeNotifier {
       'Thank you for your business!',
       styles: const PosStyles(align: PosAlign.center, bold: true),
     );
-    bytes += generator.feed(1);
-    bytes += generator.text(
-      'Please come again',
-      styles: const PosStyles(align: PosAlign.center),
-    );
-    bytes += generator.feed(3);
+    bytes += generator.feed(2);
     bytes += generator.cut();
 
     return bytes;

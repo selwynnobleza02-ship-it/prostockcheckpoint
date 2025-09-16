@@ -297,7 +297,11 @@ class ReceiptDialog extends StatelessWidget {
                     onPressed: () {
                       final printingService = PrintingService();
                       if (printingService.isConnected) {
-                        printingService.printReceipt(receipt);
+                        printingService.printReceipt(
+                          receipt,
+                          cashTendered: cashTendered,
+                          change: change,
+                        );
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Sent to printer'),

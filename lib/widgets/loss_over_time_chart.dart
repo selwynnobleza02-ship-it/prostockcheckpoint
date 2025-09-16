@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:intl/intl.dart';
+import 'package:prostock/utils/chart_utils.dart';
 import '../models/loss.dart';
+import 'filter_toggle_buttons.dart';
 
 class LossOverTimeChart extends StatefulWidget {
   final List<Loss> losses;
@@ -36,37 +37,16 @@ class _LossOverTimeChartState extends State<LossOverTimeChart> {
                   ),
                   const SizedBox(height: 8),
 
-                  /// Filter Buttons (Daily / Monthly / Yearly)
-                  Center(
-                    child: ToggleButtons(
-                      isSelected: [
-                        _selectedFilter == "Daily",
-                        _selectedFilter == "Monthly",
-                        _selectedFilter == "Yearly",
-                      ],
-                      onPressed: (index) {
-                        setState(() {
-                          _selectedFilter = [
-                            "Daily",
-                            "Monthly",
-                            "Yearly",
-                          ][index];
-                        });
-                      },
-                      borderRadius: BorderRadius.circular(12),
-                      selectedColor: Colors.white,
-                      fillColor: Colors.red,
-                      color: Colors.red,
-                      constraints: const BoxConstraints(
-                        minHeight: 36,
-                        minWidth: 70,
-                      ),
-                      children: const [
-                        Text("Daily"),
-                        Text("Monthly"),
-                        Text("Yearly"),
-                      ],
-                    ),
+                  /// Filter Buttons
+                  FilterToggleButtons(
+                    selectedFilter: _selectedFilter,
+                    onFilterChanged: (filter) {
+                      setState(() {
+                        _selectedFilter = filter;
+                      });
+                    },
+                    fillColor: Colors.red,
+                    color: Colors.red,
                   ),
                 ],
               ),
@@ -123,25 +103,12 @@ class _LossOverTimeChartState extends State<LossOverTimeChart> {
   List<BarChartGroupData> _getChartGroups() {
     if (widget.losses.isEmpty) return [];
 
-    final Map<DateTime, double> groupedLosses = {};
-
-    for (final loss in widget.losses) {
-      DateTime key;
-
-      if (_selectedFilter == "Daily") {
-        key = DateTime(
-          loss.timestamp.year,
-          loss.timestamp.month,
-          loss.timestamp.day,
-        );
-      } else if (_selectedFilter == "Monthly") {
-        key = DateTime(loss.timestamp.year, loss.timestamp.month);
-      } else {
-        key = DateTime(loss.timestamp.year);
-      }
-
-      groupedLosses[key] = (groupedLosses[key] ?? 0) + loss.totalCost;
-    }
+    final groupedLosses = ChartUtils.groupDataByFilter<Loss>(
+      widget.losses,
+      _selectedFilter,
+      (loss) => loss.timestamp,
+      (loss) => loss.totalCost,
+    );
 
     final sortedKeys = groupedLosses.keys.toList()..sort();
 
@@ -175,15 +142,7 @@ class _LossOverTimeChartState extends State<LossOverTimeChart> {
     if (value.toInt() >= groupedKeys.length) return const SizedBox.shrink();
 
     final date = groupedKeys[value.toInt()];
-    String text;
-
-    if (_selectedFilter == "Daily") {
-      text = DateFormat('MM/dd').format(date);
-    } else if (_selectedFilter == "Monthly") {
-      text = DateFormat('MMM yy').format(date);
-    } else {
-      text = DateFormat('yyyy').format(date);
-    }
+    final text = ChartUtils.formatBottomTitle(date, _selectedFilter);
 
     return SideTitleWidget(
       meta: meta,
@@ -193,23 +152,12 @@ class _LossOverTimeChartState extends State<LossOverTimeChart> {
   }
 
   List<DateTime> _getSortedKeys() {
-    final Map<DateTime, double> groupedLosses = {};
-
-    for (final loss in widget.losses) {
-      DateTime key;
-      if (_selectedFilter == "Daily") {
-        key = DateTime(
-          loss.timestamp.year,
-          loss.timestamp.month,
-          loss.timestamp.day,
-        );
-      } else if (_selectedFilter == "Monthly") {
-        key = DateTime(loss.timestamp.year, loss.timestamp.month);
-      } else {
-        key = DateTime(loss.timestamp.year);
-      }
-      groupedLosses[key] = (groupedLosses[key] ?? 0) + loss.totalCost;
-    }
+    final groupedLosses = ChartUtils.groupDataByFilter<Loss>(
+      widget.losses,
+      _selectedFilter,
+      (loss) => loss.timestamp,
+      (loss) => loss.totalCost,
+    );
     return groupedLosses.keys.toList()..sort();
   }
 
