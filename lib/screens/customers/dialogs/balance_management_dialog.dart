@@ -105,6 +105,7 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
                   }
 
                   final success = await creditProvider.recordPayment(
+                    context: context,
                     customerId: widget.customer.id,
                     amount: amount,
                     notes: 'Payment received from ${widget.customer.name}',

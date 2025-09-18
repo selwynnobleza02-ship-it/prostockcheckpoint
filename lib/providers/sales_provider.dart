@@ -17,6 +17,8 @@ import '../utils/currency_utils.dart';
 import '../utils/error_logger.dart';
 import 'inventory_provider.dart';
 
+import 'package:prostock/providers/credit_provider.dart';
+
 class SalesProvider with ChangeNotifier {
   List<Sale> _sales = [];
   List<SaleItem> _saleItems = [];
@@ -29,6 +31,7 @@ class SalesProvider with ChangeNotifier {
   final OfflineManager _offlineManager;
   final CustomerProvider _customerProvider;
   final AuthProvider _authProvider;
+  final CreditProvider _creditProvider;
 
   final Map<String, List<Sale>> _cache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
@@ -41,10 +44,12 @@ class SalesProvider with ChangeNotifier {
     required OfflineManager offlineManager,
     required CustomerProvider customerProvider,
     required AuthProvider authProvider,
+    required CreditProvider creditProvider,
   })  : _inventoryProvider = inventoryProvider,
         _offlineManager = offlineManager,
         _customerProvider = customerProvider,
-        _authProvider = authProvider;
+        _authProvider = authProvider,
+        _creditProvider = creditProvider;
 
   List<Sale> get sales => _sales;
   List<SaleItem> get saleItems => _saleItems;
@@ -352,105 +357,88 @@ class SalesProvider with ChangeNotifier {
         productsInSale.add(product);
       }
 
-      if (paymentMethod == 'credit') {
-        final customer = await _customerProvider.getCustomerById(customerId!);
-        if (customer == null) {
-          _error = 'Customer not found';
-          return null;
-        }
-
-        if (customer.balance + currentSaleTotal > customer.creditLimit) {
-          _error = 'Credit limit exceeded';
-          return null;
-        }
-      }
-
       final currentUser = _authProvider.currentUser;
       if (currentUser == null || currentUser.id == null) {
         throw Exception('User not authenticated or user ID is null');
       }
-
-      final sale = Sale(
-        customerId: customerId,
-        totalAmount: currentSaleTotal,
-        paymentMethod: paymentMethod,
-        status: 'completed',
-        createdAt: DateTime.now(),
-        dueDate: dueDate,
-        userId: currentUser.id!,
-      );
-
-      if (_offlineManager.isOnline) {
-        log('Online sale');
-        final saleService = SaleService(FirebaseFirestore.instance);
-        final saleId = await saleService.insertSale(sale, productsInSale);
-
-        for (final item in _currentSaleItems) {
-          final saleItem = SaleItem(
-            saleId: saleId,
-            productId: item.productId,
-            quantity: item.quantity,
-            unitPrice: item.unitPrice,
-            totalPrice: item.totalPrice,
-          );
-
-          await saleService.insertSaleItem(saleItem);
-
-          final stockReduced = await _inventoryProvider.reduceStock(
-            item.productId,
-            item.quantity,
-          );
-          if (!stockReduced) {
-            _error = 'Failed to reduce stock for product: \${item.productId}';
-            return null;
-          }
+      if (paymentMethod == 'credit') {
+        // Delegate to CreditProvider for credit sales
+        receipt = await _creditProvider.recordCreditSale(
+          customerId: customerId!,
+          items: _currentSaleItems,
+          total: currentSaleTotal,
+        );
+        if (receipt == null) {
+          _error = _creditProvider.error;
+          return null;
         }
-
-        if (paymentMethod == 'credit') {
-          await _customerProvider.updateCustomerBalance(
-            customerId!,
-            currentSaleTotal,
-          );
-        }
-
-        receipt = _createReceipt(saleId, customerId, paymentMethod);
       } else {
-        log('Offline sale');
-        final saleId = const Uuid().v4();
-        final offlineSale = sale.copyWith(id: saleId);
-
-        final List<Map<String, dynamic>> saleItems = [];
-        for (final item in _currentSaleItems) {
-          saleItems.add(item.copyWith(saleId: saleId).toMap());
-        }
-
-        await _offlineManager.queueOperation(
-          OfflineOperation(
-            id: offlineSale.id!,
-            type: OperationType.createSaleTransaction,
-            collectionName: 'sales',
-            documentId: offlineSale.id,
-            data: {'sale': offlineSale.toMap(), 'saleItems': saleItems},
-            timestamp: DateTime.now(),
-          ),
+        final sale = Sale(
+          customerId: customerId,
+          totalAmount: currentSaleTotal,
+          paymentMethod: paymentMethod,
+          status: 'completed',
+          createdAt: DateTime.now(),
+          dueDate: dueDate,
+          userId: currentUser.id!,
         );
 
-        for (final item in _currentSaleItems) {
-          await _inventoryProvider.reduceStock(
-            item.productId,
-            item.quantity,
-            offline: true,
-          );
-        }
+        if (_offlineManager.isOnline) {
+          log('Online sale');
+          final saleService = SaleService(FirebaseFirestore.instance);
+          final saleId = await saleService.insertSale(sale, productsInSale);
 
-        if (paymentMethod == 'credit') {
-          _customerProvider.updateLocalCustomerBalance(
-            customerId!,
-            currentSaleTotal,
-          );
-        }
+          for (final item in _currentSaleItems) {
+            final saleItem = SaleItem(
+              saleId: saleId,
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+            );
 
-        receipt = _createReceipt(saleId, customerId, paymentMethod);
+            await saleService.insertSaleItem(saleItem);
+
+            final stockReduced = await _inventoryProvider.reduceStock(
+              item.productId,
+              item.quantity,
+            );
+            if (!stockReduced) {
+              _error = 'Failed to reduce stock for product: \${item.productId}';
+              return null;
+            }
+          }
+          receipt = _createReceipt(saleId, customerId, paymentMethod);
+        } else {
+          log('Offline sale');
+          final saleId = const Uuid().v4();
+          final offlineSale = sale.copyWith(id: saleId);
+
+          final List<Map<String, dynamic>> saleItems = [];
+          for (final item in _currentSaleItems) {
+            saleItems.add(item.copyWith(saleId: saleId).toMap());
+          }
+
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              id: offlineSale.id!,
+              type: OperationType.createSaleTransaction,
+              collectionName: 'sales',
+              documentId: offlineSale.id,
+              data: {'sale': offlineSale.toMap(), 'saleItems': saleItems},
+              timestamp: DateTime.now(),
+            ),
+          );
+
+          for (final item in _currentSaleItems) {
+            await _inventoryProvider.reduceStock(
+              item.productId,
+              item.quantity,
+              offline: true,
+            );
+          }
+          receipt = _createReceipt(saleId, customerId, paymentMethod);
+        }
       }
 
       // Don't await these, let them run in the background
@@ -475,6 +463,41 @@ class SalesProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  Future<void> createSaleFromPayment(String customerId, double amount) async {
+    final currentUser = _authProvider.currentUser;
+    if (currentUser == null || currentUser.id == null) {
+      throw Exception('User not authenticated or user ID is null');
+    }
+
+    final sale = Sale(
+      customerId: customerId,
+      totalAmount: amount,
+      paymentMethod: 'Credit Payment',
+      status: 'completed',
+      createdAt: DateTime.now(),
+      userId: currentUser.id!,
+    );
+
+    if (_offlineManager.isOnline) {
+      final saleService = SaleService(FirebaseFirestore.instance);
+      await saleService.insertSale(sale, []);
+    } else {
+      final saleId = const Uuid().v4();
+      final offlineSale = sale.copyWith(id: saleId);
+      await _offlineManager.queueOperation(
+        OfflineOperation(
+          id: offlineSale.id!,
+          type: OperationType.createSaleTransaction,
+          collectionName: 'sales',
+          documentId: offlineSale.id,
+          data: {'sale': offlineSale.toMap(), 'saleItems': []},
+          timestamp: DateTime.now(),
+        ),
+      );
+    }
+    loadSales();
   }
 
   Receipt _createReceipt(

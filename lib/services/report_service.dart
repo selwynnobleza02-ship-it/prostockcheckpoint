@@ -23,6 +23,12 @@ class ReportService {
         .fold(0.0, (sum, sale) => sum + sale.totalAmount);
   }
 
+  double calculateTotalCreditReceived(List<Sale> sales) {
+    return sales
+        .where((sale) => sale.paymentMethod == 'Credit Payment')
+        .fold(0.0, (sum, sale) => sum + sale.totalAmount);
+  }
+
   // Customer calculations
   int calculateTotalCustomers(List<Customer> customers) {
     return customers.length;

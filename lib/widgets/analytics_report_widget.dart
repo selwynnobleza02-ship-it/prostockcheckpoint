@@ -1,12 +1,18 @@
 import 'package:flutter/material.dart';
-import 'package:prostock/models/loss.dart';
-import 'package:prostock/widgets/loss_over_time_chart.dart';
 import 'package:provider/provider.dart';
+
+// Model imports
+import 'package:prostock/models/loss.dart';
+import 'package:prostock/models/sale_item.dart';
+
+// Provider imports
 import '../providers/customer_provider.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
+
+// Widget imports
 import 'sales_over_time_chart.dart';
-import 'package:prostock/models/sale_item.dart';
+import 'loss_over_time_chart.dart';
 
 class AnalyticsReportWidget extends StatelessWidget {
   final List<SaleItem> saleItems;

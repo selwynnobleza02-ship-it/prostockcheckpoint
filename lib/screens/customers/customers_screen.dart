@@ -28,8 +28,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CustomerProvider>(context, listen: false).loadCustomers();
-      Provider.of<CreditProvider>(context, listen: false).fetchOverdueCustomers();
-    });
+              Provider.of<CreditProvider>(context, listen: false).fetchOverdueCustomers(context);    });
 
     _scrollController.addListener(() {
       if (_scrollController.position.pixels ==
@@ -170,7 +169,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
         onPressed: () {
           showDialog(
             context: context,
-            builder: (context) => const AddCustomerDialog(),
+            builder: (context) => AddCustomerDialog(
+              offlineManager: Provider.of<CustomerProvider>(context, listen: false).offlineManager,
+            ),
           );
         },
         child: const Icon(Icons.add),

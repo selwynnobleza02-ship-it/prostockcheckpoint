@@ -9,6 +9,10 @@ class CreditService {
     await _firestore.collection(_collectionPath).add(transaction.toMap());
   }
 
+  Future<void> recordCreditSale(CreditTransaction transaction) async {
+    await _firestore.collection(_collectionPath).add(transaction.toMap());
+  }
+
   Future<List<CreditTransaction>> getTransactionsByCustomer(String customerId) async {
     final querySnapshot = await _firestore
         .collection(_collectionPath)

@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/services/cloudinary_service.dart';
+import 'package:prostock/services/offline_manager.dart';
 import 'package:prostock/utils/error_logger.dart';
 import 'package:prostock/widgets/confirmation_dialog.dart';
 import 'package:provider/provider.dart';
@@ -13,7 +14,8 @@ import 'package:path/path.dart' as p;
 
 class AddCustomerDialog extends StatefulWidget {
   final Customer? customer;
-  const AddCustomerDialog({super.key, this.customer});
+  final OfflineManager offlineManager;
+  const AddCustomerDialog({super.key, this.customer, required this.offlineManager});
 
   @override
   State<AddCustomerDialog> createState() => _AddCustomerDialogState();
@@ -164,7 +166,9 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
 
     try {
       String? imageUrl = _networkImageUrl;
-      if (_imageFile != null) {
+      String? localImagePath = _imageFile?.path;
+
+      if (_imageFile != null && widget.offlineManager.isOnline) {
         imageUrl = await _uploadImage(_imageFile!);
         if (imageUrl == null) {
           setState(() {
@@ -200,7 +204,7 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
         email: email.isEmpty ? null : email,
         address: address.isEmpty ? null : address,
         imageUrl: imageUrl,
-        localImagePath: _imageFile?.path,
+        localImagePath: localImagePath,
         balance: _isEditMode ? widget.customer!.balance : 0.0,
         creditLimit: creditLimit,
         createdAt: _isEditMode ? widget.customer!.createdAt : DateTime.now(),

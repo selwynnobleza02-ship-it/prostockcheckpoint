@@ -31,6 +31,7 @@ class CustomerProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
   bool get hasMoreData => _hasMoreData;
+  OfflineManager get offlineManager => _offlineManager;
 
   List<Customer> get overdueCustomers =>
       _customers.where((customer) => customer.balance > 0).toList();

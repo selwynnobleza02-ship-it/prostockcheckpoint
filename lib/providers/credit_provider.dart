@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/models/credit_sale_item.dart';
 import 'package:prostock/models/credit_transaction.dart';
 import 'package:prostock/models/customer.dart';
+import 'package:prostock/models/receipt.dart';
+import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/providers/customer_provider.dart';
+import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/services/firestore/credit_service.dart';
+import 'package:provider/provider.dart';
 
 class CreditProvider with ChangeNotifier {
   final CustomerProvider _customerProvider;
-  final SalesProvider _salesProvider;
+  final InventoryProvider _inventoryProvider;
   final CreditService _creditService;
 
   List<Customer> _overdueCustomers = [];
@@ -19,23 +24,26 @@ class CreditProvider with ChangeNotifier {
   bool _isLoading = false;
   bool get isLoading => _isLoading;
   bool _isInitialized = false;
+  String? _error;
+  String? get error => _error;
 
   CreditProvider({
     required CustomerProvider customerProvider,
-    required SalesProvider salesProvider,
+    required InventoryProvider inventoryProvider, // Added
     required CreditService creditService,
-  })  : _customerProvider = customerProvider,
-        _salesProvider = salesProvider,
-        _creditService = creditService;
+  }) : _customerProvider = customerProvider,
+       _inventoryProvider = inventoryProvider, // Added
+       _creditService = creditService;
 
-  Future<void> fetchOverdueCustomers() async {
+  Future<void> fetchOverdueCustomers(BuildContext context) async {
     if (_isInitialized) return;
 
     _isLoading = true;
     notifyListeners();
 
+    final salesProvider = Provider.of<SalesProvider>(context, listen: false);
     final today = DateTime.now();
-    final overdueSales = _salesProvider.sales.where((sale) {
+    final overdueSales = salesProvider.sales.where((sale) {
       return sale.dueDate != null && sale.dueDate!.isBefore(today);
     }).toList();
 
@@ -50,7 +58,72 @@ class CreditProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<Receipt?> recordCreditSale({
+    required String customerId,
+    required List<SaleItem> items,
+    required double total,
+  }) async {
+    final customer = await _customerProvider.getCustomerById(customerId);
+    if (customer == null) {
+      _error = 'Customer not found';
+      notifyListeners();
+      return null;
+    }
+
+    if (customer.balance + total > customer.creditLimit) {
+      _error = 'Credit limit exceeded';
+      notifyListeners();
+      return null;
+    }
+
+    final transaction = CreditTransaction(
+      customerId: customerId,
+      amount: total,
+      date: DateTime.now(),
+      type: 'purchase',
+      items: items.map((item) => CreditSaleItem.fromSaleItem(item)).toList(),
+    );
+
+    try {
+      await _creditService.recordCreditSale(transaction);
+
+      for (final item in items) {
+        await _inventoryProvider.reduceStock(item.productId, item.quantity);
+      }
+
+      await _customerProvider.updateCustomerBalance(customerId, total);
+
+      return Receipt(
+        saleId: transaction.id ?? '',
+        receiptNumber: transaction.id ?? '',
+        timestamp: transaction.date,
+        customerName: customer.name,
+        paymentMethod: 'credit',
+        items: items
+            .map(
+              (item) => ReceiptItem(
+                productName:
+                    _inventoryProvider.getProductById(item.productId)?.name ??
+                    'N/A',
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.totalPrice,
+              ),
+            )
+            .toList(),
+        subtotal: total,
+        tax: 0.0,
+        total: total,
+      );
+    } catch (e) {
+      _error = 'Failed to record credit sale: $e';
+      notifyListeners();
+      return null;
+    }
+  }
+
   Future<bool> recordPayment({
+    required BuildContext context,
     required String customerId,
     required double amount,
     required String notes,
@@ -65,6 +138,11 @@ class CreditProvider with ChangeNotifier {
       );
       await _creditService.recordPayment(transaction);
       await _customerProvider.updateCustomerBalance(customerId, -amount);
+
+      // Create a sale record for the payment
+      final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+      await salesProvider.createSaleFromPayment(customerId, amount);
+
       return true;
     } catch (e) {
       return false;

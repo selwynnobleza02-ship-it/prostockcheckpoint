@@ -79,34 +79,36 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => CustomerProvider(context.read<OfflineManager>()),
         ),
-        ChangeNotifierProxyProvider3<InventoryProvider, CustomerProvider, AuthProvider, SalesProvider>(
+        ChangeNotifierProxyProvider2<CustomerProvider, InventoryProvider, CreditProvider>(
+          create: (context) => CreditProvider(
+            customerProvider: context.read<CustomerProvider>(),
+            inventoryProvider: context.read<InventoryProvider>(),
+            creditService: context.read<CreditService>(),
+          ),
+          update: (context, customerProvider, inventoryProvider, previousCreditProvider) =>
+              previousCreditProvider ??
+              CreditProvider(
+                customerProvider: customerProvider,
+                inventoryProvider: inventoryProvider,
+                creditService: context.read<CreditService>(),
+              ),
+        ),
+        ChangeNotifierProxyProvider4<InventoryProvider, CustomerProvider, AuthProvider, CreditProvider, SalesProvider>(
           create: (context) => SalesProvider(
             inventoryProvider: context.read<InventoryProvider>(),
             offlineManager: context.read<OfflineManager>(),
             customerProvider: context.read<CustomerProvider>(),
             authProvider: context.read<AuthProvider>(),
+            creditProvider: context.read<CreditProvider>(),
           ),
-          update: (context, inventoryProvider, customerProvider, authProvider, previousSalesProvider) =>
+          update: (context, inventoryProvider, customerProvider, authProvider, creditProvider, previousSalesProvider) =>
               previousSalesProvider ??
               SalesProvider(
                 inventoryProvider: inventoryProvider,
                 offlineManager: context.read<OfflineManager>(),
                 customerProvider: customerProvider,
                 authProvider: authProvider,
-              ),
-        ),
-        ChangeNotifierProxyProvider2<CustomerProvider, SalesProvider, CreditProvider>(
-          create: (context) => CreditProvider(
-            customerProvider: context.read<CustomerProvider>(),
-            salesProvider: context.read<SalesProvider>(),
-            creditService: context.read<CreditService>(),
-          ),
-          update: (context, customerProvider, salesProvider, previousCreditProvider) =>
-              previousCreditProvider ??
-              CreditProvider(
-                customerProvider: customerProvider,
-                salesProvider: salesProvider,
-                creditService: context.read<CreditService>(),
+                creditProvider: creditProvider,
               ),
         ),
         ChangeNotifierProvider(create: (_) => StockMovementProvider()),

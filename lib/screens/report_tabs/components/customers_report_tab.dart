@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
@@ -12,31 +13,31 @@ class CustomersReportTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final reportService = ReportService();
-    return Consumer<CustomerProvider>(
-      builder: (context, provider, child) {
+    return Consumer2<CustomerProvider, SalesProvider>(
+      builder: (context, customerProvider, salesProvider, child) {
         final totalCustomers = reportService.calculateTotalCustomers(
-          provider.customers,
+          customerProvider.customers,
         );
         final customersWithBalance = reportService
-            .calculateCustomersWithBalance(provider.customers);
+            .calculateCustomersWithBalance(customerProvider.customers);
         final totalBalance = reportService.calculateTotalBalance(
-          provider.customers,
+          customerProvider.customers,
         );
 
         // Calculate additional metrics
-        final activeCustomers = provider.customers
+        final activeCustomers = customerProvider.customers
             .where((c) => c.balance == 0)
             .length;
         final averageBalance = customersWithBalance > 0
             ? totalBalance / customersWithBalance
             : 0.0;
-        final customersWithPhones = provider.customers
-            .where((c) => c.phone?.isNotEmpty == true)
-            .length;
-        final highestBalance = provider.customers.isNotEmpty
-            ? provider.customers
-                  .map((c) => c.balance)
-                  .reduce((a, b) => a > b ? a : b)
+        final totalCreditReceived = reportService.calculateTotalCreditReceived(
+          salesProvider.sales,
+        );
+        final highestBalance = customerProvider.customers.isNotEmpty
+            ? customerProvider.customers
+                .map((c) => c.balance)
+                .reduce((a, b) => a > b ? a : b)
             : 0.0;
 
         return SingleChildScrollView(
@@ -76,9 +77,9 @@ class CustomersReportTab extends StatelessWidget {
                   ),
                   buildSummaryCard(
                     context,
-                    'With Phone',
-                    customersWithPhones.toString(),
-                    Icons.phone,
+                    'Total Credit Received',
+                    CurrencyUtils.formatCurrency(totalCreditReceived),
+                    Icons.attach_money,
                     Colors.purple,
                   ),
                 ],
@@ -164,11 +165,11 @@ class CustomersReportTab extends StatelessWidget {
                         const Flexible(child: Text('Contact Coverage:')),
                         Flexible(
                           child: Text(
-                            '${totalCustomers > 0 ? ((customersWithPhones / totalCustomers) * 100).toStringAsFixed(1) : 0}%',
+                            '${totalCustomers > 0 ? ((customerProvider.customers.where((c) => c.phone?.isNotEmpty == true).length / totalCustomers) * 100).toStringAsFixed(1) : 0}%',
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color:
-                                  customersWithPhones /
+                                  customerProvider.customers.where((c) => c.phone?.isNotEmpty == true).length /
                                           (totalCustomers == 0
                                               ? 1
                                               : totalCustomers) >=
@@ -246,12 +247,12 @@ class CustomersReportTab extends StatelessWidget {
                 ListView.builder(
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
-                  itemCount: provider.customers
+                  itemCount: customerProvider.customers
                       .where((c) => c.balance > 0)
                       .length,
                   itemBuilder: (context, index) {
                     final customer =
-                        provider.customers.where((c) => c.balance > 0).toList()
+                        customerProvider.customers.where((c) => c.balance > 0).toList()
                           ..sort((a, b) => b.balance.compareTo(a.balance));
                     final customerData = customer[index];
                     final isHighPriority =

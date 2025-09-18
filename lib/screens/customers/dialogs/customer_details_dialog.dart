@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/customer.dart';
+import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/add_customer_dialog.dart';
+import 'package:provider/provider.dart';
 
 class CustomerDetailsDialog extends StatelessWidget {
   final Customer customer;
@@ -73,7 +75,12 @@ class CustomerDetailsDialog extends StatelessWidget {
             Navigator.of(context).pop();
             showDialog(
               context: context,
-              builder: (context) => AddCustomerDialog(customer: customer),
+              builder: (context) => AddCustomerDialog(
+                customer: customer,
+                offlineManager:
+                    Provider.of<CustomerProvider>(context, listen: false)
+                        .offlineManager,
+              ),
             );
           },
           child: const Text('Edit'),

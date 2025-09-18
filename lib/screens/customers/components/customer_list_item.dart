@@ -91,7 +91,12 @@ class CustomerListItem extends StatelessWidget {
               case 'edit':
                 showDialog(
                   context: context,
-                  builder: (context) => AddCustomerDialog(customer: customer),
+                  builder: (context) => AddCustomerDialog(
+                    customer: customer,
+                    offlineManager:
+                        Provider.of<CustomerProvider>(context, listen: false)
+                            .offlineManager,
+                  ),
                 );
                 break;
               case 'utang':

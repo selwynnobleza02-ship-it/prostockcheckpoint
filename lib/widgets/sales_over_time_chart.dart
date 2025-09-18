@@ -161,7 +161,10 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
     return SideTitleWidget(
       meta: meta,
       space: 6,
-      child: Text(text, style: style),
+      child: Transform.rotate(
+        angle: -0.5, // Tilt text by ~30 degrees
+        child: Text(text, style: style),
+      ),
     );
   }
 

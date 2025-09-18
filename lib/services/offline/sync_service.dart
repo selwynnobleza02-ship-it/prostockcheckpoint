@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/models/offline_operation.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/models/sync_failure.dart';
 import 'package:prostock/providers/sync_failure_provider.dart';
+import 'package:prostock/services/cloudinary_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/offline/operation_queue_service.dart';
 import 'package:prostock/utils/constants.dart';
@@ -54,6 +56,16 @@ class SyncService {
 
     for (final operation in batch) {
       try {
+        if (operation.type == OperationType.insertCustomer ||
+            operation.type == OperationType.updateCustomer) {
+          if (operation.data['localImagePath'] != null) {
+            final imageUrl = await CloudinaryService.instance
+                .uploadImage(File(operation.data['localImagePath']));
+            operation.data['imageUrl'] = imageUrl;
+            operation.data.remove('localImagePath');
+          }
+        }
+
         final newBatchOperations = _getBatchOperations(operation);
         batchOperations.addAll(newBatchOperations);
         successfulOperationIds.add(operation.dbId!);

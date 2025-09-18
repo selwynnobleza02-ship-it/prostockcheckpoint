@@ -1,12 +1,14 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/models/credit_sale_item.dart';
 
 class CreditTransaction {
   final String? id;
   final String customerId;
   final double amount;
   final DateTime date;
-  final String type; // e.g., 'payment', 'credit'
+  final String type; // e.g., 'payment', 'purchase'
   final String? notes;
+  final List<CreditSaleItem> items;
 
   CreditTransaction({
     this.id,
@@ -15,7 +17,28 @@ class CreditTransaction {
     required this.date,
     required this.type,
     this.notes,
+    this.items = const [],
   });
+
+  CreditTransaction copyWith({
+    String? id,
+    String? customerId,
+    double? amount,
+    DateTime? date,
+    String? type,
+    String? notes,
+    List<CreditSaleItem>? items,
+  }) {
+    return CreditTransaction(
+      id: id ?? this.id,
+      customerId: customerId ?? this.customerId,
+      amount: amount ?? this.amount,
+      date: date ?? this.date,
+      type: type ?? this.type,
+      notes: notes ?? this.notes,
+      items: items ?? this.items,
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -24,6 +47,7 @@ class CreditTransaction {
       'date': Timestamp.fromDate(date),
       'type': type,
       'notes': notes,
+      'items': items.map((item) => item.toMap()).toList(),
     };
   }
 
@@ -35,6 +59,10 @@ class CreditTransaction {
       date: (map['date'] as Timestamp).toDate(),
       type: map['type'] ?? '',
       notes: map['notes'] ?? '',
+      items: (map['items'] as List<dynamic>?)
+              ?.map((item) => CreditSaleItem.fromMap(item))
+              .toList() ??
+          const [],
     );
   }
 }
