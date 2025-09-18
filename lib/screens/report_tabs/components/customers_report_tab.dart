@@ -234,7 +234,7 @@ class CustomersReportTab extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     const Text(
-                      'Customers with Outstanding Balance',
+                      'Outstanding Balances',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,

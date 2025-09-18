@@ -103,6 +103,7 @@ class _LossOverTimeChartState extends State<LossOverTimeChart> {
   List<BarChartGroupData> _getChartGroups() {
     if (widget.losses.isEmpty) return [];
 
+    // groupDataByFilter now handles time scoping and merging internally
     final groupedLosses = ChartUtils.groupDataByFilter<Loss>(
       widget.losses,
       _selectedFilter,
@@ -152,12 +153,14 @@ class _LossOverTimeChartState extends State<LossOverTimeChart> {
   }
 
   List<DateTime> _getSortedKeys() {
+    // groupDataByFilter now handles time scoping and merging internally
     final groupedLosses = ChartUtils.groupDataByFilter<Loss>(
       widget.losses,
       _selectedFilter,
       (loss) => loss.timestamp,
       (loss) => loss.totalCost,
     );
+
     return groupedLosses.keys.toList()..sort();
   }
 

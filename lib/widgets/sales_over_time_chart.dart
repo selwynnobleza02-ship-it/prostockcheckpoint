@@ -128,6 +128,7 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
   List<FlSpot> _getChartSpots() {
     if (widget.sales.isEmpty) return [const FlSpot(0, 0)];
 
+    // groupDataByFilter now handles time scoping and merging internally
     final groupedSales = ChartUtils.groupDataByFilter<Sale>(
       widget.sales,
       _selectedFilter,
@@ -165,12 +166,14 @@ class _SalesOverTimeChartState extends State<SalesOverTimeChart> {
   }
 
   List<DateTime> _getSortedKeys() {
+    // groupDataByFilter now handles time scoping and merging internally
     final groupedSales = ChartUtils.groupDataByFilter<Sale>(
       widget.sales,
       _selectedFilter,
       (sale) => sale.createdAt,
       (sale) => sale.totalAmount,
     );
+
     return groupedSales.keys.toList()..sort();
   }
 
