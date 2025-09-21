@@ -27,29 +27,47 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
       });
 
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final error = await authProvider.sendPasswordResetEmail(_emailController.text);
+      final error = await authProvider.sendPasswordResetEmail(
+        _emailController.text.trim(),
+      );
 
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-        });
+      if (!mounted) return;
 
-        if (error == null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Password reset email sent.'),
-              backgroundColor: Colors.green,
+      setState(() {
+        _isLoading = false;
+      });
+
+      if (error == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Password reset email sent. Please check your inbox.',
             ),
-          );
-          Navigator.of(context).pop();
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 4),
+          ),
+        );
+        Navigator.of(context).pop();
+      } else {
+        String userFriendlyError;
+        if (error.contains('user-not-found')) {
+          userFriendlyError = 'No account found with this email address.';
+        } else if (error.contains('invalid-email')) {
+          userFriendlyError = 'Please enter a valid email address.';
+        } else if (error.contains('network-request-failed')) {
+          userFriendlyError =
+              'Network error. Please check your connection and try again.';
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error),
-              backgroundColor: Colors.red,
-            ),
-          );
+          userFriendlyError = 'Failed to send reset email. Please try again.';
         }
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(userFriendlyError),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
       }
     }
   }
@@ -57,9 +75,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Forgot Password'),
-      ),
+      appBar: AppBar(title: const Text('Forgot Password')),
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
@@ -83,6 +99,11 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
+                    }
+                    if (!RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value.trim())) {
+                      return 'Please enter a valid email address';
                     }
                     return null;
                   },

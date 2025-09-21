@@ -14,14 +14,32 @@ class ProductGridView extends StatelessWidget {
     return Consumer<InventoryProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading) {
-          return const Center(child: CircularProgressIndicator());
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Loading products...'),
+              ],
+            ),
+          );
         }
+
         if (provider.error != null) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(provider.error!),
                 backgroundColor: Colors.red,
+                duration: const Duration(seconds: 4),
+                action: SnackBarAction(
+                  label: 'Retry',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    provider.loadProducts(refresh: true);
+                  },
+                ),
               ),
             );
             provider.clearError();
@@ -31,7 +49,35 @@ class ProductGridView extends StatelessWidget {
         final productsToDisplay = provider.products;
 
         if (productsToDisplay.isEmpty) {
-          return const Center(child: Text('No products found'));
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
+                const SizedBox(height: 16),
+                Text(
+                  'No products found',
+                  style: TextStyle(
+                    fontSize: 18,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Try adjusting your search or add new products',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                ElevatedButton.icon(
+                  onPressed: () => provider.loadProducts(refresh: true),
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Refresh'),
+                ),
+              ],
+            ),
+          );
         }
 
         return GridView.builder(
@@ -46,10 +92,12 @@ class ProductGridView extends StatelessWidget {
           itemBuilder: (context, index) {
             final product = productsToDisplay[index];
             final visualStock = provider.getVisualStock(product.id!);
+            final isOutOfStock = visualStock <= 0;
+            final isQueued = !provider.isOnline;
             return Card(
               child: InkWell(
                 onTap: () {
-                  if (visualStock > 0) {
+                  if (!isOutOfStock) {
                     Provider.of<SalesProvider>(
                       context,
                       listen: false,
@@ -58,52 +106,109 @@ class ProductGridView extends StatelessWidget {
                 },
                 child: Padding(
                   padding: const EdgeInsets.all(UiConstants.spacingSmall),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Stack(
                     children: [
-                      Expanded(
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.grey[200],
-                            borderRadius: BorderRadius.circular(
-                              UiConstants.borderRadiusStandard,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Container(
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(
+                                  UiConstants.borderRadiusStandard,
+                                ),
+                              ),
+                              child: const Icon(
+                                Icons.inventory,
+                                size: UiConstants.iconSizeMedium,
+                                color: Colors.grey,
+                              ),
                             ),
                           ),
-                          child: const Icon(
-                            Icons.inventory,
-                            size: UiConstants.iconSizeMedium,
-                            color: Colors.grey,
+                          const SizedBox(height: UiConstants.spacingSmall),
+                          Text(
+                            product.name,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: UiConstants.fontSizeSmall,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            CurrencyUtils.formatCurrency(product.price),
+                            style: const TextStyle(
+                              color: Colors.green,
+                              fontWeight: FontWeight.bold,
+                              fontSize: UiConstants.fontSizeSmall,
+                            ),
+                          ),
+                          Text(
+                            'Stock: $visualStock',
+                            style: TextStyle(
+                              color: visualStock > 0
+                                  ? Colors.grey[600]
+                                  : Colors.red,
+                              fontSize: UiConstants.fontSizeExtraSmall,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (isOutOfStock)
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.6),
+                              borderRadius: BorderRadius.circular(
+                                UiConstants.borderRadiusStandard,
+                              ),
+                            ),
+                            child: Center(
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.red.withValues(alpha: 0.9),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: const Text(
+                                  'Out of stock',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: UiConstants.spacingSmall),
-                      Text(
-                        product.name,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: UiConstants.fontSizeSmall,
+                      if (isQueued)
+                        Positioned(
+                          top: 0,
+                          right: 0,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.orange[700],
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Text(
+                              'Queued',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
                         ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        CurrencyUtils.formatCurrency(product.price),
-                        style: const TextStyle(
-                          color: Colors.green,
-                          fontWeight: FontWeight.bold,
-                          fontSize: UiConstants.fontSizeSmall,
-                        ),
-                      ),
-                      Text(
-                        'Stock: $visualStock',
-                        style: TextStyle(
-                          color: visualStock > 0
-                              ? Colors.grey[600]
-                              : Colors.red,
-                          fontSize: UiConstants.fontSizeExtraSmall,
-                        ),
-                      ),
                     ],
                   ),
                 ),

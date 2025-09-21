@@ -33,8 +33,27 @@ class _SignupScreenState extends State<SignupScreen> {
 
   void _showErrorSnackBar(String message) {
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Dismiss',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
     );
+  }
+
+  void _clearErrors() {
+    setState(() {
+      _usernameError = null;
+      _emailError = null;
+      _passwordError = null;
+    });
   }
 
   void _showVerificationDialog() {
@@ -43,7 +62,8 @@ class _SignupScreenState extends State<SignupScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Verify Your Email'),
         content: const Text(
-            'A verification email has been sent to your email address. Please verify your email to login.'),
+          'A verification email has been sent to your email address. Please verify your email to login.',
+        ),
         actions: [
           TextButton(
             onPressed: () {
@@ -87,9 +107,16 @@ class _SignupScreenState extends State<SignupScreen> {
                     fillColor: Colors.white70,
                     errorText: _usernameError,
                   ),
+                  onChanged: (value) => _clearErrors(),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a username';
+                    }
+                    if (value.trim().length < 3) {
+                      return 'Username must be at least 3 characters long';
+                    }
+                    if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value.trim())) {
+                      return 'Username can only contain letters, numbers, and underscores';
                     }
                     return null;
                   },
@@ -105,9 +132,15 @@ class _SignupScreenState extends State<SignupScreen> {
                     fillColor: Colors.white70,
                     errorText: _emailError,
                   ),
+                  onChanged: (value) => _clearErrors(),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter an email';
+                    }
+                    if (!RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value.trim())) {
+                      return 'Please enter a valid email address';
                     }
                     return null;
                   },
@@ -138,6 +171,7 @@ class _SignupScreenState extends State<SignupScreen> {
                     errorText: _passwordError,
                   ),
                   obscureText: !_isPasswordVisible,
+                  onChanged: (value) => _clearErrors(),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter a password';
@@ -186,40 +220,56 @@ class _SignupScreenState extends State<SignupScreen> {
                                 _emailError = null;
                                 _passwordError = null;
                               });
-                              final authProvider =
-                                  context.read<AuthProvider>();
+                              final authProvider = context.read<AuthProvider>();
                               final success = await authProvider.createUser(
-                                _usernameController.text,
-                                _emailController.text,
+                                _usernameController.text.trim(),
+                                _emailController.text.trim(),
                                 _passwordController.text,
                                 _selectedRole,
                               );
 
+                              if (!mounted) return;
+
                               if (success) {
-                                if (context.mounted) {
-                                  _showVerificationDialog();
-                                }
+                                _showVerificationDialog();
                               } else {
-                                if (!mounted) return;
-                                final errorMessage = authProvider.error ?? 'Signup failed';
+                                final errorMessage =
+                                    authProvider.error ?? 'Signup failed';
                                 setState(() {
-                                  if (errorMessage.contains('Username already exists')) {
+                                  if (errorMessage.contains(
+                                    'Username already exists',
+                                  )) {
                                     _usernameError = 'Username already exists.';
-                                  } else if (errorMessage.contains('email-already-in-use') ||
-                                      errorMessage.contains('invalid-email')) {
-                                    _emailError = 'Invalid email or email already in use.';
-                                  } else if (errorMessage.contains('weak-password')) {
-                                    _passwordError = 'The password is too weak.';
+                                  } else if (errorMessage.contains(
+                                    'email-already-in-use',
+                                  )) {
+                                    _emailError = 'Email is already in use.';
+                                  } else if (errorMessage.contains(
+                                    'invalid-email',
+                                  )) {
+                                    _emailError =
+                                        'Please enter a valid email address.';
+                                  } else if (errorMessage.contains(
+                                    'weak-password',
+                                  )) {
+                                    _passwordError =
+                                        'Password is too weak. Please use a stronger password.';
+                                  } else if (errorMessage.contains(
+                                    'network-request-failed',
+                                  )) {
+                                    _showErrorSnackBar(
+                                      'Network error. Please check your connection and try again.',
+                                    );
                                   } else {
-                                    _showErrorSnackBar(errorMessage);
+                                    _showErrorSnackBar(
+                                      'Signup failed. Please try again.',
+                                    );
                                   }
                                 });
                               }
-                              if (mounted) {
-                                setState(() {
-                                  _isLoading = false;
-                                });
-                              }
+                              setState(() {
+                                _isLoading = false;
+                              });
                             }
                           },
                     style: ElevatedButton.styleFrom(

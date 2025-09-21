@@ -15,7 +15,11 @@ import 'package:path/path.dart' as p;
 class AddCustomerDialog extends StatefulWidget {
   final Customer? customer;
   final OfflineManager offlineManager;
-  const AddCustomerDialog({super.key, this.customer, required this.offlineManager});
+  const AddCustomerDialog({
+    super.key,
+    this.customer,
+    required this.offlineManager,
+  });
 
   @override
   State<AddCustomerDialog> createState() => _AddCustomerDialogState();
@@ -216,7 +220,8 @@ class _AddCustomerDialogState extends State<AddCustomerDialog> {
       final provider = Provider.of<CustomerProvider>(context, listen: false);
       Customer? result;
       if (_isEditMode) {
-        result = await provider.updateCustomer(customerData);
+        final updateResult = await provider.updateCustomer(customerData);
+        result = updateResult.success ? customerData : null;
       } else {
         result = await provider.addCustomer(customerData);
       }

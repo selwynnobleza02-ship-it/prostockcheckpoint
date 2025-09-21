@@ -13,6 +13,7 @@ import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/loss_breakdown_list.dart';
 import 'package:prostock/widgets/report_helpers.dart';
 import 'package:prostock/widgets/top_selling_products_list.dart';
+import 'package:prostock/services/pdf_report_service.dart';
 
 class FinancialReportTab extends StatefulWidget {
   final List<Loss> losses;
@@ -31,7 +32,10 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final salesProvider = Provider.of<SalesProvider>(context, listen: false);
-      final stockMovementProvider = Provider.of<StockMovementProvider>(context, listen: false);
+      final stockMovementProvider = Provider.of<StockMovementProvider>(
+        context,
+        listen: false,
+      );
       salesProvider.loadSales();
       stockMovementProvider.loadAllMovements();
     });
@@ -49,27 +53,42 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
       initialDateRange: initialDateRange,
     );
 
-    if (!mounted) return; 
+    if (!mounted) return;
 
     if (newDateRange != null) {
       setState(() {
         _startDate = newDateRange.start;
         _endDate = newDateRange.end;
       });
-      
-      if (!context.mounted) return;
-      final salesProvider = Provider.of<SalesProvider>(context,listen: false,);
-      final stockMovementProvider = Provider.of<StockMovementProvider>(context, listen: false);
 
-      salesProvider.loadSales(startDate: _startDate, endDate: _endDate, refresh: true);
-      stockMovementProvider.loadAllMovements(startDate: _startDate, endDate: _endDate);
+      if (!context.mounted) return;
+      final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+      final stockMovementProvider = Provider.of<StockMovementProvider>(
+        context,
+        listen: false,
+      );
+
+      salesProvider.loadSales(
+        startDate: _startDate,
+        endDate: _endDate,
+        refresh: true,
+      );
+      stockMovementProvider.loadAllMovements(
+        startDate: _startDate,
+        endDate: _endDate,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final reportService = ReportService();
-    return Consumer4<SalesProvider, InventoryProvider, CustomerProvider, StockMovementProvider>(
+    return Consumer4<
+      SalesProvider,
+      InventoryProvider,
+      CustomerProvider,
+      StockMovementProvider
+    >(
       builder: (context, sales, inventory, customers, stockMovements, child) {
         if (sales.isLoading || stockMovements.isLoading) {
           return const Center(child: CircularProgressIndicator());
@@ -120,9 +139,16 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
         );
 
         // Corrected Inventory Turnover Calculation
-        final endingInventoryValue = reportService.calculateTotalInventoryValue(inventory.products);
-        final beginningInventoryValue = reportService.calculateBeginningInventoryValue(inventory.products, stockMovements.allMovements);
-        final averageInventoryValue = (beginningInventoryValue + endingInventoryValue) / 2;
+        final endingInventoryValue = reportService.calculateTotalInventoryValue(
+          inventory.products,
+        );
+        final beginningInventoryValue = reportService
+            .calculateBeginningInventoryValue(
+              inventory.products,
+              stockMovements.allMovements,
+            );
+        final averageInventoryValue =
+            (beginningInventoryValue + endingInventoryValue) / 2;
 
         final inventoryTurnover = reportService.calculateInventoryTurnover(
           totalCost,
@@ -144,6 +170,77 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.picture_as_pdf),
+                    label: const Text('Export PDF'),
+                    onPressed: () async {
+                      final scaffold = ScaffoldMessenger.of(context);
+                      final pdf = PdfReportService();
+                      final sections = <PdfReportSection>[
+                        PdfReportSection(
+                          title: 'Summary',
+                          rows: [
+                            [
+                              'Total Revenue',
+                              CurrencyUtils.formatCurrency(totalRevenue),
+                            ],
+                            [
+                              'Total Cost',
+                              CurrencyUtils.formatCurrency(totalCost),
+                            ],
+                            [
+                              'Total Loss',
+                              CurrencyUtils.formatCurrency(totalLoss),
+                            ],
+                            [
+                              'Gross Profit',
+                              CurrencyUtils.formatCurrency(totalProfit),
+                            ],
+                            [
+                              'Profit Margin',
+                              '${profitMargin.toStringAsFixed(1)}%',
+                            ],
+                            ['ROI', '${roi.toStringAsFixed(1)}%'],
+                            [
+                              'Average Order',
+                              CurrencyUtils.formatCurrency(averageOrderValue),
+                            ],
+                            [
+                              'Markup %',
+                              '${markupPercentage.toStringAsFixed(1)}%',
+                            ],
+                            [
+                              'Inventory Turnover',
+                              '${inventoryTurnover.toStringAsFixed(1)}x',
+                            ],
+                            [
+                              'Outstanding Utang',
+                              CurrencyUtils.formatCurrency(outstandingUtang),
+                            ],
+                            [
+                              'Potential Profit',
+                              CurrencyUtils.formatCurrency(potentialProfit),
+                            ],
+                          ],
+                        ),
+                      ];
+                      final file = await pdf.generateFinancialReport(
+                        reportTitle: 'Financial Report',
+                        startDate: _startDate,
+                        endDate: _endDate,
+                        sections: sections,
+                      );
+                      if (!context.mounted) return;
+                      scaffold.showSnackBar(
+                        SnackBar(content: Text('PDF saved: ${file.path}')),
+                      );
+                    },
+                  ),
+                ],
+              ),
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [

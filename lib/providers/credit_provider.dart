@@ -128,6 +128,8 @@ class CreditProvider with ChangeNotifier {
     required double amount,
     required String notes,
   }) async {
+    // Obtain provider before any async gaps to avoid using BuildContext after awaits
+    final salesProvider = Provider.of<SalesProvider>(context, listen: false);
     try {
       final transaction = CreditTransaction(
         customerId: customerId,
@@ -140,7 +142,6 @@ class CreditProvider with ChangeNotifier {
       await _customerProvider.updateCustomerBalance(customerId, -amount);
 
       // Create a sale record for the payment
-      final salesProvider = Provider.of<SalesProvider>(context, listen: false);
       await salesProvider.createSaleFromPayment(customerId, amount);
 
       return true;

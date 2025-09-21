@@ -15,50 +15,88 @@ class CreditCheckService {
     final List<Sale> allSales = sales.map((s) => Sale.fromMap(s)).toList();
 
     final today = DateTime.now();
-    final tomorrow = today.add(const Duration(days: 1));
+    final todayStart = DateTime(today.year, today.month, today.day);
+    final almostDueStart = todayStart.add(
+      const Duration(days: 2),
+    ); // 2 days from now
+    final almostDueEnd = todayStart.add(
+      const Duration(days: 4),
+    ); // 4 days from now
 
     final List<Sale> almostDue = [];
     final List<Sale> due = [];
     final List<Sale> overdue = [];
 
     for (final sale in allSales) {
-      if (sale.dueDate != null) {
+      if (sale.dueDate != null && sale.customerId != null) {
         final dueDate = sale.dueDate!;
-        if (dueDate.year == tomorrow.year && dueDate.month == tomorrow.month && dueDate.day == tomorrow.day) {
-          almostDue.add(sale);
-        } else if (dueDate.year == today.year && dueDate.month == today.month && dueDate.day == today.day) {
-          due.add(sale);
-        } else if (dueDate.isBefore(today)) {
+        final dueDateStart = DateTime(dueDate.year, dueDate.month, dueDate.day);
+
+        if (dueDateStart.isBefore(todayStart)) {
+          // Overdue: due date has passed
           overdue.add(sale);
+        } else if (dueDateStart.isAtSameMomentAs(todayStart)) {
+          // Due today
+          due.add(sale);
+        } else if (dueDateStart.isAfter(almostDueStart) &&
+            dueDateStart.isBefore(almostDueEnd)) {
+          // Almost due: 2-4 days from now
+          almostDue.add(sale);
         }
       }
     }
 
     if (almostDue.isNotEmpty) {
+      final customerNames = await _getCustomerNames(almostDue);
       _notificationService.showNotification(
         0,
         'Almost Due Payments',
-        'You have ${almostDue.length} payment(s) almost due.',
+        '${almostDue.length} payment(s) almost due: ${customerNames.join(', ')}',
         'almost_due',
       );
     }
 
     if (due.isNotEmpty) {
+      final customerNames = await _getCustomerNames(due);
       _notificationService.showNotification(
         1,
         'Due Payments',
-        'You have ${due.length} payment(s) due today.',
+        '${due.length} payment(s) due today: ${customerNames.join(', ')}',
         'due',
       );
     }
 
     if (overdue.isNotEmpty) {
+      final customerNames = await _getCustomerNames(overdue);
       _notificationService.showNotification(
         2,
         'Overdue Payments',
-        'You have ${overdue.length} payment(s) overdue.',
+        '${overdue.length} payment(s) overdue: ${customerNames.join(', ')}',
         'overdue',
       );
     }
+  }
+
+  Future<List<String>> _getCustomerNames(List<Sale> sales) async {
+    final db = await _localDatabaseService.database;
+    final customerIds = sales
+        .map((s) => s.customerId)
+        .where((id) => id != null)
+        .toSet();
+
+    if (customerIds.isEmpty) return ['Unknown Customer'];
+
+    final customers = await db.query(
+      'customers',
+      where: 'id IN (${customerIds.map((_) => '?').join(',')})',
+      whereArgs: customerIds.toList(),
+    );
+
+    final customerMap = {for (var c in customers) c['id']: c['name'] as String};
+
+    return sales
+        .map((s) => customerMap[s.customerId] ?? 'Unknown Customer')
+        .toSet()
+        .toList();
   }
 }

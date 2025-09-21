@@ -13,6 +13,7 @@ class Customer {
   final double creditLimit;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int version; // Add version field for conflict detection
 
   Customer({
     String? id,
@@ -26,6 +27,7 @@ class Customer {
     this.creditLimit = 0,
     required this.createdAt,
     required this.updatedAt,
+    this.version = 1, // Default version
   }) : id = id ?? const Uuid().v4() {
     _validateCustomer();
   }
@@ -43,7 +45,8 @@ class Customer {
     if (email != null && email!.isNotEmpty && !_isValidEmail(email!)) {
       throw ArgumentError('Invalid email format');
     }
-    if (address != null && address!.length > ValidationConstants.maxDescriptionLength) {
+    if (address != null &&
+        address!.length > ValidationConstants.maxDescriptionLength) {
       throw ArgumentError('Address cannot exceed 200 characters');
     }
     if (balance < 0) {
@@ -80,6 +83,7 @@ class Customer {
       'credit_limit': creditLimit,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
+      'version': version,
     };
   }
 
@@ -100,6 +104,7 @@ class Customer {
       updatedAt: DateTime.parse(
         map['updated_at'] ?? DateTime.now().toIso8601String(),
       ),
+      version: map['version'] ?? 1,
     );
   }
 
@@ -115,6 +120,7 @@ class Customer {
     double? creditLimit,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? version,
   }) {
     return Customer(
       id: id ?? this.id,
@@ -128,6 +134,7 @@ class Customer {
       creditLimit: creditLimit ?? this.creditLimit,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
     );
   }
 
@@ -136,9 +143,7 @@ class Customer {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Customer &&
-          runtimeType == other.runtimeType &&
-          id == other.id;
+      other is Customer && runtimeType == other.runtimeType && id == other.id;
 
   @override
   int get hashCode => id.hashCode;

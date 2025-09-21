@@ -21,8 +21,7 @@ class ProductListView extends StatelessWidget {
 
         final filteredProducts = provider.products.where((product) {
           return product.name.toLowerCase().contains(searchQuery) ||
-              (product.barcode?.toLowerCase().contains(searchQuery) ??
-                  false);
+              (product.barcode?.toLowerCase().contains(searchQuery) ?? false);
         }).toList();
 
         if (filteredProducts.isEmpty) {
@@ -47,30 +46,73 @@ class ProductListView extends StatelessWidget {
             itemCount: filteredProducts.length,
             itemBuilder: (context, index) {
               final product = filteredProducts[index];
+              final visualStock = provider.getVisualStock(product.id!);
+              final isQueued = !provider.isOnline;
               return Card(
-                margin: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 4,
-                ),
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                 child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: product.isLowStock
-                        ? Colors.red
-                        : Colors.green,
-                    child: Text(
-                      product.stock.toString(),
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
+                  leading: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: product.isLowStock
+                            ? Colors.red
+                            : Colors.green,
+                        child: Text(
+                          visualStock.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                       ),
-                    ),
+                      if (visualStock <= 0)
+                        const Positioned(
+                          bottom: -2,
+                          child: Icon(
+                            Icons.block,
+                            color: Colors.white,
+                            size: 14,
+                          ),
+                        ),
+                    ],
                   ),
-                  title: Text(product.name),
+                  title: Row(
+                    children: [
+                      Expanded(child: Text(product.name)),
+                      if (isQueued)
+                        Container(
+                          margin: const EdgeInsets.only(left: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange[700],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: const Text(
+                            'Queued',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         'Price: ${CurrencyUtils.formatCurrency(product.price)}',
+                      ),
+                      Text(
+                        'Stock: $visualStock',
+                        style: TextStyle(
+                          color: visualStock > 0 ? Colors.black54 : Colors.red,
+                        ),
                       ),
                       if (product.barcode != null)
                         Text('Barcode: ${product.barcode}'),
@@ -93,7 +135,8 @@ class ProductListView extends StatelessWidget {
                         onPressed: () {
                           showDialog(
                             context: context,
-                            builder: (context) => PriceHistoryDialog(productId: product.id!),
+                            builder: (context) =>
+                                PriceHistoryDialog(productId: product.id!),
                           );
                         },
                       ),

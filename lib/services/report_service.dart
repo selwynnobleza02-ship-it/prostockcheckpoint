@@ -258,7 +258,7 @@ class ReportService {
     final breakdown = <String, double>{};
     for (final loss in losses) {
       breakdown.update(
-        loss.reason,
+        loss.reason.name,
         (value) => value + loss.totalCost,
         ifAbsent: () => loss.totalCost,
       );

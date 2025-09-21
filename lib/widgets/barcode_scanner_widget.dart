@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
 import '../models/product.dart';
+import '../models/loss_reason.dart';
 import 'add_product_dialog.dart';
 import 'barcode_product_dialog.dart';
 import 'receive_stock_dialog.dart';
@@ -543,11 +544,24 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
         context,
         listen: false,
       );
-      final success = await inventoryProvider.reduceStock(
-        product.id!,
-        result.quantity,
-        reason: result.reason,
-      );
+
+      bool success = false;
+
+      // If the reason is "Damage", use addLoss to properly record the loss
+      if (result.reason == 'Damage') {
+        success = await inventoryProvider.addLoss(
+          productId: product.id!,
+          quantity: result.quantity,
+          reason: LossReason.damaged,
+        );
+      } else {
+        // For other reasons like "Miss stock", just reduce stock
+        success = await inventoryProvider.reduceStock(
+          product.id!,
+          result.quantity,
+          reason: result.reason,
+        );
+      }
 
       if (mounted) {
         if (success) {
@@ -581,6 +595,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
   }) async {
     final quantityController = TextEditingController(text: '1');
     String reason = 'Damage'; // Default reason
+    String? errorMessage;
 
     return await showDialog<StockUpdateResult>(
       context: context,
@@ -603,7 +618,22 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                       border: OutlineInputBorder(),
                     ),
                     autofocus: true,
+                    onChanged: (value) {
+                      // Clear error message when user types
+                      if (errorMessage != null) {
+                        setState(() {
+                          errorMessage = null;
+                        });
+                      }
+                    },
                   ),
+                  if (errorMessage != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      errorMessage!,
+                      style: const TextStyle(color: Colors.red, fontSize: 12),
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
                     initialValue: reason,
@@ -637,12 +667,29 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                 ElevatedButton(
                   onPressed: () {
                     final qty = int.tryParse(quantityController.text);
-                    if (qty != null && qty > 0 && qty <= product.stock) {
-                      Navigator.pop(
-                        context,
-                        StockUpdateResult(quantity: qty, reason: reason),
-                      );
+
+                    if (qty == null || qty <= 0) {
+                      setState(() {
+                        errorMessage = 'Please enter a valid quantity';
+                      });
+                      return;
                     }
+
+                    if (qty > product.stock) {
+                      setState(() {
+                        errorMessage =
+                            'Cannot remove $qty units. Only ${product.stock} units available';
+                      });
+                      return;
+                    }
+
+                    // Show confirmation dialog
+                    _showConfirmationDialog(
+                      context: context,
+                      product: product,
+                      quantity: qty,
+                      reason: reason,
+                    );
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('Remove'),
@@ -653,6 +700,55 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
         );
       },
     );
+  }
+
+  Future<void> _showConfirmationDialog({
+    required BuildContext context,
+    required Product product,
+    required int quantity,
+    required String reason,
+  }) async {
+    final navigator = Navigator.of(context);
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Stock Removal'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Product: ${product.name}'),
+            const SizedBox(height: 8),
+            Text('Quantity to remove: $quantity'),
+            const SizedBox(height: 8),
+            Text('Reason: $reason'),
+            const SizedBox(height: 8),
+            Text('Remaining stock: ${product.stock - quantity}'),
+            const SizedBox(height: 16),
+            const Text(
+              'Are you sure you want to remove this stock?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Confirm Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if (!navigator.mounted) return;
+      navigator.pop(StockUpdateResult(quantity: quantity, reason: reason));
+    }
   }
 
   Future<void> _handleExistingProduct(

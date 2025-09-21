@@ -12,6 +12,7 @@ import 'package:prostock/screens/report_tabs/components/sales_report_tab.dart';
 import 'package:prostock/services/firestore/inventory_service.dart';
 import 'package:prostock/services/firestore/sale_service.dart';
 import 'package:prostock/services/local_database_service.dart';
+import 'package:prostock/services/offline_manager.dart';
 import 'package:prostock/widgets/analytics_report_widget.dart';
 import 'package:prostock/widgets/stock_movement_report_widget.dart';
 import 'package:provider/provider.dart';
@@ -40,25 +41,38 @@ class _ReportsScreenState extends State<ReportsScreen>
 
   Future<void> _loadData({bool refresh = false}) async {
     final salesProvider = Provider.of<SalesProvider>(context, listen: false);
-    await salesProvider.loadSales(refresh: refresh);
-    if (!mounted) return;
-    await Provider.of<CustomerProvider>(
+    final customersProvider = Provider.of<CustomerProvider>(
       context,
       listen: false,
-    ).loadCustomers(refresh: refresh);
-    if (!mounted) return;
-    await Provider.of<InventoryProvider>(
+    );
+    final inventoryProvider = Provider.of<InventoryProvider>(
       context,
       listen: false,
-    ).loadProducts(refresh: refresh);
-    if (!mounted) return;
-    await Provider.of<StockMovementProvider>(
+    );
+    final stockMovementProvider = Provider.of<StockMovementProvider>(
       context,
       listen: false,
-    ).loadMovements(refresh: refresh);
+    );
+    final offlineManager = Provider.of<OfflineManager>(context, listen: false);
     final inventoryService = InventoryService(FirebaseFirestore.instance);
     final saleService = SaleService(FirebaseFirestore.instance);
-    final losses = await inventoryService.getLosses();
+
+    await salesProvider.loadSales(refresh: refresh);
+    if (!mounted) return;
+    await customersProvider.loadCustomers(refresh: refresh);
+    if (!mounted) return;
+    await inventoryProvider.loadProducts(refresh: refresh);
+    if (!mounted) return;
+    await stockMovementProvider.loadMovements(refresh: refresh);
+
+    // Load losses from both Firestore and local database
+    List<Loss> losses = [];
+    if (offlineManager.isOnline) {
+      losses = await inventoryService.getLosses();
+    } else {
+      final localLossesData = await LocalDatabaseService.instance.getLosses();
+      losses = localLossesData.map((loss) => Loss.fromMap(loss)).toList();
+    }
 
     final List<SaleItem> allSaleItems = [];
     for (final sale in salesProvider.sales) {

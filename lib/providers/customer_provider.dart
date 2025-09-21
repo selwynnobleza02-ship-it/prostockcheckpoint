@@ -3,19 +3,23 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/models/offline_operation.dart';
+import 'package:prostock/models/update_result.dart';
 import 'package:prostock/services/firestore/customer_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import '../models/customer.dart';
 import '../services/cloudinary_service.dart';
 import '../utils/error_logger.dart';
 import 'package:prostock/services/local_database_service.dart';
+import '../widgets/delete_confirmation_dialog.dart';
+import '../widgets/dialog_helpers.dart';
 
 class CustomerProvider with ChangeNotifier {
   List<Customer> _customers = [];
   bool _isLoading = false;
   String? _error;
 
-  final LocalDatabaseService _localDatabaseService = LocalDatabaseService.instance;
+  final LocalDatabaseService _localDatabaseService =
+      LocalDatabaseService.instance;
   final OfflineManager _offlineManager;
   final Map<String, List<Customer>> _cache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
@@ -33,8 +37,11 @@ class CustomerProvider with ChangeNotifier {
   bool get hasMoreData => _hasMoreData;
   OfflineManager get offlineManager => _offlineManager;
 
-  List<Customer> get overdueCustomers =>
-      _customers.where((customer) => customer.balance > 0).toList();
+  List<Customer> get overdueCustomers {
+    // This should be based on actual due dates from sales, not just balance
+    // For now, return customers with positive balance as a fallback
+    return _customers.where((customer) => customer.balance > 0).toList();
+  }
 
   void clearError() {
     _error = null;
@@ -116,18 +123,24 @@ class CustomerProvider with ChangeNotifier {
   Future<void> _cacheCustomersToLocalDB(List<Customer> customers) async {
     try {
       final db = await _localDatabaseService.database;
-      final batch = db.batch();
-      batch.delete('customers');
-      for (final customer in customers) {
-        batch.insert('customers', customer.toMap());
-      }
-      await batch.commit(noResult: true);
+
+      // Use transaction to ensure atomicity
+      await db.transaction((txn) async {
+        // Delete existing customers
+        await txn.delete('customers');
+
+        // Insert new customers
+        for (final customer in customers) {
+          await txn.insert('customers', customer.toMap());
+        }
+      });
     } catch (e) {
       ErrorLogger.logError(
         'Error caching customers to local DB',
         error: e,
         context: 'CustomerProvider._cacheCustomersToLocalDB',
       );
+      // Don't rethrow to prevent breaking the main operation
     }
   }
 
@@ -190,18 +203,46 @@ class CustomerProvider with ChangeNotifier {
 
     try {
       final db = await _localDatabaseService.database;
-      await db.insert('customers', customer.toMap());
+
+      // Use transaction to ensure atomicity
+      await db.transaction((txn) async {
+        await txn.insert('customers', customer.toMap());
+      });
+
       _customers.add(customer);
 
       if (_offlineManager.isOnline) {
-        final customerService = CustomerService(FirebaseFirestore.instance);
-        final firestoreId = await customerService.insertCustomer(customer);
-        final finalCustomer = customer.copyWith(id: firestoreId);
-        final index = _customers.indexWhere((c) => c.id == customer.id);
-        if (index != -1) {
-          _customers[index] = finalCustomer;
+        try {
+          final customerService = CustomerService(FirebaseFirestore.instance);
+          final firestoreId = await customerService.insertCustomer(customer);
+          final finalCustomer = customer.copyWith(id: firestoreId);
+
+          // Update local database with Firestore ID
+          await db.transaction((txn) async {
+            await txn.update(
+              'customers',
+              finalCustomer.toMap(),
+              where: 'id = ?',
+              whereArgs: [customer.id],
+            );
+          });
+
+          final index = _customers.indexWhere((c) => c.id == customer.id);
+          if (index != -1) {
+            _customers[index] = finalCustomer;
+          }
+        } catch (firestoreError) {
+          // If Firestore fails, rollback local changes
+          await db.transaction((txn) async {
+            await txn.delete(
+              'customers',
+              where: 'id = ?',
+              whereArgs: [customer.id],
+            );
+          });
+          _customers.removeWhere((c) => c.id == customer.id);
+          rethrow;
         }
-        await db.update('customers', finalCustomer.toMap(), where: 'id = ?', whereArgs: [customer.id]);
       } else {
         await _offlineManager.queueOperation(
           OfflineOperation(
@@ -231,14 +272,19 @@ class CustomerProvider with ChangeNotifier {
     }
   }
 
-  Future<Customer?> updateCustomer(Customer customer) async {
+  Future<UpdateResult> updateCustomer(Customer customer) async {
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
       final db = await _localDatabaseService.database;
-      await db.update('customers', customer.toMap(), where: 'id = ?', whereArgs: [customer.id]);
+      await db.update(
+        'customers',
+        customer.toMap(),
+        where: 'id = ?',
+        whereArgs: [customer.id],
+      );
 
       final index = _customers.indexWhere((c) => c.id == customer.id);
       if (index != -1) {
@@ -246,6 +292,30 @@ class CustomerProvider with ChangeNotifier {
       }
 
       if (_offlineManager.isOnline) {
+        final customerService = CustomerService(FirebaseFirestore.instance);
+        final existingCustomer = await customerService.getCustomerById(
+          customer.id,
+        );
+
+        if (existingCustomer != null &&
+            existingCustomer.version > customer.version) {
+          ErrorLogger.logInfo(
+            'Conflict detected for customer ${customer.id}',
+            context: 'CustomerProvider.updateCustomer',
+          );
+          return UpdateResult(
+            success: false,
+            conflict: Conflict.customer(
+              localCustomer: customer,
+              remoteCustomer: existingCustomer,
+            ),
+          );
+        }
+
+        final customerToUpdate = customer.copyWith(
+          version: customer.version + 1,
+        );
+
         final oldCustomer = await getCustomerById(customer.id);
         if (oldCustomer?.localImagePath != null &&
             oldCustomer!.localImagePath! != customer.localImagePath) {
@@ -264,16 +334,32 @@ class CustomerProvider with ChangeNotifier {
           }
         }
 
-        final customerService = CustomerService(FirebaseFirestore.instance);
-        await customerService.updateCustomer(customer);
+        await customerService.updateCustomer(customerToUpdate);
+
+        // Update local data with the versioned customer
+        await db.update(
+          'customers',
+          customerToUpdate.toMap(),
+          where: 'id = ?',
+          whereArgs: [customer.id],
+        );
+        final updatedIndex = _customers.indexWhere(
+          (c) => c.id == customerToUpdate.id,
+        );
+        if (updatedIndex != -1) {
+          _customers[updatedIndex] = customerToUpdate;
+        }
       } else {
+        final updatedCustomer = customer.copyWith(
+          version: customer.version + 1,
+        );
         await _offlineManager.queueOperation(
           OfflineOperation(
-            id: customer.id,
+            id: updatedCustomer.id,
             type: OperationType.updateCustomer,
             collectionName: 'customers',
-            documentId: customer.id,
-            data: customer.toMap(),
+            documentId: updatedCustomer.id,
+            data: updatedCustomer.toMap(),
             timestamp: DateTime.now(),
           ),
         );
@@ -281,7 +367,7 @@ class CustomerProvider with ChangeNotifier {
 
       _isLoading = false;
       notifyListeners();
-      return customer;
+      return UpdateResult(success: true);
     } catch (e) {
       _error = 'Failed to update customer: ${e.toString()}';
       _isLoading = false;
@@ -291,7 +377,7 @@ class CustomerProvider with ChangeNotifier {
         error: e,
         context: 'CustomerProvider.updateCustomer',
       );
-      return null;
+      return UpdateResult(success: false);
     }
   }
 
@@ -353,6 +439,41 @@ class CustomerProvider with ChangeNotifier {
     }
   }
 
+  /// Delete customer with confirmation dialog
+  Future<bool> deleteCustomerWithConfirmation(
+    BuildContext context,
+    String customerId,
+  ) async {
+    final navigator = Navigator.of(context);
+    final customer = await getCustomerById(customerId);
+    if (customer == null) {
+      _error = 'Customer not found';
+      notifyListeners();
+      return false;
+    }
+
+    if (customer.balance != 0) {
+      _error =
+          'Cannot delete customer with an outstanding balance of ₱${customer.balance.toStringAsFixed(2)}';
+      notifyListeners();
+      return false;
+    }
+
+    if (!navigator.mounted) return false;
+    final confirmed = await DeleteConfirmationDialog.show(
+      context: navigator.context,
+      title: 'Delete Customer',
+      message:
+          'Are you sure you want to delete this customer? This action cannot be undone.',
+      itemName: customer.name,
+      onConfirm: () async {
+        await deleteCustomer(customerId);
+      },
+    );
+
+    return confirmed ?? false;
+  }
+
   Future<bool> updateCustomerBalance(String customerId, double amount) async {
     try {
       final customerIndex = _customers.indexWhere((c) => c.id == customerId);
@@ -363,8 +484,24 @@ class CustomerProvider with ChangeNotifier {
       }
 
       final customer = _customers[customerIndex];
+      final newBalance = customer.balance + amount;
+
+      // Validate business rules
+      if (newBalance < 0) {
+        _error = 'Customer balance cannot be negative';
+        notifyListeners();
+        return false;
+      }
+
+      if (newBalance > customer.creditLimit && customer.creditLimit > 0) {
+        _error =
+            'Customer balance exceeds credit limit of ${customer.creditLimit}';
+        notifyListeners();
+        return false;
+      }
+
       final updatedCustomer = customer.copyWith(
-        balance: customer.balance + amount,
+        balance: newBalance,
         updatedAt: DateTime.now(),
       );
 
@@ -378,14 +515,26 @@ class CustomerProvider with ChangeNotifier {
             type: OperationType.updateCustomerBalance,
             collectionName: 'customers',
             documentId: updatedCustomer.id,
-            data: {'balance': updatedCustomer.balance, 'updated_at': updatedCustomer.updatedAt.toIso8601String()},
+            data: {
+              'balance_increment':
+                  amount, // Store increment instead of absolute value
+              'updated_at': updatedCustomer.updatedAt.toIso8601String(),
+            },
             timestamp: DateTime.now(),
           ),
         );
       }
-      
+
       final db = await _localDatabaseService.database;
-      await db.update('customers', {'balance': updatedCustomer.balance, 'updated_at': updatedCustomer.updatedAt.toIso8601String()}, where: 'id = ?', whereArgs: [customerId]);
+      await db.update(
+        'customers',
+        {
+          'balance': updatedCustomer.balance,
+          'updated_at': updatedCustomer.updatedAt.toIso8601String(),
+        },
+        where: 'id = ?',
+        whereArgs: [customerId],
+      );
 
       _customers[customerIndex] = updatedCustomer;
       notifyListeners();
@@ -414,13 +563,33 @@ class CustomerProvider with ChangeNotifier {
     }
   }
 
+  /// Show manage balance dialog for a customer
+  Future<void> showManageBalanceDialog(
+    BuildContext context,
+    String customerId,
+  ) async {
+    final navigator = Navigator.of(context);
+    final customer = await getCustomerById(customerId);
+    if (customer == null) {
+      _error = 'Customer not found';
+      notifyListeners();
+      return;
+    }
+
+    if (!navigator.mounted) return;
+    await DialogHelpers.showManageBalanceDialog(
+      context: navigator.context,
+      customer: customer,
+      onUpdateBalance: updateCustomerBalance,
+    );
+  }
+
   Future<Customer?> getCustomerById(String id) async {
     try {
       Customer? localCustomer;
       try {
         localCustomer = _customers.firstWhere((customer) => customer.id == id);
-      }
-      catch (e) {
+      } catch (e) {
         localCustomer = null;
       }
 

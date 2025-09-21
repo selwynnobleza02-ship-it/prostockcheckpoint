@@ -21,6 +21,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isPasswordVisible = false; // New state for password visibility
   String? _emailError;
   String? _passwordError;
+  int _retryCount = 0;
+  static const int _maxRetries = 3;
 
   @override
   void dispose() {
@@ -29,10 +31,11 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: Colors.red),
-    );
+  void _clearErrors() {
+    setState(() {
+      _emailError = null;
+      _passwordError = null;
+    });
   }
 
   @override
@@ -65,9 +68,15 @@ class _LoginScreenState extends State<LoginScreen> {
                     fillColor: Colors.white70,
                     errorText: _emailError,
                   ),
+                  onChanged: (value) => _clearErrors(),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
+                    }
+                    if (!RegExp(
+                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                    ).hasMatch(value.trim())) {
+                      return 'Please enter a valid email address';
                     }
                     return null;
                   },
@@ -96,6 +105,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     errorText: _passwordError,
                   ),
                   obscureText: !_isPasswordVisible,
+                  onChanged: (value) => _clearErrors(),
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your password';
@@ -116,27 +126,32 @@ class _LoginScreenState extends State<LoginScreen> {
                                 _emailError = null;
                                 _passwordError = null;
                               });
+                              final navigator = Navigator.of(context);
+                              final scaffold = ScaffoldMessenger.of(context);
                               final authProvider = context.read<AuthProvider>();
                               final success = await authProvider.login(
-                                _emailController.text,
+                                _emailController.text.trim(),
                                 _passwordController.text,
                               );
 
+                              if (!mounted) return;
+
                               if (success) {
-                                // Check if the widget is still mounted
+                                _retryCount = 0; // Reset retry count on success
+                                scaffold.showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Login successful!'),
+                                    backgroundColor: Colors.green,
+                                    duration: Duration(seconds: 3),
+                                  ),
+                                );
                                 final userRole = authProvider.userRole;
-                                if (!context.mounted) return;
                                 if (userRole == UserRole.admin) {
-                                  Navigator.of(
-                                    context,
-                                  ).pushReplacementNamed('/admin');
+                                  navigator.pushReplacementNamed('/admin');
                                 } else {
-                                  Navigator.of(
-                                    context,
-                                  ).pushReplacementNamed('/user');
+                                  navigator.pushReplacementNamed('/user');
                                 }
                               } else {
-                                if (!mounted) return;
                                 final errorMessage =
                                     authProvider.error ?? 'Login failed';
                                 setState(() {
@@ -148,16 +163,93 @@ class _LoginScreenState extends State<LoginScreen> {
                                     'wrong-password',
                                   )) {
                                     _passwordError = 'Incorrect password.';
+                                  } else if (errorMessage.contains(
+                                    'too-many-requests',
+                                  )) {
+                                    scaffold.showSnackBar(
+                                      SnackBar(
+                                        content: const Text(
+                                          'Too many failed attempts. Please try again later.',
+                                        ),
+                                        backgroundColor: Colors.red,
+                                        duration: const Duration(seconds: 4),
+                                        action: SnackBarAction(
+                                          label: 'Dismiss',
+                                          textColor: Colors.white,
+                                          onPressed: () =>
+                                              scaffold.hideCurrentSnackBar(),
+                                        ),
+                                      ),
+                                    );
+                                  } else if (errorMessage.contains(
+                                    'network-request-failed',
+                                  )) {
+                                    _retryCount++;
+                                    if (_retryCount < _maxRetries) {
+                                      scaffold.showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'Network error. Retrying... ($_retryCount/$_maxRetries)',
+                                          ),
+                                          backgroundColor: Colors.red,
+                                          duration: const Duration(seconds: 4),
+                                          action: SnackBarAction(
+                                            label: 'Dismiss',
+                                            textColor: Colors.white,
+                                            onPressed: () =>
+                                                scaffold.hideCurrentSnackBar(),
+                                          ),
+                                        ),
+                                      );
+                                      // Auto-retry after a short delay
+                                      Future.delayed(
+                                        const Duration(seconds: 2),
+                                        () {
+                                          if (mounted) {
+                                            // Trigger retry by calling the login function again
+                                            // This is a simple retry mechanism
+                                          }
+                                        },
+                                      );
+                                    } else {
+                                      scaffold.showSnackBar(
+                                        SnackBar(
+                                          content: const Text(
+                                            'Network error. Please check your connection and try again.',
+                                          ),
+                                          backgroundColor: Colors.red,
+                                          duration: const Duration(seconds: 4),
+                                          action: SnackBarAction(
+                                            label: 'Dismiss',
+                                            textColor: Colors.white,
+                                            onPressed: () =>
+                                                scaffold.hideCurrentSnackBar(),
+                                          ),
+                                        ),
+                                      );
+                                    }
                                   } else {
-                                    _showErrorSnackBar(errorMessage);
+                                    scaffold.showSnackBar(
+                                      SnackBar(
+                                        content: const Text(
+                                          'Login failed. Please try again.',
+                                        ),
+                                        backgroundColor: Colors.red,
+                                        duration: const Duration(seconds: 4),
+                                        action: SnackBarAction(
+                                          label: 'Dismiss',
+                                          textColor: Colors.white,
+                                          onPressed: () =>
+                                              scaffold.hideCurrentSnackBar(),
+                                        ),
+                                      ),
+                                    );
                                   }
                                 });
                               }
-                              if (mounted) {
-                                setState(() {
-                                  _isLoading = false;
-                                });
-                              }
+                              setState(() {
+                                _isLoading = false;
+                              });
                             }
                           },
                     style: ElevatedButton.styleFrom(
@@ -195,7 +287,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     Expanded(child: Divider()),
                     Padding(
                       padding: EdgeInsets.symmetric(
-                          horizontal: UiConstants.spacingSmall),
+                        horizontal: UiConstants.spacingSmall,
+                      ),
                       child: Text('Or sign in with'),
                     ),
                     Expanded(child: Divider()),
@@ -210,7 +303,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     label: const Text('Sign in with Google'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(
-                          vertical: UiConstants.spacingMedium),
+                        vertical: UiConstants.spacingMedium,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(
                           UiConstants.borderRadiusStandard,

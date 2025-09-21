@@ -19,11 +19,17 @@ class SyncService {
   final SyncFailureProvider _syncFailureProvider;
   static const int maxRetries = 3;
 
+  Function(int, int)? _onProgressUpdate;
+
   SyncService(
     this._queueService,
     this._localDatabaseService,
     this._syncFailureProvider,
   );
+
+  void setProgressCallback(Function(int completed, int total) callback) {
+    _onProgressUpdate = callback;
+  }
 
   Future<void> syncPendingOperations() async {
     final operationsToSync = await _queueService.getPendingOperations();
@@ -46,7 +52,14 @@ class SyncService {
             : i + batchSize,
       );
       await _processBatch(batch);
+
+      // Update progress after each batch
+      _updateSyncProgress(i + batch.length, operationsToSync.length);
     }
+  }
+
+  void _updateSyncProgress(int completed, int total) {
+    _onProgressUpdate?.call(completed, total);
   }
 
   Future<void> _processBatch(List<OfflineOperation> batch) async {
@@ -56,13 +69,29 @@ class SyncService {
 
     for (final operation in batch) {
       try {
+        // Handle image upload with fallback
         if (operation.type == OperationType.insertCustomer ||
             operation.type == OperationType.updateCustomer) {
           if (operation.data['localImagePath'] != null) {
-            final imageUrl = await CloudinaryService.instance
-                .uploadImage(File(operation.data['localImagePath']));
-            operation.data['imageUrl'] = imageUrl;
-            operation.data.remove('localImagePath');
+            try {
+              final imageUrl = await CloudinaryService.instance.uploadImage(
+                File(operation.data['localImagePath']),
+              );
+              operation.data['imageUrl'] = imageUrl;
+              operation.data.remove('localImagePath');
+              ErrorLogger.logInfo(
+                'Image uploaded successfully for operation ${operation.id}',
+                context: 'SyncService._processBatch',
+              );
+            } catch (imageError) {
+              ErrorLogger.logError(
+                'Image upload failed for operation ${operation.id}, continuing without image',
+                error: imageError,
+                context: 'SyncService._processBatch',
+              );
+              // Keep localImagePath for retry later, don't fail the entire operation
+              // operation.data.remove('localImagePath'); // Commented out to preserve for retry
+            }
           }
         }
 
@@ -128,10 +157,11 @@ class SyncService {
 
     final db = await _localDatabaseService.database;
     if (successfulOperationIds.isNotEmpty) {
+      final placeholders = successfulOperationIds.map((_) => '?').join(',');
       await db.delete(
         'offline_operations',
-        where: 'id IN (?)',
-        whereArgs: [successfulOperationIds.join(',')],
+        where: 'id IN ($placeholders)',
+        whereArgs: successfulOperationIds,
       );
     }
 
@@ -188,8 +218,9 @@ class SyncService {
         return [_getInsertOperation(operation)];
       case OperationType.updateProduct:
       case OperationType.updateCustomer:
-      case OperationType.updateCustomerBalance:
         return [_getUpdateOperation(operation)];
+      case OperationType.updateCustomerBalance:
+        return [_getBalanceIncrementOperation(operation)];
       case OperationType.deleteCustomer:
         return [_getDeleteOperation(operation)];
       case OperationType.createSaleTransaction:
@@ -199,9 +230,7 @@ class SyncService {
             .map((item) => SaleItem.fromMap(item as Map<String, dynamic>))
             .toList();
 
-        unawaited(
-          _localDatabaseService.insertSale(sale.copyWith(isSynced: 1)),
-        );
+        unawaited(_localDatabaseService.insertSale(sale.copyWith(isSynced: 1)));
         for (final item in saleItems) {
           unawaited(_localDatabaseService.insertSaleItem(item));
         }
@@ -241,6 +270,7 @@ class SyncService {
     return {
       'type': AppConstants.operationInsert,
       'collection': operation.collectionName,
+      'docId': operation.documentId,
       'data': operation.data,
     };
   }
@@ -259,6 +289,22 @@ class SyncService {
       'type': AppConstants.operationDelete,
       'collection': operation.collectionName,
       'docId': operation.documentId,
+    };
+  }
+
+  Map<String, dynamic> _getBalanceIncrementOperation(
+    OfflineOperation operation,
+  ) {
+    return {
+      'type': AppConstants.operationUpdate,
+      'collection': operation.collectionName,
+      'docId': operation.documentId,
+      'data': {
+        'balance': FieldValue.increment(
+          operation.data['balance_increment'] ?? 0.0,
+        ),
+        'updatedAt': FieldValue.serverTimestamp(),
+      },
     };
   }
 }

@@ -15,8 +15,13 @@ import '../utils/error_logger.dart'; // Added ErrorLogger import for consistent 
 
 class AuthProvider with ChangeNotifier {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
-  final UserService _userService = UserService(FirebaseFirestore.instance, FirebaseAuth.instance);
-  final ActivityService _activityService = ActivityService(FirebaseFirestore.instance);
+  final UserService _userService = UserService(
+    FirebaseFirestore.instance,
+    FirebaseAuth.instance,
+  );
+  final ActivityService _activityService = ActivityService(
+    FirebaseFirestore.instance,
+  );
   final OfflineManager _offlineManager;
 
   bool _isAuthenticated = false;
@@ -37,8 +42,11 @@ class AuthProvider with ChangeNotifier {
 
   Future<bool> login(String email, String password) async {
     try {
+      // Clear previous error
+      _error = null;
+
       final credential = await _firebaseAuth.signInWithEmailAndPassword(
-        email: email,
+        email: email.trim(),
         password: password,
       );
 
@@ -49,7 +57,7 @@ class AuthProvider with ChangeNotifier {
           return false;
         }
 
-        final user = await _userService.getUserByEmail(email);
+        final user = await _userService.getUserByEmail(email.trim());
         if (user != null) {
           _isAuthenticated = true;
           _currentUser = user;
@@ -71,9 +79,41 @@ class AuthProvider with ChangeNotifier {
       _error = 'Login failed. Please check your credentials.';
       return false;
     } on FirebaseAuthException catch (e) {
-      _error = e.message;
+      String userFriendlyError;
+      switch (e.code) {
+        case 'user-not-found':
+          userFriendlyError = 'No account found with this email address.';
+          break;
+        case 'wrong-password':
+          userFriendlyError = 'Incorrect password.';
+          break;
+        case 'invalid-email':
+          userFriendlyError = 'Please enter a valid email address.';
+          break;
+        case 'user-disabled':
+          userFriendlyError = 'This account has been disabled.';
+          break;
+        case 'too-many-requests':
+          userFriendlyError =
+              'Too many failed attempts. Please try again later.';
+          break;
+        case 'network-request-failed':
+          userFriendlyError = 'Network error. Please check your connection.';
+          break;
+        default:
+          userFriendlyError = e.message ?? 'Login failed. Please try again.';
+      }
+      _error = userFriendlyError;
       ErrorLogger.logError(
         'Error during login',
+        error: e,
+        context: 'AuthProvider.login',
+      );
+      return false;
+    } catch (e) {
+      _error = 'An unexpected error occurred. Please try again.';
+      ErrorLogger.logError(
+        'Unexpected error during login',
         error: e,
         context: 'AuthProvider.login',
       );
@@ -224,8 +264,19 @@ class AuthProvider with ChangeNotifier {
   ) async {
     AppUser? newUser;
     try {
+      // Clear previous error
+      _error = null;
+
+      // Validate inputs
+      if (username.trim().isEmpty || email.trim().isEmpty || password.isEmpty) {
+        _error = 'Please fill in all required fields.';
+        return false;
+      }
+
       // Check if username already exists
-      final existingUser = await _userService.getUserByUsername(username);
+      final existingUser = await _userService.getUserByUsername(
+        username.trim(),
+      );
       if (existingUser != null) {
         _error = 'Username already exists';
         return false;
@@ -235,8 +286,8 @@ class AuthProvider with ChangeNotifier {
 
       // Create user in Firestore first
       newUser = AppUser(
-        username: username,
-        email: email,
+        username: username.trim(),
+        email: email.trim(),
         passwordHash: hashedPassword, // Store hashed password
         role: role,
         createdAt: DateTime.now(),
@@ -248,13 +299,13 @@ class AuthProvider with ChangeNotifier {
       // Create Firebase Auth account
       try {
         final credential = await _firebaseAuth.createUserWithEmailAndPassword(
-          email: email,
+          email: email.trim(),
           password: password,
         );
 
         if (credential.user != null) {
           await credential.user!.sendEmailVerification();
-          await credential.user!.updateDisplayName(username);
+          await credential.user!.updateDisplayName(username.trim());
           await logActivity('CREATE_USER', details: 'User $username created');
           _error =
               'A verification email has been sent to your email address. Please verify your email to login.';
@@ -268,11 +319,29 @@ class AuthProvider with ChangeNotifier {
         if (newUser.id != null) {
           await _userService.deleteUser(newUser.id!);
         }
-        _error = e.toString();
-        return false;
+        rethrow;
       }
     } on FirebaseAuthException catch (e) {
-      _error = e.message;
+      String userFriendlyError;
+      switch (e.code) {
+        case 'email-already-in-use':
+          userFriendlyError = 'Email is already in use.';
+          break;
+        case 'invalid-email':
+          userFriendlyError = 'Please enter a valid email address.';
+          break;
+        case 'weak-password':
+          userFriendlyError =
+              'Password is too weak. Please use a stronger password.';
+          break;
+        case 'network-request-failed':
+          userFriendlyError = 'Network error. Please check your connection.';
+          break;
+        default:
+          userFriendlyError =
+              e.message ?? 'Failed to create account. Please try again.';
+      }
+      _error = userFriendlyError;
       ErrorLogger.logError(
         'Error creating user',
         error: e,
@@ -280,9 +349,9 @@ class AuthProvider with ChangeNotifier {
       );
       return false;
     } catch (e) {
-      _error = e.toString();
+      _error = 'An unexpected error occurred. Please try again.';
       ErrorLogger.logError(
-        'Error creating user',
+        'Unexpected error creating user',
         error: e,
         context: 'AuthProvider.createUser',
       );
@@ -292,22 +361,40 @@ class AuthProvider with ChangeNotifier {
 
   Future<String?> sendPasswordResetEmail(String email) async {
     try {
-      await _firebaseAuth.sendPasswordResetEmail(email: email);
+      await _firebaseAuth.sendPasswordResetEmail(email: email.trim());
       return null;
     } on FirebaseAuthException catch (e) {
+      String userFriendlyError;
+      switch (e.code) {
+        case 'user-not-found':
+          userFriendlyError = 'No account found with this email address.';
+          break;
+        case 'invalid-email':
+          userFriendlyError = 'Please enter a valid email address.';
+          break;
+        case 'network-request-failed':
+          userFriendlyError = 'Network error. Please check your connection.';
+          break;
+        case 'too-many-requests':
+          userFriendlyError = 'Too many requests. Please try again later.';
+          break;
+        default:
+          userFriendlyError =
+              e.message ?? 'Failed to send reset email. Please try again.';
+      }
       ErrorLogger.logError(
         'Error sending password reset email',
         error: e,
         context: 'AuthProvider.sendPasswordResetEmail',
       );
-      return e.message;
+      return userFriendlyError;
     } catch (e) {
       ErrorLogger.logError(
-        'Error sending password reset email',
+        'Unexpected error sending password reset email',
         error: e,
         context: 'AuthProvider.sendPasswordResetEmail',
       );
-      return 'An unexpected error occurred.';
+      return 'An unexpected error occurred. Please try again.';
     }
   }
 

@@ -222,6 +222,13 @@ class ProductService {
     try {
       Query query = products.orderBy('name');
 
+      // Apply search filter if searchQuery is provided
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        query = query
+            .where('name', isGreaterThanOrEqualTo: searchQuery)
+            .where('name', isLessThan: '$searchQuery\ufff0');
+      }
+
       if (lastDocument != null) {
         query = query.startAfterDocument(lastDocument);
       }

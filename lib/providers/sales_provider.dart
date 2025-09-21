@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/models/offline_operation.dart';
 import 'package:prostock/providers/auth_provider.dart';
-import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/services/firestore/sale_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/offline_manager.dart';
@@ -29,7 +28,6 @@ class SalesProvider with ChangeNotifier {
 
   final InventoryProvider _inventoryProvider;
   final OfflineManager _offlineManager;
-  final CustomerProvider _customerProvider;
   final AuthProvider _authProvider;
   final CreditProvider _creditProvider;
 
@@ -42,14 +40,12 @@ class SalesProvider with ChangeNotifier {
   SalesProvider({
     required InventoryProvider inventoryProvider,
     required OfflineManager offlineManager,
-    required CustomerProvider customerProvider,
     required AuthProvider authProvider,
     required CreditProvider creditProvider,
-  })  : _inventoryProvider = inventoryProvider,
-        _offlineManager = offlineManager,
-        _customerProvider = customerProvider,
-        _authProvider = authProvider,
-        _creditProvider = creditProvider;
+  }) : _inventoryProvider = inventoryProvider,
+       _offlineManager = offlineManager,
+       _authProvider = authProvider,
+       _creditProvider = creditProvider;
 
   List<Sale> get sales => _sales;
   List<SaleItem> get saleItems => _saleItems;
@@ -132,8 +128,11 @@ class SalesProvider with ChangeNotifier {
           final saleService = SaleService(FirebaseFirestore.instance);
           _saleItems = await saleService.getSaleItemsBySaleIds(saleIds);
         } else {
-          final localSaleItems = await LocalDatabaseService.instance.getSaleItemsBySaleIds(saleIds);
-          _saleItems = localSaleItems.map((item) => SaleItem.fromMap(item)).toList();
+          final localSaleItems = await LocalDatabaseService.instance
+              .getSaleItemsBySaleIds(saleIds);
+          _saleItems = localSaleItems
+              .map((item) => SaleItem.fromMap(item))
+              .toList();
         }
       }
 

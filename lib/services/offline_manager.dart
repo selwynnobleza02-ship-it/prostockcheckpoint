@@ -15,10 +15,14 @@ class OfflineManager with ChangeNotifier {
 
   final ConnectivityService _connectivityService = ConnectivityService();
   final CacheService _cacheService = CacheService();
-  final OperationQueueService _queueService =
-      OperationQueueService(LocalDatabaseService.instance);
-  late final SyncService _syncService =
-      SyncService(_queueService, LocalDatabaseService.instance, _syncFailureProvider);
+  final OperationQueueService _queueService = OperationQueueService(
+    LocalDatabaseService.instance,
+  );
+  late final SyncService _syncService = SyncService(
+    _queueService,
+    LocalDatabaseService.instance,
+    _syncFailureProvider,
+  )..setProgressCallback(_updateSyncProgress);
 
   bool _isSyncing = false;
   DateTime? _lastSyncTime;
@@ -89,6 +93,12 @@ class OfflineManager with ChangeNotifier {
 
   Future<void> clearCache() async {
     await _cacheService.clearCache();
+  }
+
+  void _updateSyncProgress(int completed, int total) {
+    _syncProgress = completed;
+    _totalOperationsToSync = total;
+    notifyListeners();
   }
 
   @override

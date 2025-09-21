@@ -7,6 +7,7 @@ import 'dart:async';
 import 'components/inventory_action_buttons.dart';
 import 'components/inventory_search_bar.dart';
 import 'components/product_list_view.dart';
+import '../../widgets/sync_status_indicator.dart';
 
 class InventoryScreen extends StatefulWidget {
   const InventoryScreen({super.key});
@@ -49,6 +50,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
       appBar: AppBar(
         title: const Text('Inventory'),
         actions: [
+          const SyncStatusIndicator(),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
             tooltip: 'Scan Barcode',
@@ -68,9 +70,7 @@ class _InventoryScreenState extends State<InventoryScreen> {
           InventorySearchBar(controller: _searchController),
           const InventoryActionButtons(),
           const SizedBox(height: 16),
-          Expanded(
-            child: ProductListView(searchQuery: _searchQuery),
-          ),
+          Expanded(child: ProductListView(searchQuery: _searchQuery)),
         ],
       ),
       floatingActionButton: FloatingActionButton(

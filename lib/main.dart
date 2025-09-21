@@ -21,11 +21,14 @@ import 'providers/sales_provider.dart';
 import 'providers/customer_provider.dart';
 import 'providers/credit_provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/demand_provider.dart';
+import 'services/demand_analysis_service.dart';
 import 'screens/admin/admin_screen.dart';
 import 'screens/login_signup/login_screen.dart';
 import 'screens/login_signup/signup_screen.dart';
 import 'screens/user/user_screen.dart';
 import 'screens/splash_screen.dart'; // Added import for SplashScreen
+import 'screens/inventory/demand_suggestions_screen.dart';
 import 'package:background_fetch/background_fetch.dart';
 import 'package:prostock/services/firestore/activity_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -43,16 +46,28 @@ void main() async {
   await notificationService.init();
 
   final localDatabaseService = LocalDatabaseService.instance;
-  final creditCheckService = CreditCheckService(localDatabaseService, notificationService);
+  final creditCheckService = CreditCheckService(
+    localDatabaseService,
+    notificationService,
+  );
 
   await BackgroundSyncService.init(offlineManager, creditCheckService);
 
-  runApp(MyApp(offlineManager: offlineManager, syncFailureProvider: syncFailureProvider));
+  runApp(
+    MyApp(
+      offlineManager: offlineManager,
+      syncFailureProvider: syncFailureProvider,
+    ),
+  );
   BackgroundFetch.registerHeadlessTask(backgroundFetchHeadlessTask);
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key, required this.offlineManager, required this.syncFailureProvider});
+  const MyApp({
+    super.key,
+    required this.offlineManager,
+    required this.syncFailureProvider,
+  });
   final OfflineManager offlineManager;
   final SyncFailureProvider syncFailureProvider;
 
@@ -63,9 +78,7 @@ class MyApp extends StatelessWidget {
         Provider<ActivityService>(
           create: (_) => ActivityService(FirebaseFirestore.instance),
         ),
-        Provider<CreditService>(
-          create: (_) => CreditService(),
-        ),
+        Provider<CreditService>(create: (_) => CreditService()),
         ChangeNotifierProvider.value(value: offlineManager),
         ChangeNotifierProvider.value(value: syncFailureProvider),
         ChangeNotifierProvider(
@@ -73,43 +86,73 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(
-          create: (context) =>
-              InventoryProvider(offlineManager: context.read<OfflineManager>()),
+          create: (context) => DemandProvider(
+            DemandAnalysisService(
+              LocalDatabaseService.instance,
+              context.read<NotificationService>(),
+            ),
+          ),
+        ),
+        ChangeNotifierProvider(
+          create: (context) => InventoryProvider(
+            offlineManager: context.read<OfflineManager>(),
+            authProvider: context.read<AuthProvider>(),
+          ),
         ),
         ChangeNotifierProvider(
           create: (context) => CustomerProvider(context.read<OfflineManager>()),
         ),
-        ChangeNotifierProxyProvider2<CustomerProvider, InventoryProvider, CreditProvider>(
+        ChangeNotifierProxyProvider2<
+          CustomerProvider,
+          InventoryProvider,
+          CreditProvider
+        >(
           create: (context) => CreditProvider(
             customerProvider: context.read<CustomerProvider>(),
             inventoryProvider: context.read<InventoryProvider>(),
             creditService: context.read<CreditService>(),
           ),
-          update: (context, customerProvider, inventoryProvider, previousCreditProvider) =>
-              previousCreditProvider ??
-              CreditProvider(
-                customerProvider: customerProvider,
-                inventoryProvider: inventoryProvider,
-                creditService: context.read<CreditService>(),
-              ),
+          update:
+              (
+                context,
+                customerProvider,
+                inventoryProvider,
+                previousCreditProvider,
+              ) =>
+                  previousCreditProvider ??
+                  CreditProvider(
+                    customerProvider: customerProvider,
+                    inventoryProvider: inventoryProvider,
+                    creditService: context.read<CreditService>(),
+                  ),
         ),
-        ChangeNotifierProxyProvider4<InventoryProvider, CustomerProvider, AuthProvider, CreditProvider, SalesProvider>(
+        ChangeNotifierProxyProvider3<
+          InventoryProvider,
+          AuthProvider,
+          CreditProvider,
+          SalesProvider
+        >(
           create: (context) => SalesProvider(
             inventoryProvider: context.read<InventoryProvider>(),
             offlineManager: context.read<OfflineManager>(),
-            customerProvider: context.read<CustomerProvider>(),
             authProvider: context.read<AuthProvider>(),
             creditProvider: context.read<CreditProvider>(),
           ),
-          update: (context, inventoryProvider, customerProvider, authProvider, creditProvider, previousSalesProvider) =>
-              previousSalesProvider ??
-              SalesProvider(
-                inventoryProvider: inventoryProvider,
-                offlineManager: context.read<OfflineManager>(),
-                customerProvider: customerProvider,
-                authProvider: authProvider,
-                creditProvider: creditProvider,
-              ),
+          update:
+              (
+                context,
+                inventoryProvider,
+                authProvider,
+                creditProvider,
+                previousSalesProvider,
+              ) =>
+                  previousSalesProvider ??
+                  SalesProvider(
+                    inventoryProvider: inventoryProvider,
+                    offlineManager: context.read<OfflineManager>(),
+                    authProvider: authProvider,
+                    creditProvider: creditProvider,
+                  ),
         ),
         ChangeNotifierProvider(create: (_) => StockMovementProvider()),
         ChangeNotifierProvider(create: (_) => PrintingService()),
@@ -160,6 +203,8 @@ class _RetailCreditAppState extends State<RetailCreditApp> {
           routes: {
             '/splash': (context) =>
                 const SplashScreen(), // Added SplashScreen route
+            '/inventory/suggestions': (context) =>
+                const DemandSuggestionsScreen(),
             '/admin': (context) => const AdminScreen(),
             '/login': (context) => const LoginScreen(),
             '/signup': (context) => const SignupScreen(),
