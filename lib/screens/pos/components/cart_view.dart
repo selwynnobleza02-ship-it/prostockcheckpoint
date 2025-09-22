@@ -181,6 +181,7 @@ class CartViewState extends State<CartView> {
         return ListView.builder(
           padding: const EdgeInsets.symmetric(horizontal: 4),
           itemCount: salesProvider.currentSaleItems.length,
+          physics: const AlwaysScrollableScrollPhysics(),
           itemBuilder: (context, index) {
             final item = salesProvider.currentSaleItems[index];
             final product = context
@@ -263,10 +264,6 @@ class CartViewState extends State<CartView> {
 
   Widget _buildCartFooter(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: UiConstants.spacingSmall,
-        vertical: 8,
-      ),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Colors.grey[300]!)),
@@ -279,135 +276,150 @@ class CartViewState extends State<CartView> {
           ),
         ],
       ),
-      child: Consumer<SalesProvider>(
-        builder: (context, provider, child) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Total:',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                  Text(
-                    CurrencyUtils.formatCurrency(provider.currentSaleTotal),
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.green,
-                    ),
-                  ),
-                ],
-              ),
-              if (widget.paymentMethod == 'cash') ...[
-                const SizedBox(height: 8),
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.symmetric(
+          horizontal: UiConstants.spacingSmall,
+          vertical: 8,
+        ),
+        child: Consumer<SalesProvider>(
+          builder: (context, provider, child) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Total row
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Expanded(
-                      child: TextFormField(
-                        controller: _cashTenderedController,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
+                    const Text(
+                      'Total:',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Flexible(
+                      child: Text(
+                        CurrencyUtils.formatCurrency(provider.currentSaleTotal),
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
                         ),
-                        decoration: const InputDecoration(
-                          labelText: 'Cash Tendered',
-                          border: OutlineInputBorder(),
-                          isDense: true,
-                          prefixText: '₱ ',
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 8,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                // Cash tendered and change row (only for cash payments)
+                if (widget.paymentMethod == 'cash') ...[
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        flex: 2,
+                        child: TextFormField(
+                          controller: _cashTenderedController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          decoration: const InputDecoration(
+                            labelText: 'Cash Tendered',
+                            border: OutlineInputBorder(),
+                            isDense: true,
+                            prefixText: '₱ ',
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
                           ),
                         ),
                       ),
+                      const SizedBox(width: 12),
+                      Flexible(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _change >= 0
+                                ? Colors.blue[50]
+                                : Colors.red[50],
+                            border: Border.all(
+                              color: _change >= 0 ? Colors.blue : Colors.red,
+                            ),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            'Change: ${CurrencyUtils.formatCurrency(_change)}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: _change >= 0 ? Colors.blue : Colors.red,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                // Action buttons row
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: provider.currentSaleItems.isEmpty
+                            ? null
+                            : () {
+                                provider.clearCurrentSale();
+                                _cashTenderedController.clear();
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.grey,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        child: const Text('Clear'),
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: _change >= 0 ? Colors.blue[50] : Colors.red[50],
-                        border: Border.all(
-                          color: _change >= 0 ? Colors.blue : Colors.red,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: ElevatedButton(
+                        onPressed:
+                            provider.currentSaleItems.isEmpty ||
+                                widget.isProcessingSale ||
+                                (widget.paymentMethod == 'cash' &&
+                                    (double.tryParse(
+                                              _cashTenderedController.text,
+                                            ) ??
+                                            0.0) <
+                                        provider.currentSaleTotal)
+                            ? null
+                            : widget.onCompleteSale,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
                         ),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: Text(
-                        'Change: ${CurrencyUtils.formatCurrency(_change)}',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: _change >= 0 ? Colors.blue : Colors.red,
-                        ),
+                        child: widget.isProcessingSale
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Checkout'),
                       ),
                     ),
                   ],
                 ),
               ],
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: provider.currentSaleItems.isEmpty
-                          ? null
-                          : () {
-                              provider.clearCurrentSale();
-                              _cashTenderedController.clear();
-                            },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
-                      child: const Text(
-                        'Clear',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    flex: 2,
-                    child: ElevatedButton(
-                      onPressed:
-                          provider.currentSaleItems.isEmpty ||
-                              widget.isProcessingSale ||
-                              (widget.paymentMethod == 'cash' &&
-                                  (double.tryParse(
-                                            _cashTenderedController.text,
-                                          ) ??
-                                          0.0) <
-                                      provider.currentSaleTotal)
-                          ? null
-                          : widget.onCompleteSale,
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 8),
-                      ),
-                      child: widget.isProcessingSale
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                color: Colors.white,
-                                strokeWidth: 2,
-                              ),
-                            )
-                          : const Text(
-                              'Checkout',
-                              style: TextStyle(fontSize: 12),
-                            ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

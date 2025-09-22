@@ -229,9 +229,7 @@ class SaleService {
     }
   }
 
-  Future<List<SaleItem>> getSaleItemsBySaleIds(
-    List<String> saleIds,
-  ) async {
+  Future<List<SaleItem>> getSaleItemsBySaleIds(List<String> saleIds) async {
     if (saleIds.isEmpty) {
       return [];
     }
@@ -241,8 +239,7 @@ class SaleService {
       final saleIdBatches = _splitList(saleIds, 30);
 
       for (final batch in saleIdBatches) {
-        final snapshot =
-            await saleItems.where('saleId', whereIn: batch).get();
+        final snapshot = await saleItems.where('saleId', whereIn: batch).get();
         final items = snapshot.docs.map((doc) {
           final data = doc.data() as Map<String, dynamic>;
           data['id'] = doc.id;
@@ -260,7 +257,9 @@ class SaleService {
   List<List<T>> _splitList<T>(List<T> list, int size) {
     final chunks = <List<T>>[];
     for (var i = 0; i < list.length; i += size) {
-      chunks.add(list.sublist(i, i + size > list.length ? list.length : i + size));
+      chunks.add(
+        list.sublist(i, i + size > list.length ? list.length : i + size),
+      );
     }
     return chunks;
   }
@@ -295,7 +294,6 @@ class SaleService {
       query = query.limit(limit);
 
       final snapshot = await query.get();
-
 
       final salesList = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
@@ -390,15 +388,20 @@ class SaleService {
     String customerId,
   ) async {
     try {
+      // Use a simpler query without orderBy to avoid composite index requirement
       final snapshot = await creditTransactions
           .where('customerId', isEqualTo: customerId)
-          .orderBy('createdAt', descending: true)
           .get();
 
-      return snapshot.docs.map((doc) {
+      final transactions = snapshot.docs.map((doc) {
         final data = doc.data() as Map<String, dynamic>;
         return CreditTransaction.fromMap(data, doc.id);
       }).toList();
+
+      // Sort transactions by createdAt in descending order locally
+      transactions.sort((a, b) => b.date.compareTo(a.date));
+
+      return transactions;
     } catch (e) {
       throw FirestoreException(
         'Failed to get credit transactions by customer: $e',

@@ -262,7 +262,10 @@ class ReceiptDialog extends StatelessWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text('Cash Tendered:', style: TextStyle(fontSize: 14)),
+                        const Text(
+                          'Cash Tendered:',
+                          style: TextStyle(fontSize: 14),
+                        ),
                         Text(
                           CurrencyUtils.formatCurrency(cashTendered!),
                           style: const TextStyle(fontSize: 14),
@@ -278,7 +281,10 @@ class ReceiptDialog extends StatelessWidget {
                         const Text('Change:', style: TextStyle(fontSize: 14)),
                         Text(
                           CurrencyUtils.formatCurrency(change!),
-                          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ],
                     ),

@@ -131,6 +131,10 @@ class CreditProvider with ChangeNotifier {
     // Obtain provider before any async gaps to avoid using BuildContext after awaits
     final salesProvider = Provider.of<SalesProvider>(context, listen: false);
     try {
+      print(
+        'CreditProvider: Starting payment recording for customer: $customerId, amount: $amount',
+      );
+
       final transaction = CreditTransaction(
         customerId: customerId,
         amount: amount,
@@ -138,25 +142,54 @@ class CreditProvider with ChangeNotifier {
         type: 'payment',
         notes: notes,
       );
+
+      print('CreditProvider: Recording payment transaction...');
       await _creditService.recordPayment(transaction);
+      print('CreditProvider: Payment transaction recorded successfully');
+
+      print('CreditProvider: Updating customer balance...');
       await _customerProvider.updateCustomerBalance(customerId, -amount);
+      print('CreditProvider: Customer balance updated successfully');
 
       // Create a sale record for the payment
+      print('CreditProvider: Creating sale record for payment...');
       await salesProvider.createSaleFromPayment(customerId, amount);
+      print('CreditProvider: Sale record created successfully');
 
+      print('CreditProvider: Payment recording completed successfully');
       return true;
     } catch (e) {
+      print('CreditProvider: Error recording payment: $e');
+      _error = 'Failed to record payment: $e';
+      notifyListeners();
       return false;
     }
   }
 
   Future<void> getTransactionsByCustomer(String customerId) async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
-    _transactions = await _creditService.getTransactionsByCustomer(customerId);
+    try {
+      print('CreditProvider: Fetching transactions for customer: $customerId');
 
-    _isLoading = false;
-    notifyListeners();
+      // Check if there are any transactions at all
+      final hasTransactions = await _creditService.hasAnyTransactions();
+      print('CreditProvider: Database has transactions: $hasTransactions');
+
+      _transactions = await _creditService.getTransactionsByCustomer(
+        customerId,
+      );
+      print('CreditProvider: Found ${_transactions.length} transactions');
+
+      _isLoading = false;
+      notifyListeners();
+    } catch (e) {
+      print('CreditProvider: Error fetching transactions: $e');
+      _error = 'Failed to load transactions: $e';
+      _isLoading = false;
+      notifyListeners();
+    }
   }
 }

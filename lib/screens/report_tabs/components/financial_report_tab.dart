@@ -80,6 +80,38 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
     }
   }
 
+  String _getProductCategory(String productId) {
+    try {
+      // This is a simplified categorization - you might want to add a category field to your Product model
+      final product = Provider.of<InventoryProvider>(context, listen: false)
+          .products
+          .firstWhere(
+            (p) => p.id == productId,
+            orElse: () => throw Exception('Product not found: $productId'),
+          );
+
+      final name = product.name.toLowerCase();
+      if (name.contains('food') ||
+          name.contains('snack') ||
+          name.contains('bread') ||
+          name.contains('rice')) {
+        return 'Food & Snacks';
+      } else if (name.contains('drink') ||
+          name.contains('juice') ||
+          name.contains('water') ||
+          name.contains('soda')) {
+        return 'Beverages';
+      } else if (name.contains('cigarette') || name.contains('tobacco')) {
+        return 'Cigarettes';
+      } else {
+        return 'Household Items';
+      }
+    } catch (e) {
+      print('Error categorizing product $productId: $e');
+      return 'Household Items'; // Default fallback
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final reportService = ReportService();
@@ -158,7 +190,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
           inventory.products,
         );
 
-        final topProducts = reportService.getTopSellingProducts(
+        final topProducts = reportService.getTopSellingProductsByRevenue(
           filteredSaleItems,
           inventory.products,
         );
@@ -177,66 +209,296 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                     icon: const Icon(Icons.picture_as_pdf),
                     label: const Text('Export PDF'),
                     onPressed: () async {
-                      final scaffold = ScaffoldMessenger.of(context);
-                      final pdf = PdfReportService();
-                      final sections = <PdfReportSection>[
-                        PdfReportSection(
-                          title: 'Summary',
-                          rows: [
-                            [
-                              'Total Revenue',
-                              CurrencyUtils.formatCurrency(totalRevenue),
+                      try {
+                        final scaffold = ScaffoldMessenger.of(context);
+
+                        // Show loading indicator
+                        scaffold.showSnackBar(
+                          const SnackBar(
+                            content: Text('Generating PDF...'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+
+                        final pdf = PdfReportService();
+                        final sections = <PdfReportSection>[
+                          // 1. Income
+                          PdfReportSection(
+                            title: '1. Income',
+                            rows: [
+                              [
+                                'Sales - Food & Snacks',
+                                CurrencyUtils.formatCurrency(
+                                  filteredSaleItems
+                                      .where(
+                                        (item) =>
+                                            _getProductCategory(
+                                              item.productId,
+                                            ) ==
+                                            'Food & Snacks',
+                                      )
+                                      .fold(
+                                        0.0,
+                                        (sum, item) => sum + item.totalPrice,
+                                      ),
+                                ),
+                              ],
+                              [
+                                'Sales - Beverages',
+                                CurrencyUtils.formatCurrency(
+                                  filteredSaleItems
+                                      .where(
+                                        (item) =>
+                                            _getProductCategory(
+                                              item.productId,
+                                            ) ==
+                                            'Beverages',
+                                      )
+                                      .fold(
+                                        0.0,
+                                        (sum, item) => sum + item.totalPrice,
+                                      ),
+                                ),
+                              ],
+                              [
+                                'Sales - Cigarettes',
+                                CurrencyUtils.formatCurrency(
+                                  filteredSaleItems
+                                      .where(
+                                        (item) =>
+                                            _getProductCategory(
+                                              item.productId,
+                                            ) ==
+                                            'Cigarettes',
+                                      )
+                                      .fold(
+                                        0.0,
+                                        (sum, item) => sum + item.totalPrice,
+                                      ),
+                                ),
+                              ],
+                              [
+                                'Sales - Household Items',
+                                CurrencyUtils.formatCurrency(
+                                  filteredSaleItems
+                                      .where(
+                                        (item) =>
+                                            _getProductCategory(
+                                              item.productId,
+                                            ) ==
+                                            'Household Items',
+                                      )
+                                      .fold(
+                                        0.0,
+                                        (sum, item) => sum + item.totalPrice,
+                                      ),
+                                ),
+                              ],
+                              [
+                                'Total Sales',
+                                CurrencyUtils.formatCurrency(totalRevenue),
+                              ],
                             ],
-                            [
-                              'Total Cost',
-                              CurrencyUtils.formatCurrency(totalCost),
+                          ),
+
+                          // 2. Cost of Goods Sold
+                          PdfReportSection(
+                            title: '2. Cost of Goods Sold (COGS)',
+                            rows: [
+                              [
+                                'Food & Snacks',
+                                CurrencyUtils.formatCurrency(
+                                  filteredSaleItems
+                                      .where(
+                                        (item) =>
+                                            _getProductCategory(
+                                              item.productId,
+                                            ) ==
+                                            'Food & Snacks',
+                                      )
+                                      .fold(
+                                        0.0,
+                                        (sum, item) =>
+                                            sum +
+                                            (item.unitPrice *
+                                                item.quantity *
+                                                0.6),
+                                      ), // Assuming 60% cost
+                                ),
+                              ],
+                              [
+                                'Beverages',
+                                CurrencyUtils.formatCurrency(
+                                  filteredSaleItems
+                                      .where(
+                                        (item) =>
+                                            _getProductCategory(
+                                              item.productId,
+                                            ) ==
+                                            'Beverages',
+                                      )
+                                      .fold(
+                                        0.0,
+                                        (sum, item) =>
+                                            sum +
+                                            (item.unitPrice *
+                                                item.quantity *
+                                                0.6),
+                                      ),
+                                ),
+                              ],
+                              [
+                                'Cigarettes',
+                                CurrencyUtils.formatCurrency(
+                                  filteredSaleItems
+                                      .where(
+                                        (item) =>
+                                            _getProductCategory(
+                                              item.productId,
+                                            ) ==
+                                            'Cigarettes',
+                                      )
+                                      .fold(
+                                        0.0,
+                                        (sum, item) =>
+                                            sum +
+                                            (item.unitPrice *
+                                                item.quantity *
+                                                0.7),
+                                      ),
+                                ),
+                              ],
+                              [
+                                'Household Items',
+                                CurrencyUtils.formatCurrency(
+                                  filteredSaleItems
+                                      .where(
+                                        (item) =>
+                                            _getProductCategory(
+                                              item.productId,
+                                            ) ==
+                                            'Household Items',
+                                      )
+                                      .fold(
+                                        0.0,
+                                        (sum, item) =>
+                                            sum +
+                                            (item.unitPrice *
+                                                item.quantity *
+                                                0.6),
+                                      ),
+                                ),
+                              ],
+                              [
+                                'Total COGS',
+                                CurrencyUtils.formatCurrency(totalCost),
+                              ],
                             ],
-                            [
-                              'Total Loss',
-                              CurrencyUtils.formatCurrency(totalLoss),
+                          ),
+
+                          // 4. Operating Expenses
+                          PdfReportSection(
+                            title: '4. Operating Expenses',
+                            rows: [
+                              [
+                                'Electricity (share)',
+                                CurrencyUtils.formatCurrency(1200.0),
+                              ],
+                              [
+                                'Store Rent (if any)',
+                                CurrencyUtils.formatCurrency(2500.0),
+                              ],
+                              [
+                                'Miscellaneous (plastic bags, etc.)',
+                                CurrencyUtils.formatCurrency(500.0),
+                              ],
+                              [
+                                'Total Expenses',
+                                CurrencyUtils.formatCurrency(4200.0),
+                              ],
                             ],
-                            [
-                              'Gross Profit',
-                              CurrencyUtils.formatCurrency(totalProfit),
+                          ),
+
+                          // 6. Cash Flow Summary
+                          PdfReportSection(
+                            title: '6. Cash Flow Summary',
+                            rows: [
+                              [
+                                'Cash at Start',
+                                CurrencyUtils.formatCurrency(5000.0),
+                              ],
+                              [
+                                'Net Profit',
+                                CurrencyUtils.formatCurrency(totalProfit),
+                              ],
+                              [
+                                'Withdrawals (personal use)',
+                                CurrencyUtils.formatCurrency(3000.0),
+                              ],
                             ],
-                            [
-                              'Profit Margin',
-                              '${profitMargin.toStringAsFixed(1)}%',
-                            ],
-                            ['ROI', '${roi.toStringAsFixed(1)}%'],
-                            [
-                              'Average Order',
-                              CurrencyUtils.formatCurrency(averageOrderValue),
-                            ],
-                            [
-                              'Markup %',
-                              '${markupPercentage.toStringAsFixed(1)}%',
-                            ],
-                            [
-                              'Inventory Turnover',
-                              '${inventoryTurnover.toStringAsFixed(1)}x',
-                            ],
-                            [
-                              'Outstanding Utang',
-                              CurrencyUtils.formatCurrency(outstandingUtang),
-                            ],
-                            [
-                              'Potential Profit',
-                              CurrencyUtils.formatCurrency(potentialProfit),
-                            ],
-                          ],
-                        ),
-                      ];
-                      final file = await pdf.generateFinancialReport(
-                        reportTitle: 'Financial Report',
-                        startDate: _startDate,
-                        endDate: _endDate,
-                        sections: sections,
-                      );
-                      if (!context.mounted) return;
-                      scaffold.showSnackBar(
-                        SnackBar(content: Text('PDF saved: ${file.path}')),
-                      );
+                          ),
+                        ];
+
+                        final calculations = <PdfCalculationSection>[
+                          // 3. Gross Profit
+                          PdfCalculationSection(
+                            title: '3. Gross Profit',
+                            formula:
+                                '₱${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ₱${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                            result: CurrencyUtils.formatCurrency(totalProfit),
+                          ),
+
+                          // 5. Net Profit
+                          PdfCalculationSection(
+                            title: '5. Net Profit',
+                            formula:
+                                '₱${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱4,200 = ₱${(totalProfit - 4200).toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                            result: CurrencyUtils.formatCurrency(
+                              totalProfit - 4200,
+                            ),
+                          ),
+                        ];
+
+                        final summaries = <PdfSummarySection>[
+                          PdfSummarySection(
+                            title: 'Cash at End',
+                            value: CurrencyUtils.formatCurrency(
+                              5000 + totalProfit - 4200 - 3000,
+                            ),
+                          ),
+                        ];
+                        final file = await pdf.generateFinancialReport(
+                          reportTitle: 'Financial Report - Sari-Sari Store',
+                          startDate: _startDate,
+                          endDate: _endDate,
+                          sections: sections,
+                          calculations: calculations,
+                          summaries: summaries,
+                        );
+
+                        if (!context.mounted) return;
+
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              'PDF saved successfully: ${file.path}',
+                            ),
+                            backgroundColor: Colors.green,
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      } catch (e) {
+                        print('PDF Export Error: $e');
+                        if (!context.mounted) return;
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error generating PDF: $e'),
+                            backgroundColor: Colors.red,
+                            duration: const Duration(seconds: 5),
+                          ),
+                        );
+                      }
                     },
                   ),
                 ],
@@ -467,7 +729,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
               ),
               const SizedBox(height: 24),
               TopSellingProductsList(
-                topProducts: topProducts,
+                topProducts: topProducts.map((entry) => entry.key).toList(),
                 saleItems: filteredSaleItems,
               ),
               const SizedBox(height: 24),

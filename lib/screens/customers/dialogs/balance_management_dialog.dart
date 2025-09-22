@@ -124,7 +124,10 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
                       );
                     }
                   } else {
-                    _showErrorSnackBar('Failed to record payment.');
+                    // Show the specific error message from CreditProvider
+                    final errorMessage =
+                        creditProvider.error ?? 'Failed to record payment.';
+                    _showErrorSnackBar(errorMessage);
                   }
                 }
               : null,

@@ -23,7 +23,7 @@ class LocalDatabaseService {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS customers (
   balance REAL NOT NULL,
   credit_limit REAL NOT NULL,
   created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
+  updated_at TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1
 )
 ''');
 
@@ -167,6 +168,15 @@ CREATE TABLE IF NOT EXISTS losses (
   recordedBy TEXT
 )
 ''');
+    }
+    if (oldVersion < 6) {
+      try {
+        await db.execute(
+          "ALTER TABLE customers ADD COLUMN version INTEGER NOT NULL DEFAULT 1",
+        );
+      } catch (e) {
+        // Column might already exist, ignore
+      }
     }
   }
 

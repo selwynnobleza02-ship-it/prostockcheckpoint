@@ -289,59 +289,63 @@ class _POSScreenState extends State<POSScreen> {
           ),
         ],
       ),
-      body: Column(
-        children: [
-          // Search section with result indicator
-          Consumer<InventoryProvider>(
-            builder: (context, provider, child) {
-              final isSearching = _productSearchController.text.isNotEmpty;
-              final resultCount = provider.products.length;
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Search section with result indicator
+            Consumer<InventoryProvider>(
+              builder: (context, provider, child) {
+                final isSearching = _productSearchController.text.isNotEmpty;
+                final resultCount = provider.products.length;
 
-              return Column(
-                children: [
-                  ProductSearchView(
-                    controller: _productSearchController,
-                    onChanged: (value) => _onProductSearchChanged(),
-                  ),
-                  if (isSearching)
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 8,
-                      ),
-                      color: Colors.blue[50],
-                      child: Text(
-                        resultCount == 0
-                            ? 'No products found for "${_productSearchController.text}"'
-                            : 'Found $resultCount product${resultCount == 1 ? '' : 's'} for "${_productSearchController.text}"',
-                        style: TextStyle(
-                          color: Colors.blue[700],
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ProductSearchView(
+                      controller: _productSearchController,
+                      onChanged: (value) => _onProductSearchChanged(),
+                    ),
+                    if (isSearching)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                        color: Colors.blue[50],
+                        child: Text(
+                          resultCount == 0
+                              ? 'No products found for "${_productSearchController.text}"'
+                              : 'Found $resultCount product${resultCount == 1 ? '' : 's'} for "${_productSearchController.text}"',
+                          style: TextStyle(
+                            color: Colors.blue[700],
+                            fontSize: 14,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                    ),
-                ],
-              );
-            },
-          ),
-          // Products section
-          Expanded(flex: 3, child: const ProductGridView()),
-          // Cart section
-          Expanded(
-            flex: 2,
-            child: CartView(
-              key: _cartViewKey,
-              selectedCustomer: _selectedCustomer,
-              paymentMethod: _paymentMethod,
-              isProcessingSale: _isProcessingSale,
-              onCustomerChanged: _onCustomerChanged,
-              onPaymentMethodChanged: _onPaymentMethodChanged,
-              onCompleteSale: _completeSale,
+                  ],
+                );
+              },
             ),
-          ),
-        ],
+            // Products section with scrolling
+            Expanded(flex: 3, child: const ProductGridView()),
+            // Cart section with scrolling
+            Expanded(
+              flex: 2,
+              child: CartView(
+                key: _cartViewKey,
+                selectedCustomer: _selectedCustomer,
+                paymentMethod: _paymentMethod,
+                isProcessingSale: _isProcessingSale,
+                onCustomerChanged: _onCustomerChanged,
+                onPaymentMethodChanged: _onPaymentMethodChanged,
+                onCompleteSale: _completeSale,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

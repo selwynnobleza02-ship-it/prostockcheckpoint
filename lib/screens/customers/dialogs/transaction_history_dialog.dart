@@ -19,11 +19,26 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Provider.of<CreditProvider>(
+      _loadTransactions();
+    });
+  }
+
+  Future<void> _loadTransactions() async {
+    try {
+      print('Loading transactions for customer: ${widget.customer.id}');
+      await Provider.of<CreditProvider>(
         context,
         listen: false,
       ).getTransactionsByCustomer(widget.customer.id);
-    });
+      print('Transactions loaded successfully');
+    } catch (e) {
+      print('Error loading transactions: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error loading transactions: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -32,17 +47,64 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
       title: Text('${widget.customer.name} - Transaction History'),
       content: SizedBox(
         width: double.maxFinite,
-        height: 400,
+        height:
+            MediaQuery.of(context).size.height *
+            0.6, // Use 60% of screen height
         child: Consumer<CreditProvider>(
           builder: (context, provider, child) {
             final transactions = provider.transactions;
 
             if (provider.isLoading) {
-              return const Center(child: CircularProgressIndicator());
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text('Loading transactions...'),
+                  ],
+                ),
+              );
+            }
+
+            if (provider.error != null) {
+              return SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(Icons.error, color: Colors.red, size: 48),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Error: ${provider.error}',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(color: Colors.red),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () => _loadTransactions(),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+              );
             }
 
             if (transactions.isEmpty) {
-              return const Center(child: Text('No transactions found'));
+              return const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.receipt_long, color: Colors.grey, size: 48),
+                    SizedBox(height: 16),
+                    Text('No transactions found'),
+                    SizedBox(height: 8),
+                    Text(
+                      'This customer has no credit transactions yet.',
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ],
+                ),
+              );
             }
 
             return ListView.builder(

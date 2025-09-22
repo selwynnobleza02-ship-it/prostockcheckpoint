@@ -89,6 +89,7 @@ class ProductGridView extends StatelessWidget {
             childAspectRatio: 0.9,
           ),
           itemCount: productsToDisplay.length,
+          physics: const AlwaysScrollableScrollPhysics(),
           itemBuilder: (context, index) {
             final product = productsToDisplay[index];
             final visualStock = provider.getVisualStock(product.id!);
