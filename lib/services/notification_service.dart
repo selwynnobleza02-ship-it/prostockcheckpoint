@@ -92,8 +92,7 @@ class NotificationService {
       tz.TZDateTime.from(scheduledDate, tz.local),
       platformChannelSpecifics,
       payload: payload,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
   }
 }

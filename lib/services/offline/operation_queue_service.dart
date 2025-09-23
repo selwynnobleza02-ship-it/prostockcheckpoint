@@ -21,6 +21,9 @@ class OperationQueueService {
       for (final item in saleItems) {
         await _localDatabaseService.insertSaleItem(item);
       }
+    } else if (operation.type == OperationType.insertCreditTransaction) {
+      // Mirror credit transaction locally for offline history
+      await _localDatabaseService.insertCreditTransaction(operation.data);
     }
 
     try {

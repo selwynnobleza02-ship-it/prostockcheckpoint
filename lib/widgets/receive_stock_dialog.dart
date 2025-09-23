@@ -94,6 +94,49 @@ class ReceiveStockDialogState extends State<ReceiveStockDialog> {
       final quantity = int.parse(_quantityController.text);
       final newCost = double.parse(_costController.text);
 
+      // Confirm action with the user before applying changes
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Confirm Stock Receive'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Product: ${widget.product.name}'),
+              const SizedBox(height: 8),
+              Text('Quantity to receive: $quantity'),
+              const SizedBox(height: 8),
+              Text('New cost price: $newCost'),
+              const SizedBox(height: 8),
+              Text('Current stock: ${widget.product.stock}'),
+              const SizedBox(height: 8),
+              Text('Resulting stock: ${widget.product.stock + quantity}'),
+              const SizedBox(height: 16),
+              const Text(
+                'Are you sure you want to receive this stock?',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.green),
+              child: const Text('Confirm Receive'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed != true) {
+        return;
+      }
+
       final inventoryProvider = context.read<InventoryProvider>();
 
       // Create a copy of the product with the new cost

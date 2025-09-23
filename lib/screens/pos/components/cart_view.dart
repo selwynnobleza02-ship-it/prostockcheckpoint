@@ -262,8 +262,18 @@ class CartViewState extends State<CartView> {
     );
   }
 
+  // In your _buildCartFooter method, wrap the Column in a SingleChildScrollView
+  // and add constraints to prevent overflow
+
   Widget _buildCartFooter(BuildContext context) {
     return Container(
+      constraints: const BoxConstraints(
+        maxHeight: 200, // Limit footer height
+      ),
+      padding: const EdgeInsets.symmetric(
+        horizontal: UiConstants.spacingSmall,
+        vertical: 8,
+      ),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(top: BorderSide(color: Colors.grey[300]!)),
@@ -276,17 +286,13 @@ class CartViewState extends State<CartView> {
           ),
         ],
       ),
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(
-          horizontal: UiConstants.spacingSmall,
-          vertical: 8,
-        ),
-        child: Consumer<SalesProvider>(
-          builder: (context, provider, child) {
-            return Column(
+      child: Consumer<SalesProvider>(
+        builder: (context, provider, child) {
+          return SingleChildScrollView(
+            // Added scrolling capability
+            child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Total row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -297,26 +303,21 @@ class CartViewState extends State<CartView> {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    Flexible(
-                      child: Text(
-                        CurrencyUtils.formatCurrency(provider.currentSaleTotal),
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                    Text(
+                      CurrencyUtils.formatCurrency(provider.currentSaleTotal),
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green,
                       ),
                     ),
                   ],
                 ),
-                // Cash tendered and change row (only for cash payments)
                 if (widget.paymentMethod == 'cash') ...[
-                  const SizedBox(height: 12),
+                  const SizedBox(height: 8),
                   Row(
                     children: [
                       Expanded(
-                        flex: 2,
                         child: TextFormField(
                           controller: _cashTenderedController,
                           keyboardType: const TextInputType.numberWithOptions(
@@ -328,17 +329,18 @@ class CartViewState extends State<CartView> {
                             isDense: true,
                             prefixText: '₱ ',
                             contentPadding: EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 12,
+                              horizontal: 8,
+                              vertical: 8,
                             ),
                           ),
                         ),
                       ),
-                      const SizedBox(width: 12),
+                      const SizedBox(width: 8),
                       Flexible(
+                        // Changed from Container to Flexible
                         child: Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
+                            horizontal: 8,
                             vertical: 12,
                           ),
                           decoration: BoxDecoration(
@@ -357,15 +359,13 @@ class CartViewState extends State<CartView> {
                               fontWeight: FontWeight.bold,
                               color: _change >= 0 ? Colors.blue : Colors.red,
                             ),
-                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
                     ],
                   ),
                 ],
-                // Action buttons row
-                const SizedBox(height: 12),
+                const SizedBox(height: 8),
                 Row(
                   children: [
                     Expanded(
@@ -379,12 +379,15 @@ class CartViewState extends State<CartView> {
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.grey,
                           foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
-                        child: const Text('Clear'),
+                        child: const Text(
+                          'Clear',
+                          style: TextStyle(fontSize: 12),
+                        ),
                       ),
                     ),
-                    const SizedBox(width: 12),
+                    const SizedBox(width: 8),
                     Expanded(
                       flex: 2,
                       child: ElevatedButton(
@@ -400,26 +403,29 @@ class CartViewState extends State<CartView> {
                             ? null
                             : widget.onCompleteSale,
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          padding: const EdgeInsets.symmetric(vertical: 8),
                         ),
                         child: widget.isProcessingSale
                             ? const SizedBox(
-                                width: 20,
-                                height: 20,
+                                width: 16,
+                                height: 16,
                                 child: CircularProgressIndicator(
                                   color: Colors.white,
                                   strokeWidth: 2,
                                 ),
                               )
-                            : const Text('Checkout'),
+                            : const Text(
+                                'Checkout',
+                                style: TextStyle(fontSize: 12),
+                              ),
                       ),
                     ),
                   ],
                 ),
               ],
-            );
-          },
-        ),
+            ),
+          );
+        },
       ),
     );
   }

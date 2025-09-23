@@ -39,6 +39,11 @@ class InventoryProvider with ChangeNotifier {
   String? get error => _error;
   Map<String, int> get visualStock => _visualStock;
   bool get isOnline => _offlineManager.isOnline;
+  OfflineManager get offlineManager => _offlineManager;
+
+  Future<void> queueOperation(OfflineOperation operation) async {
+    await _offlineManager.queueOperation(operation);
+  }
 
   List<Product> get lowStockProducts =>
       _products.where((product) => product.isLowStock).toList();

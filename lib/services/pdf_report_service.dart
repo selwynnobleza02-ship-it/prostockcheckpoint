@@ -249,8 +249,9 @@ class PdfReportService {
   String _getHeaderText(String sectionTitle) {
     if (sectionTitle.toLowerCase().contains('income')) return 'Source';
     if (sectionTitle.toLowerCase().contains('cogs') ||
-        sectionTitle.toLowerCase().contains('cost'))
+        sectionTitle.toLowerCase().contains('cost')) {
       return 'Item Category';
+    }
     if (sectionTitle.toLowerCase().contains('expense')) return 'Expense Item';
     if (sectionTitle.toLowerCase().contains('cash flow')) return 'Description';
     return 'Description';

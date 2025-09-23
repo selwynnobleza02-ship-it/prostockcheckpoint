@@ -17,6 +17,8 @@ import '../utils/error_logger.dart';
 import 'inventory_provider.dart';
 
 import 'package:prostock/providers/credit_provider.dart';
+import 'package:prostock/services/demand_analysis_service.dart';
+import 'package:prostock/services/notification_service.dart';
 
 class SalesProvider with ChangeNotifier {
   List<Sale> _sales = [];
@@ -30,6 +32,7 @@ class SalesProvider with ChangeNotifier {
   final OfflineManager _offlineManager;
   final AuthProvider _authProvider;
   final CreditProvider _creditProvider;
+  late final DemandAnalysisService _demandAnalysisService;
 
   final Map<String, List<Sale>> _cache = {};
   final Map<String, DateTime> _cacheTimestamps = {};
@@ -45,7 +48,12 @@ class SalesProvider with ChangeNotifier {
   }) : _inventoryProvider = inventoryProvider,
        _offlineManager = offlineManager,
        _authProvider = authProvider,
-       _creditProvider = creditProvider;
+       _creditProvider = creditProvider {
+    _demandAnalysisService = DemandAnalysisService(
+      LocalDatabaseService.instance,
+      NotificationService(),
+    );
+  }
 
   List<Sale> get sales => _sales;
   List<SaleItem> get saleItems => _saleItems;
@@ -371,6 +379,36 @@ class SalesProvider with ChangeNotifier {
           _error = _creditProvider.error;
           return null;
         }
+        // Mirror the credit sale to local database for demand analysis
+        try {
+          final localSaleId = const Uuid().v4();
+          final localSale = Sale(
+            id: localSaleId,
+            customerId: customerId,
+            totalAmount: currentSaleTotal,
+            paymentMethod: 'credit',
+            status: 'completed',
+            createdAt: DateTime.now(),
+            userId: currentUser.id!,
+          );
+          await LocalDatabaseService.instance.insertSale(localSale);
+          for (final item in _currentSaleItems) {
+            final localItem = SaleItem(
+              saleId: localSaleId,
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+            );
+            await LocalDatabaseService.instance.insertSaleItem(localItem);
+          }
+        } catch (e) {
+          ErrorLogger.logError(
+            'Error mirroring credit sale to local DB',
+            error: e,
+            context: 'SalesProvider.completeSale',
+          );
+        }
       } else {
         final sale = Sale(
           customerId: customerId,
@@ -407,6 +445,29 @@ class SalesProvider with ChangeNotifier {
               return null;
             }
           }
+          // Mirror the online sale to local database so demand analysis sees it immediately
+          try {
+            await LocalDatabaseService.instance.insertSale(
+              sale.copyWith(id: saleId, isSynced: 1),
+            );
+            for (final item in _currentSaleItems) {
+              final localSaleItem = SaleItem(
+                saleId: saleId,
+                productId: item.productId,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                totalPrice: item.totalPrice,
+              );
+              await LocalDatabaseService.instance.insertSaleItem(localSaleItem);
+            }
+          } catch (e) {
+            ErrorLogger.logError(
+              'Error mirroring online sale to local DB',
+              error: e,
+              context: 'SalesProvider.completeSale',
+            );
+          }
+
           receipt = _createReceipt(saleId, customerId, paymentMethod);
         } else {
           log('Offline sale');
@@ -447,6 +508,9 @@ class SalesProvider with ChangeNotifier {
         amount: receipt.total,
       );
       loadSales(); // No await
+
+      // Trigger immediate demand analysis after sale
+      _triggerDemandAnalysis();
 
       _currentSaleItems.clear();
       return receipt;
@@ -564,5 +628,31 @@ class SalesProvider with ChangeNotifier {
       );
       return null;
     }
+  }
+
+  /// Triggers immediate demand analysis after a sale to check for threshold suggestions
+  void _triggerDemandAnalysis() {
+    // Run in background without blocking the UI
+    Future.microtask(() async {
+      try {
+        final suggestions = await _demandAnalysisService.computeSuggestions(
+          highDemandThresholdPerDay: 20.0,
+          minDeltaUnits: 5,
+          minDeltaPercent: 0.2,
+        );
+        if (suggestions.isNotEmpty) {
+          await _demandAnalysisService.markSuggestedNow(
+            suggestions.map((s) => s.product.id!).toList(),
+          );
+          await _demandAnalysisService.runDailyAndNotify();
+        }
+      } catch (e) {
+        ErrorLogger.logError(
+          'Error in immediate demand analysis',
+          error: e,
+          context: 'SalesProvider._triggerDemandAnalysis',
+        );
+      }
+    });
   }
 }

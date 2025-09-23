@@ -95,6 +95,18 @@ CREATE TABLE IF NOT EXISTS sale_items (
 )
 ''');
 
+    // Credit transactions local cache
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS credit_transactions (
+  id TEXT PRIMARY KEY,
+  customerId TEXT NOT NULL,
+  amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  type TEXT NOT NULL,
+  notes TEXT
+)
+''');
+
     await db.execute('''
 CREATE TABLE IF NOT EXISTS losses (
   id TEXT PRIMARY KEY,
@@ -203,6 +215,28 @@ CREATE TABLE IF NOT EXISTS losses (
   Future<int> insertSaleItem(SaleItem saleItem) async {
     final db = await instance.database;
     return await db.insert('sale_items', saleItem.toMap());
+  }
+
+  // Credit transactions local cache methods
+  Future<int> insertCreditTransaction(Map<String, dynamic> tx) async {
+    final db = await instance.database;
+    return await db.insert(
+      'credit_transactions',
+      tx,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getCreditTransactionsByCustomer(
+    String customerId,
+  ) async {
+    final db = await instance.database;
+    return await db.query(
+      'credit_transactions',
+      where: 'customerId = ?',
+      whereArgs: [customerId],
+      orderBy: 'date DESC',
+    );
   }
 
   Future<List<Map<String, dynamic>>> getSaleItems(String saleId) async {

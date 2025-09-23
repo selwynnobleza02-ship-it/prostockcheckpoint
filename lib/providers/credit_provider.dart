@@ -8,12 +8,18 @@ import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/services/firestore/credit_service.dart';
+import 'package:prostock/models/offline_operation.dart';
+import 'package:prostock/services/demand_analysis_service.dart';
+import 'package:prostock/services/notification_service.dart';
+import 'package:prostock/services/local_database_service.dart';
+import 'package:prostock/utils/error_logger.dart';
 import 'package:provider/provider.dart';
 
 class CreditProvider with ChangeNotifier {
   final CustomerProvider _customerProvider;
   final InventoryProvider _inventoryProvider;
   final CreditService _creditService;
+  late final DemandAnalysisService _demandAnalysisService;
 
   List<Customer> _overdueCustomers = [];
   List<Customer> get overdueCustomers => _overdueCustomers;
@@ -33,7 +39,12 @@ class CreditProvider with ChangeNotifier {
     required CreditService creditService,
   }) : _customerProvider = customerProvider,
        _inventoryProvider = inventoryProvider, // Added
-       _creditService = creditService;
+       _creditService = creditService {
+    _demandAnalysisService = DemandAnalysisService(
+      LocalDatabaseService.instance,
+      NotificationService(),
+    );
+  }
 
   Future<void> fetchOverdueCustomers(BuildContext context) async {
     if (_isInitialized) return;
@@ -93,6 +104,9 @@ class CreditProvider with ChangeNotifier {
 
       await _customerProvider.updateCustomerBalance(customerId, total);
 
+      // Trigger immediate demand analysis after credit sale
+      _triggerDemandAnalysis();
+
       return Receipt(
         saleId: transaction.id ?? '',
         receiptNumber: transaction.id ?? '',
@@ -143,13 +157,39 @@ class CreditProvider with ChangeNotifier {
         notes: notes,
       );
 
-      print('CreditProvider: Recording payment transaction...');
-      await _creditService.recordPayment(transaction);
-      print('CreditProvider: Payment transaction recorded successfully');
+      if (_inventoryProvider.isOnline) {
+        print('CreditProvider: Recording payment transaction...');
+        await _creditService.recordPayment(transaction);
+        print('CreditProvider: Payment transaction recorded successfully');
 
-      print('CreditProvider: Updating customer balance...');
-      await _customerProvider.updateCustomerBalance(customerId, -amount);
-      print('CreditProvider: Customer balance updated successfully');
+        print('CreditProvider: Updating customer balance...');
+        await _customerProvider.updateCustomerBalance(customerId, -amount);
+        print('CreditProvider: Customer balance updated successfully');
+        // Mirror online credit transaction locally for offline history
+        try {
+          await LocalDatabaseService.instance.insertCreditTransaction(
+            transaction.toMap(),
+          );
+        } catch (_) {}
+      } else {
+        // Queue offline operations: insertCreditTransaction + updateCustomerBalance
+        final opTx = OfflineOperation(
+          type: OperationType.insertCreditTransaction,
+          collectionName: 'credit_transactions',
+          documentId: transaction.id,
+          data: transaction.toMap(),
+          timestamp: DateTime.now(),
+        );
+        final opBalance = OfflineOperation(
+          type: OperationType.updateCustomerBalance,
+          collectionName: 'customers',
+          documentId: customerId,
+          data: {'delta': -amount},
+          timestamp: DateTime.now(),
+        );
+        await _inventoryProvider.queueOperation(opTx);
+        await _inventoryProvider.queueOperation(opBalance);
+      }
 
       // Create a sale record for the payment
       print('CreditProvider: Creating sale record for payment...');
@@ -191,5 +231,27 @@ class CreditProvider with ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Triggers immediate demand analysis after a credit sale to check for threshold suggestions
+  void _triggerDemandAnalysis() {
+    // Run in background without blocking the UI
+    Future.microtask(() async {
+      try {
+        final suggestions = await _demandAnalysisService.computeSuggestions();
+        if (suggestions.isNotEmpty) {
+          await _demandAnalysisService.markSuggestedNow(
+            suggestions.map((s) => s.product.id!).toList(),
+          );
+          await _demandAnalysisService.runDailyAndNotify();
+        }
+      } catch (e) {
+        ErrorLogger.logError(
+          'Error in immediate demand analysis',
+          error: e,
+          context: 'CreditProvider._triggerDemandAnalysis',
+        );
+      }
+    });
   }
 }

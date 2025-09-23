@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
+import 'package:prostock/services/local_database_service.dart';
+import 'package:prostock/models/credit_transaction.dart';
 
 class TransactionHistoryDialog extends StatefulWidget {
   final Customer customer;
@@ -33,9 +35,24 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
       print('Transactions loaded successfully');
     } catch (e) {
       print('Error loading transactions: $e');
+      // Fallback to local cache when offline
+      try {
+        final rows = await LocalDatabaseService.instance
+            .getCreditTransactionsByCustomer(widget.customer.id);
+        final cached = rows
+            .map((m) => CreditTransaction.fromMap(m, (m['id'] ?? '') as String))
+            .toList();
+        if (mounted) {
+          Provider.of<CreditProvider>(context, listen: false)
+            ..transactions.clear()
+            ..transactions.addAll(cached);
+        }
+      } catch (_) {}
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error loading transactions: $e')),
+          const SnackBar(
+            content: Text('Offline: showing cached history if available.'),
+          ),
         );
       }
     }

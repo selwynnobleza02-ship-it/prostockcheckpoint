@@ -96,12 +96,19 @@ class DemandAnalysisService {
           now.day,
         ).subtract(Duration(days: i));
         final k = DateTime(d.year, d.month, d.day).toIso8601String();
-        totalQtyWindow += (entry.value[k] ?? 0).toDouble();
+        final dayQty = (entry.value[k] ?? 0).toDouble();
+        totalQtyWindow += dayQty;
         daysCounted += 1;
       }
       double velocity = daysCounted > 0 ? (totalQtyWindow / daysCounted) : 0.0;
 
-      if (velocity < highDemandThresholdPerDay) {
+      // Special case: Check if today's sales alone meet the threshold
+      final todayKey = DateTime(now.year, now.month, now.day).toIso8601String();
+      final todayQty = (entry.value[todayKey] ?? 0).toDouble();
+
+      if (todayQty >= highDemandThresholdPerDay) {
+        velocity = todayQty; // Use today's sales as velocity
+      } else if (velocity < highDemandThresholdPerDay) {
         // Try fallback window if within 30 days the avg could qualify
         double totalQtyFallback = 0;
         for (int i = 0; i < fallbackWindowDays; i++) {
@@ -122,19 +129,21 @@ class DemandAnalysisService {
         final current = product.minStock;
         final deltaUnits = suggested - current;
         final deltaPercent = current > 0 ? deltaUnits / current : 1.0;
+
         if (deltaUnits >= minDeltaUnits || deltaPercent >= minDeltaPercent) {
-          if (await _isEligibleToSuggest(productId, now)) {
-            suggestions.add(
-              DemandSuggestion(
-                product: product,
-                velocityPerDay: velocity,
-                currentThreshold: current,
-                suggestedThreshold: min(
-                  current + max(deltaUnits, 0),
-                  current + max(5, (current * 0.5).ceil()),
-                ),
+          final isEligible = await _isEligibleToSuggest(productId, now);
+
+          if (isEligible) {
+            final suggestion = DemandSuggestion(
+              product: product,
+              velocityPerDay: velocity,
+              currentThreshold: current,
+              suggestedThreshold: min(
+                current + max(deltaUnits, 0),
+                current + max(5, (current * 0.5).ceil()),
               ),
             );
+            suggestions.add(suggestion);
           }
         }
       }

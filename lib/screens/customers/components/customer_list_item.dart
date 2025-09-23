@@ -3,11 +3,11 @@ import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/screens/customers/dialogs/balance_management_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
-import 'package:prostock/widgets/confirmation_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/transaction_history_dialog.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/add_customer_dialog.dart';
 import 'package:provider/provider.dart';
+import 'package:prostock/screens/pos/pos_screen.dart';
 
 class CustomerListItem extends StatelessWidget {
   final Customer customer;
@@ -74,7 +74,8 @@ class CustomerListItem extends StatelessWidget {
               value: 'history',
               child: Text('Transaction History'),
             ),
-            const PopupMenuItem(value: 'delete', child: Text('Delete')),
+            // Replaced Delete with Utang (POS Credit)
+            const PopupMenuItem(value: 'utang_pos', child: Text('Utang')),
           ],
           onSelected: (value) async {
             // Check context.mounted before any async operations that use context
@@ -93,9 +94,10 @@ class CustomerListItem extends StatelessWidget {
                   context: context,
                   builder: (context) => AddCustomerDialog(
                     customer: customer,
-                    offlineManager:
-                        Provider.of<CustomerProvider>(context, listen: false)
-                            .offlineManager,
+                    offlineManager: Provider.of<CustomerProvider>(
+                      context,
+                      listen: false,
+                    ).offlineManager,
                   ),
                 );
                 break;
@@ -113,44 +115,14 @@ class CustomerListItem extends StatelessWidget {
                       TransactionHistoryDialog(customer: customer),
                 );
                 break;
-              case 'delete':
-                final confirmed = await showConfirmationDialog(
-                  context: context,
-                  title: 'Delete Customer',
-                  content:
-                      'Are you sure you want to delete ${customer.name}? This action cannot be undone.',
-                  confirmText: 'Delete',
+              case 'utang_pos':
+                if (!context.mounted) return;
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (context) =>
+                        POSScreen(customer: customer, paymentMethod: 'credit'),
+                  ),
                 );
-                if (confirmed == true) {
-                  // Check context.mounted again after the await call
-                  if (!context.mounted) return;
-                  final provider = Provider.of<CustomerProvider>(
-                    context,
-                    listen: false,
-                  );
-                  final success = await provider.deleteCustomer(customer.id);
-                  if (context.mounted) {
-                    if (success) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Customer "${customer.name}" deleted successfully!',
-                          ),
-                          backgroundColor: Colors.green,
-                        ),
-                      );
-                    } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            'Failed to delete customer. ${provider.error ?? ''}',
-                          ),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                }
                 break;
             }
           },

@@ -79,6 +79,7 @@ class MyApp extends StatelessWidget {
           create: (_) => ActivityService(FirebaseFirestore.instance),
         ),
         Provider<CreditService>(create: (_) => CreditService()),
+        Provider<NotificationService>(create: (_) => NotificationService()),
         ChangeNotifierProvider.value(value: offlineManager),
         ChangeNotifierProvider.value(value: syncFailureProvider),
         ChangeNotifierProvider(

@@ -396,32 +396,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                             ],
                           ),
 
-                          // 4. Operating Expenses
+                          // 4. Cash Flow Summary
                           PdfReportSection(
-                            title: '4. Operating Expenses',
-                            rows: [
-                              [
-                                'Electricity (share)',
-                                CurrencyUtils.formatCurrency(1200.0),
-                              ],
-                              [
-                                'Store Rent (if any)',
-                                CurrencyUtils.formatCurrency(2500.0),
-                              ],
-                              [
-                                'Miscellaneous (plastic bags, etc.)',
-                                CurrencyUtils.formatCurrency(500.0),
-                              ],
-                              [
-                                'Total Expenses',
-                                CurrencyUtils.formatCurrency(4200.0),
-                              ],
-                            ],
-                          ),
-
-                          // 6. Cash Flow Summary
-                          PdfReportSection(
-                            title: '6. Cash Flow Summary',
+                            title: '4. Cash Flow Summary',
                             rows: [
                               [
                                 'Cash at Start',
@@ -447,23 +424,13 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 '₱${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ₱${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
                             result: CurrencyUtils.formatCurrency(totalProfit),
                           ),
-
-                          // 5. Net Profit
-                          PdfCalculationSection(
-                            title: '5. Net Profit',
-                            formula:
-                                '₱${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱4,200 = ₱${(totalProfit - 4200).toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
-                            result: CurrencyUtils.formatCurrency(
-                              totalProfit - 4200,
-                            ),
-                          ),
                         ];
 
                         final summaries = <PdfSummarySection>[
                           PdfSummarySection(
                             title: 'Cash at End',
                             value: CurrencyUtils.formatCurrency(
-                              5000 + totalProfit - 4200 - 3000,
+                              5000 + totalProfit - 3000,
                             ),
                           ),
                         ];
