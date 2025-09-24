@@ -23,7 +23,7 @@ class LocalDatabaseService {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -102,8 +102,10 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
   customerId TEXT NOT NULL,
   amount REAL NOT NULL,
   date TEXT NOT NULL,
+  createdAt TEXT,
   type TEXT NOT NULL,
-  notes TEXT
+  notes TEXT,
+  items TEXT
 )
 ''');
 
@@ -189,6 +191,21 @@ CREATE TABLE IF NOT EXISTS losses (
       } catch (e) {
         // Column might already exist, ignore
       }
+    }
+    // Ensure credit_transactions table exists/updated for older installs
+    if (oldVersion < 7) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS credit_transactions (
+  id TEXT PRIMARY KEY,
+  customerId TEXT NOT NULL,
+  amount REAL NOT NULL,
+  date TEXT NOT NULL,
+  createdAt TEXT,
+  type TEXT NOT NULL,
+  notes TEXT,
+  items TEXT
+)
+''');
     }
   }
 

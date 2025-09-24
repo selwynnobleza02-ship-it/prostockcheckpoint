@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/models/product.dart';
 import 'package:prostock/providers/stock_movement_provider.dart';
 import 'package:prostock/services/report_service.dart';
 import 'package:provider/provider.dart';
@@ -9,6 +10,7 @@ import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
+import 'package:prostock/utils/constants.dart';
 
 import 'package:prostock/widgets/loss_breakdown_list.dart';
 import 'package:prostock/widgets/report_helpers.dart';
@@ -82,7 +84,6 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
   String _getProductCategory(String productId) {
     try {
-      // This is a simplified categorization - you might want to add a category field to your Product model
       final product = Provider.of<InventoryProvider>(context, listen: false)
           .products
           .firstWhere(
@@ -90,26 +91,68 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
             orElse: () => throw Exception('Product not found: $productId'),
           );
 
-      final name = product.name.toLowerCase();
-      if (name.contains('food') ||
-          name.contains('snack') ||
-          name.contains('bread') ||
-          name.contains('rice')) {
-        return 'Food & Snacks';
-      } else if (name.contains('drink') ||
-          name.contains('juice') ||
-          name.contains('water') ||
-          name.contains('soda')) {
-        return 'Beverages';
-      } else if (name.contains('cigarette') || name.contains('tobacco')) {
-        return 'Cigarettes';
-      } else {
-        return 'Household Items';
-      }
+      // Use the actual category from the product, fallback to 'Others (Iba pa)' if null
+      return product.category ?? 'Others (Iba pa)';
     } catch (e) {
       print('Error categorizing product $productId: $e');
-      return 'Household Items'; // Default fallback
+      return 'Others (Iba pa)'; // Default fallback
     }
+  }
+
+  Map<String, double> _calculateCategoryRevenue(List<SaleItem> saleItems) {
+    final Map<String, double> categoryRevenue = {};
+
+    for (final item in saleItems) {
+      try {
+        final category = _getProductCategory(item.productId);
+        categoryRevenue[category] =
+            (categoryRevenue[category] ?? 0) + item.totalPrice;
+      } catch (e) {
+        print('Error calculating revenue for product ${item.productId}: $e');
+        // Add to "Unknown Products" category
+        categoryRevenue['Unknown Products'] =
+            (categoryRevenue['Unknown Products'] ?? 0) + item.totalPrice;
+      }
+    }
+
+    return categoryRevenue;
+  }
+
+  Map<String, double> _calculateCategoryCost(
+    List<SaleItem> saleItems,
+    List<Product> products,
+  ) {
+    final Map<String, double> categoryCost = {};
+    final productMap = {for (var p in products) p.id: p};
+
+    for (final item in saleItems) {
+      try {
+        final category = _getProductCategory(item.productId);
+        final product = productMap[item.productId];
+
+        if (product != null) {
+          // Use actual product cost instead of assumed percentages
+          final itemCost = product.cost * item.quantity;
+          categoryCost[category] = (categoryCost[category] ?? 0) + itemCost;
+        } else {
+          print(
+            'Product not found for sale item ${item.productId}, using estimated cost',
+          );
+          // Add to "Unknown Products" category with estimated cost
+          final estimatedCost = item.totalPrice * 0.6; // Assume 60% cost ratio
+          categoryCost['Unknown Products'] =
+              (categoryCost['Unknown Products'] ?? 0) + estimatedCost;
+        }
+      } catch (e) {
+        print('Error calculating cost for product ${item.productId}: $e');
+        // Add to "Unknown Products" category with estimated cost
+        final estimatedCost = item.totalPrice * 0.6; // Assume 60% cost ratio
+        categoryCost['Unknown Products'] =
+            (categoryCost['Unknown Products'] ?? 0) + estimatedCost;
+      }
+    }
+
+    return categoryCost;
   }
 
   @override
@@ -221,219 +264,99 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                         );
 
                         final pdf = PdfReportService();
+
+                        // Calculate category revenue and cost using actual data
+                        final categoryRevenue = _calculateCategoryRevenue(
+                          filteredSaleItems,
+                        );
+                        final categoryCost = _calculateCategoryCost(
+                          filteredSaleItems,
+                          inventory.products,
+                        );
+
+                        // Build income section dynamically
+                        final incomeRows = <List<String>>[];
+                        final allCategories = [
+                          ...AppConstants.productCategories,
+                          'Unknown Products',
+                        ];
+
+                        for (final category in allCategories) {
+                          final revenue = categoryRevenue[category] ?? 0.0;
+                          if (revenue > 0) {
+                            incomeRows.add([
+                              'Sales - $category',
+                              CurrencyUtils.formatCurrency(revenue),
+                            ]);
+                          }
+                        }
+                        incomeRows.add([
+                          'Total Sales',
+                          CurrencyUtils.formatCurrency(totalRevenue),
+                        ]);
+
+                        // Build COGS section dynamically
+                        final cogsRows = <List<String>>[];
+                        for (final category in allCategories) {
+                          final cost = categoryCost[category] ?? 0.0;
+                          if (cost > 0) {
+                            cogsRows.add([
+                              category,
+                              CurrencyUtils.formatCurrency(cost),
+                            ]);
+                          }
+                        }
+                        cogsRows.add([
+                          'Total COGS',
+                          CurrencyUtils.formatCurrency(totalCost),
+                        ]);
+
                         final sections = <PdfReportSection>[
                           // 1. Income
                           PdfReportSection(
                             title: '1. Income',
-                            rows: [
-                              [
-                                'Sales - Food & Snacks',
-                                CurrencyUtils.formatCurrency(
-                                  filteredSaleItems
-                                      .where(
-                                        (item) =>
-                                            _getProductCategory(
-                                              item.productId,
-                                            ) ==
-                                            'Food & Snacks',
-                                      )
-                                      .fold(
-                                        0.0,
-                                        (sum, item) => sum + item.totalPrice,
-                                      ),
-                                ),
-                              ],
-                              [
-                                'Sales - Beverages',
-                                CurrencyUtils.formatCurrency(
-                                  filteredSaleItems
-                                      .where(
-                                        (item) =>
-                                            _getProductCategory(
-                                              item.productId,
-                                            ) ==
-                                            'Beverages',
-                                      )
-                                      .fold(
-                                        0.0,
-                                        (sum, item) => sum + item.totalPrice,
-                                      ),
-                                ),
-                              ],
-                              [
-                                'Sales - Cigarettes',
-                                CurrencyUtils.formatCurrency(
-                                  filteredSaleItems
-                                      .where(
-                                        (item) =>
-                                            _getProductCategory(
-                                              item.productId,
-                                            ) ==
-                                            'Cigarettes',
-                                      )
-                                      .fold(
-                                        0.0,
-                                        (sum, item) => sum + item.totalPrice,
-                                      ),
-                                ),
-                              ],
-                              [
-                                'Sales - Household Items',
-                                CurrencyUtils.formatCurrency(
-                                  filteredSaleItems
-                                      .where(
-                                        (item) =>
-                                            _getProductCategory(
-                                              item.productId,
-                                            ) ==
-                                            'Household Items',
-                                      )
-                                      .fold(
-                                        0.0,
-                                        (sum, item) => sum + item.totalPrice,
-                                      ),
-                                ),
-                              ],
-                              [
-                                'Total Sales',
-                                CurrencyUtils.formatCurrency(totalRevenue),
-                              ],
-                            ],
+                            rows: incomeRows,
                           ),
 
                           // 2. Cost of Goods Sold
                           PdfReportSection(
                             title: '2. Cost of Goods Sold (COGS)',
-                            rows: [
-                              [
-                                'Food & Snacks',
-                                CurrencyUtils.formatCurrency(
-                                  filteredSaleItems
-                                      .where(
-                                        (item) =>
-                                            _getProductCategory(
-                                              item.productId,
-                                            ) ==
-                                            'Food & Snacks',
-                                      )
-                                      .fold(
-                                        0.0,
-                                        (sum, item) =>
-                                            sum +
-                                            (item.unitPrice *
-                                                item.quantity *
-                                                0.6),
-                                      ), // Assuming 60% cost
-                                ),
-                              ],
-                              [
-                                'Beverages',
-                                CurrencyUtils.formatCurrency(
-                                  filteredSaleItems
-                                      .where(
-                                        (item) =>
-                                            _getProductCategory(
-                                              item.productId,
-                                            ) ==
-                                            'Beverages',
-                                      )
-                                      .fold(
-                                        0.0,
-                                        (sum, item) =>
-                                            sum +
-                                            (item.unitPrice *
-                                                item.quantity *
-                                                0.6),
-                                      ),
-                                ),
-                              ],
-                              [
-                                'Cigarettes',
-                                CurrencyUtils.formatCurrency(
-                                  filteredSaleItems
-                                      .where(
-                                        (item) =>
-                                            _getProductCategory(
-                                              item.productId,
-                                            ) ==
-                                            'Cigarettes',
-                                      )
-                                      .fold(
-                                        0.0,
-                                        (sum, item) =>
-                                            sum +
-                                            (item.unitPrice *
-                                                item.quantity *
-                                                0.7),
-                                      ),
-                                ),
-                              ],
-                              [
-                                'Household Items',
-                                CurrencyUtils.formatCurrency(
-                                  filteredSaleItems
-                                      .where(
-                                        (item) =>
-                                            _getProductCategory(
-                                              item.productId,
-                                            ) ==
-                                            'Household Items',
-                                      )
-                                      .fold(
-                                        0.0,
-                                        (sum, item) =>
-                                            sum +
-                                            (item.unitPrice *
-                                                item.quantity *
-                                                0.6),
-                                      ),
-                                ),
-                              ],
-                              [
-                                'Total COGS',
-                                CurrencyUtils.formatCurrency(totalCost),
-                              ],
-                            ],
-                          ),
-
-                          // 4. Cash Flow Summary
-                          PdfReportSection(
-                            title: '4. Cash Flow Summary',
-                            rows: [
-                              [
-                                'Cash at Start',
-                                CurrencyUtils.formatCurrency(5000.0),
-                              ],
-                              [
-                                'Net Profit',
-                                CurrencyUtils.formatCurrency(totalProfit),
-                              ],
-                              [
-                                'Withdrawals (personal use)',
-                                CurrencyUtils.formatCurrency(3000.0),
-                              ],
-                            ],
+                            rows: cogsRows,
                           ),
                         ];
 
                         final calculations = <PdfCalculationSection>[
-                          // 3. Gross Profit
+                          // 1. Total Revenue
                           PdfCalculationSection(
-                            title: '3. Gross Profit',
+                            title: '1. Total Revenue',
+                            formula: 'Sum of all sales transactions',
+                            result: CurrencyUtils.formatCurrency(totalRevenue),
+                          ),
+
+                          // 2. Cost of Goods Sold
+                          PdfCalculationSection(
+                            title: '2. Cost of Goods Sold',
+                            formula: 'Sum of product costs × quantities sold',
+                            result: CurrencyUtils.formatCurrency(totalCost),
+                          ),
+
+                          // 3. Total Losses
+                          PdfCalculationSection(
+                            title: '3. Total Losses',
+                            formula: 'Sum of damaged/expired items',
+                            result: CurrencyUtils.formatCurrency(totalLoss),
+                          ),
+
+                          // 4. Gross Profit
+                          PdfCalculationSection(
+                            title: '4. Gross Profit',
                             formula:
-                                '₱${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ₱${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                                '₱${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalLoss.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ₱${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
                             result: CurrencyUtils.formatCurrency(totalProfit),
                           ),
                         ];
 
-                        final summaries = <PdfSummarySection>[
-                          PdfSummarySection(
-                            title: 'Cash at End',
-                            value: CurrencyUtils.formatCurrency(
-                              5000 + totalProfit - 3000,
-                            ),
-                          ),
-                        ];
+                        final summaries = <PdfSummarySection>[];
                         final file = await pdf.generateFinancialReport(
                           reportTitle: 'Financial Report - Sari-Sari Store',
                           startDate: _startDate,
@@ -492,7 +415,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                 crossAxisCount: 2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 1.8,
+                childAspectRatio: 1.5,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 children: [

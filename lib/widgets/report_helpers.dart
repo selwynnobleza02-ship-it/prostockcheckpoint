@@ -79,22 +79,30 @@ Widget buildSummaryCard(
                             overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        if (_formatLargeNumber(value) != value)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 2),
-                            child: FittedBox(
-                              fit: BoxFit.scaleDown,
-                              child: Text(
-                                'Tap for details',
-                                style: TextStyle(
-                                  fontSize: 9,
-                                  color: Colors.grey.shade600,
-                                  fontStyle: FontStyle.italic,
+                        SizedBox(
+                          height: 14,
+                          child: Visibility(
+                            visible: _formatLargeNumber(value) != value,
+                            maintainSize: true,
+                            maintainAnimation: true,
+                            maintainState: true,
+                            child: Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  'Tap for details',
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: Colors.grey.shade600,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                  textAlign: TextAlign.right,
                                 ),
-                                textAlign: TextAlign.right,
                               ),
                             ),
                           ),
+                        ),
                       ],
                     ),
                   ),
@@ -105,7 +113,7 @@ Widget buildSummaryCard(
             Flexible(
               child: Text(
                 title,
-                style: const TextStyle(fontSize: 13, color: Colors.grey),
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
               ),

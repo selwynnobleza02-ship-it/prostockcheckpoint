@@ -48,7 +48,7 @@ class InventoryReportTab extends StatelessWidget {
                 crossAxisCount: 2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 1.8,
+                childAspectRatio: 1.5,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 children: [

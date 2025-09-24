@@ -44,7 +44,18 @@ class Sale {
   }
 
   bool _isValidPaymentMethod(String method) {
-    const validMethods = ['cash', 'credit', 'card', 'gcash', 'paymaya'];
+    const validMethods = [
+      'cash',
+      'credit',
+      'card',
+      'gcash',
+      'paymaya',
+      // Special methods for customer debt settlements recorded as sales
+      'credit_payment',
+      'debt_payment',
+      'credit payment', // backward-compat for spaced label
+      'debt payment',
+    ];
     return validMethods.contains(method.toLowerCase());
   }
 

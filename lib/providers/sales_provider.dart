@@ -537,7 +537,7 @@ class SalesProvider with ChangeNotifier {
     final sale = Sale(
       customerId: customerId,
       totalAmount: amount,
-      paymentMethod: 'Credit Payment',
+      paymentMethod: 'credit_payment',
       status: 'completed',
       createdAt: DateTime.now(),
       userId: currentUser.id!,

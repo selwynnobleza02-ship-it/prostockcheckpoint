@@ -200,7 +200,7 @@ class PdfReportService {
                   pw.Padding(
                     padding: const pw.EdgeInsets.all(6),
                     child: pw.Text(
-                      'Amount (₱)',
+                      'Amount',
                       style: pw.TextStyle(
                         fontWeight: pw.FontWeight.bold,
                         fontSize: 11,
@@ -225,7 +225,7 @@ class PdfReportService {
                     pw.Padding(
                       padding: const pw.EdgeInsets.all(6),
                       child: pw.Text(
-                        section.rows[i][1],
+                        _stripCurrencySymbols(section.rows[i][1]),
                         style: pw.TextStyle(
                           fontSize: 10,
                           fontWeight:
@@ -313,12 +313,19 @@ class PdfReportService {
             style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
           ),
           pw.Text(
-            summary.value,
+            _stripCurrencySymbols(summary.value),
             style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
           ),
         ],
       ),
     );
+  }
+
+  String _stripCurrencySymbols(String value) {
+    // Remove common currency symbols that may not be supported by the PDF font
+    final withoutSymbols = value.replaceAll(RegExp(r'[₱$€£¥₹]'), '');
+    // Also trim extra whitespace that may be left over
+    return withoutSymbols.trim();
   }
 
   bool _isNumericValue(String value) {

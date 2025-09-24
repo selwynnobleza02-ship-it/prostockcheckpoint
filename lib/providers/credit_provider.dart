@@ -14,6 +14,7 @@ import 'package:prostock/services/notification_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/utils/error_logger.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 
 class CreditProvider with ChangeNotifier {
   final CustomerProvider _customerProvider;
@@ -157,6 +158,9 @@ class CreditProvider with ChangeNotifier {
         notes: notes,
       );
 
+      // Generate a local ID for mirroring in SQLite (Firestore add() doesn't return ID here)
+      final localId = const Uuid().v4();
+
       if (_inventoryProvider.isOnline) {
         print('CreditProvider: Recording payment transaction...');
         await _creditService.recordPayment(transaction);
@@ -167,28 +171,50 @@ class CreditProvider with ChangeNotifier {
         print('CreditProvider: Customer balance updated successfully');
         // Mirror online credit transaction locally for offline history
         try {
-          await LocalDatabaseService.instance.insertCreditTransaction(
-            transaction.toMap(),
-          );
+          final localMap = transaction.toLocalMap();
+          localMap['id'] = localId;
+          await LocalDatabaseService.instance.insertCreditTransaction(localMap);
         } catch (_) {}
       } else {
         // Queue offline operations: insertCreditTransaction + updateCustomerBalance
+        // Insert immediately into local cache for offline history
+        try {
+          final localMap = transaction.toLocalMap();
+          localMap['id'] = localId;
+          await LocalDatabaseService.instance.insertCreditTransaction(localMap);
+        } catch (_) {}
+
+        // Also update local balance immediately and queue remote sync via provider
+        await _customerProvider.updateCustomerBalance(customerId, -amount);
+
         final opTx = OfflineOperation(
           type: OperationType.insertCreditTransaction,
           collectionName: 'credit_transactions',
-          documentId: transaction.id,
-          data: transaction.toMap(),
-          timestamp: DateTime.now(),
-        );
-        final opBalance = OfflineOperation(
-          type: OperationType.updateCustomerBalance,
-          collectionName: 'customers',
-          documentId: customerId,
-          data: {'delta': -amount},
+          documentId: localId,
+          // Store plain JSON without Firestore Timestamp for offline queue
+          data: {...transaction.toLocalMap(), 'id': localId},
           timestamp: DateTime.now(),
         );
         await _inventoryProvider.queueOperation(opTx);
-        await _inventoryProvider.queueOperation(opBalance);
+
+        // Show offline material banner notification
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.hideCurrentMaterialBanner();
+        messenger.showMaterialBanner(
+          MaterialBanner(
+            content: const Text(
+              'Offline: Payment recorded locally. It will sync when online.',
+            ),
+            leading: const Icon(Icons.cloud_off),
+            backgroundColor: Colors.amber.shade100,
+            actions: [
+              TextButton(
+                onPressed: () => messenger.hideCurrentMaterialBanner(),
+                child: const Text('Dismiss'),
+              ),
+            ],
+          ),
+        );
       }
 
       // Create a sale record for the payment

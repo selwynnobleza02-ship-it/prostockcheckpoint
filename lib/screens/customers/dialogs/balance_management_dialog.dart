@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
+import 'package:prostock/widgets/confirmation_dialog.dart';
 
 class BalanceManagementDialog extends StatefulWidget {
   final Customer customer;
@@ -101,6 +102,18 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
                     _showErrorSnackBar(
                       'Payment amount cannot exceed the current balance.',
                     );
+                    return;
+                  }
+
+                  final confirmed = await showConfirmationDialog(
+                    context: context,
+                    title: 'Record Payment',
+                    content:
+                        'Record payment of ₱${amount.toStringAsFixed(2)} for ${widget.customer.name}? This will reduce their outstanding balance.',
+                    confirmText: 'Record',
+                    cancelText: 'Cancel',
+                  );
+                  if (confirmed != true) {
                     return;
                   }
 

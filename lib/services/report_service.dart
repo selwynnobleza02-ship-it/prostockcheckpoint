@@ -25,7 +25,13 @@ class ReportService {
 
   double calculateTotalCreditReceived(List<Sale> sales) {
     return sales
-        .where((sale) => sale.paymentMethod == 'Credit Payment')
+        .where((sale) {
+          final method = sale.paymentMethod.toLowerCase();
+          return method == 'credit payment' ||
+              method == 'credit_payment' ||
+              method == 'debt payment' ||
+              method == 'debt_payment';
+        })
         .fold(0.0, (sum, sale) => sum + sale.totalAmount);
   }
 

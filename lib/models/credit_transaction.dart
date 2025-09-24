@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'dart:convert';
 import 'package:prostock/models/credit_sale_item.dart';
 
 class CreditTransaction {
@@ -51,6 +52,21 @@ class CreditTransaction {
       'type': type,
       'notes': notes,
       'items': items.map((item) => item.toMap()).toList(),
+    };
+  }
+
+  // Local-only map for SQLite/offline queue (no Firestore Timestamp types)
+  Map<String, dynamic> toLocalMap() {
+    return {
+      'id': id,
+      'customerId': customerId,
+      'amount': amount,
+      'date': date.toIso8601String(),
+      'createdAt': date.toIso8601String(),
+      'type': type,
+      'notes': notes,
+      // Persist as JSON string for SQLite
+      'items': jsonEncode(items.map((item) => item.toMap()).toList()),
     };
   }
 

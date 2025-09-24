@@ -14,6 +14,7 @@ import '../services/local_database_service.dart';
 import '../utils/error_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/providers/auth_provider.dart'; // New import
+import 'package:prostock/services/notification_service.dart';
 
 class InventoryProvider with ChangeNotifier {
   List<Product> _products = [];
@@ -22,6 +23,7 @@ class InventoryProvider with ChangeNotifier {
   final Map<String, int> _reservedStock = {};
   final Map<String, int> _reorderPoints = {};
   final Map<String, int> _visualStock = {};
+  final Map<String, _StockAlertState> _lastAlertStates = {};
 
   final LocalDatabaseService _localDatabaseService =
       LocalDatabaseService.instance;
@@ -992,6 +994,58 @@ class InventoryProvider with ChangeNotifier {
   }
 
   void _checkStockAlerts(Product product) {
-    // Implementation for checking stock alerts
+    if (product.id == null) return;
+
+    final String productId = product.id!;
+    final int currentStock = product.stock;
+    final int lowThreshold = product.minStock;
+
+    final _StockAlertState currentState = currentStock == 0
+        ? _StockAlertState.out
+        : (currentStock <= lowThreshold
+              ? _StockAlertState.low
+              : _StockAlertState.normal);
+
+    final _StockAlertState? previousState = _lastAlertStates[productId];
+    _lastAlertStates[productId] = currentState;
+
+    // Only notify on state transitions to avoid spamming
+    if (previousState == currentState) return;
+
+    final notificationService = NotificationService();
+
+    if (currentState == _StockAlertState.out) {
+      notificationService.showNotification(
+        productId.hashCode,
+        'Out of stock',
+        '${product.name} is out of stock',
+        'out_of_stock:$productId',
+      );
+      return;
+    }
+
+    if (currentState == _StockAlertState.low) {
+      notificationService.showNotification(
+        productId.hashCode ^ 1,
+        'Low stock',
+        '${product.name} is low on stock ($currentStock left)',
+        'low_stock:$productId',
+      );
+      return;
+    }
+
+    if (currentState == _StockAlertState.normal &&
+        (previousState == _StockAlertState.low ||
+            previousState == _StockAlertState.out)) {
+      // Optional: notify restock
+      notificationService.showNotification(
+        productId.hashCode ^ 2,
+        'Restocked',
+        '${product.name} has been restocked',
+        'restocked:$productId',
+      );
+    }
   }
 }
+
+enum _StockAlertState { normal, low, out }

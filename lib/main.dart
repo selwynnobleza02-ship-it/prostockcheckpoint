@@ -44,6 +44,9 @@ void main() async {
 
   final notificationService = NotificationService();
   await notificationService.init();
+  // Request notification permissions just-in-time on startup.
+  // This will prompt only on Android 13+ and on iOS; otherwise it's a no-op.
+  await notificationService.requestPermission();
 
   final localDatabaseService = LocalDatabaseService.instance;
   final creditCheckService = CreditCheckService(

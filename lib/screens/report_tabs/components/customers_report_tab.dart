@@ -36,8 +36,8 @@ class CustomersReportTab extends StatelessWidget {
         );
         final highestBalance = customerProvider.customers.isNotEmpty
             ? customerProvider.customers
-                .map((c) => c.balance)
-                .reduce((a, b) => a > b ? a : b)
+                  .map((c) => c.balance)
+                  .reduce((a, b) => a > b ? a : b)
             : 0.0;
 
         return SingleChildScrollView(
@@ -50,7 +50,7 @@ class CustomersReportTab extends StatelessWidget {
                 crossAxisCount: 2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 1.8,
+                childAspectRatio: 1.5,
                 crossAxisSpacing: 16,
                 mainAxisSpacing: 16,
                 children: [
@@ -169,7 +169,12 @@ class CustomersReportTab extends StatelessWidget {
                             style: TextStyle(
                               fontWeight: FontWeight.bold,
                               color:
-                                  customerProvider.customers.where((c) => c.phone?.isNotEmpty == true).length /
+                                  customerProvider.customers
+                                              .where(
+                                                (c) =>
+                                                    c.phone?.isNotEmpty == true,
+                                              )
+                                              .length /
                                           (totalCustomers == 0
                                               ? 1
                                               : totalCustomers) >=
@@ -252,7 +257,9 @@ class CustomersReportTab extends StatelessWidget {
                       .length,
                   itemBuilder: (context, index) {
                     final customer =
-                        customerProvider.customers.where((c) => c.balance > 0).toList()
+                        customerProvider.customers
+                            .where((c) => c.balance > 0)
+                            .toList()
                           ..sort((a, b) => b.balance.compareTo(a.balance));
                     final customerData = customer[index];
                     final isHighPriority =

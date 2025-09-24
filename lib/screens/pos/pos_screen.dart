@@ -146,8 +146,7 @@ class _POSScreenState extends State<POSScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      resizeToAvoidBottomInset:
-          false, // Changed to false to prevent keyboard overflow
+      resizeToAvoidBottomInset: true,
       appBar: AppBar(
         title: const Text('Point of Sale'),
         actions: [
@@ -166,16 +165,15 @@ class _POSScreenState extends State<POSScreen> {
         ],
       ),
       body: Column(
-        // Changed from SingleChildScrollView to Column
         children: [
-          // Product section - takes up remaining space after cart
+          // Product section - gets most of the space (70%)
           Expanded(
-            flex: 3, // 60% of available space
+            flex: 7, // Increased from 3 to give more space to products
             child: Column(
               children: [
-                // Search bar with fixed height
+                // Search bar with consistent height
                 SizedBox(
-                  height: 70, // Fixed height for search
+                  height: 70,
                   child: ProductSearchView(
                     controller: _productSearchController,
                     onChanged: (value) => _onProductSearchChanged(),
@@ -186,12 +184,10 @@ class _POSScreenState extends State<POSScreen> {
               ],
             ),
           ),
-          // Cart section - fixed height that adapts to content
-          Container(
-            constraints: BoxConstraints(
-              maxHeight: MediaQuery.of(context).size.height * 0.4,
-              minHeight: 200,
-            ),
+          // Cart section - fixed height, fully scrollable (30%)
+          SizedBox(
+            height:
+                MediaQuery.of(context).size.height * 0.3, // Fixed 30% of screen
             child: CartView(
               key: _cartViewKey,
               selectedCustomer: _selectedCustomer,
