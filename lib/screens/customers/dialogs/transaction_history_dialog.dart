@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
+import 'package:prostock/utils/error_logger.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/models/credit_transaction.dart';
 
@@ -27,14 +28,27 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
 
   Future<void> _loadTransactions() async {
     try {
-      print('Loading transactions for customer: ${widget.customer.id}');
+      ErrorLogger.logInfo(
+        'Loading transactions',
+        context: 'TransactionHistoryDialog._loadTransactions',
+        metadata: {'customerId': widget.customer.id},
+      );
       await Provider.of<CreditProvider>(
         context,
         listen: false,
       ).getTransactionsByCustomer(widget.customer.id);
-      print('Transactions loaded successfully');
+      ErrorLogger.logInfo(
+        'Transactions loaded successfully',
+        context: 'TransactionHistoryDialog._loadTransactions',
+        metadata: {'customerId': widget.customer.id},
+      );
     } catch (e) {
-      print('Error loading transactions: $e');
+      ErrorLogger.logError(
+        'Error loading transactions',
+        error: e,
+        context: 'TransactionHistoryDialog._loadTransactions',
+        metadata: {'customerId': widget.customer.id},
+      );
       // Fallback to local cache when offline
       try {
         final rows = await LocalDatabaseService.instance

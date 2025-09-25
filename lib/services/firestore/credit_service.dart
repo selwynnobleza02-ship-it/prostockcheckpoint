@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/models/credit_transaction.dart';
+import 'package:prostock/utils/error_logger.dart';
 
 class CreditService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -17,15 +18,21 @@ class CreditService {
     String customerId,
   ) async {
     try {
-      print('CreditService: Querying transactions for customer: $customerId');
+      ErrorLogger.logInfo(
+        'Querying transactions for customer',
+        context: 'CreditService.getTransactionsByCustomer',
+        metadata: {'customerId': customerId},
+      );
 
       // First, let's check if the collection exists and has any documents
       final collectionSnapshot = await _firestore
           .collection(_collectionPath)
           .limit(1)
           .get();
-      print(
-        'CreditService: Collection exists with ${collectionSnapshot.docs.length} total documents',
+      ErrorLogger.logInfo(
+        'Checked collection existence',
+        context: 'CreditService.getTransactionsByCustomer',
+        metadata: {'docs': collectionSnapshot.docs.length},
       );
 
       // Use a simpler query without orderBy to avoid composite index requirement
@@ -35,13 +42,20 @@ class CreditService {
           .where('customerId', isEqualTo: customerId)
           .get();
 
-      print(
-        'CreditService: Found ${querySnapshot.docs.length} documents for customer $customerId',
+      ErrorLogger.logInfo(
+        'Found documents for customer',
+        context: 'CreditService.getTransactionsByCustomer',
+        metadata: {
+          'customerId': customerId,
+          'count': querySnapshot.docs.length,
+        },
       );
 
       final transactions = querySnapshot.docs.map((doc) {
-        print(
-          'CreditService: Processing document ${doc.id} with data: ${doc.data()}',
+        ErrorLogger.logInfo(
+          'Processing document',
+          context: 'CreditService.getTransactionsByCustomer',
+          metadata: {'docId': doc.id},
         );
         return CreditTransaction.fromMap(doc.data(), doc.id);
       }).toList();
@@ -49,12 +63,19 @@ class CreditService {
       // Sort transactions by createdAt in descending order locally
       transactions.sort((a, b) => b.date.compareTo(a.date));
 
-      print(
-        'CreditService: Successfully created ${transactions.length} transactions',
+      ErrorLogger.logInfo(
+        'Created transactions list',
+        context: 'CreditService.getTransactionsByCustomer',
+        metadata: {'count': transactions.length},
       );
       return transactions;
     } catch (e) {
-      print('CreditService: Error querying transactions: $e');
+      ErrorLogger.logError(
+        'Error querying transactions',
+        error: e,
+        context: 'CreditService.getTransactionsByCustomer',
+        metadata: {'customerId': customerId},
+      );
       rethrow;
     }
   }
@@ -67,7 +88,11 @@ class CreditService {
           .get();
       return snapshot.docs.isNotEmpty;
     } catch (e) {
-      print('CreditService: Error checking for transactions: $e');
+      ErrorLogger.logError(
+        'Error checking for transactions',
+        error: e,
+        context: 'CreditService.hasAnyTransactions',
+      );
       return false;
     }
   }

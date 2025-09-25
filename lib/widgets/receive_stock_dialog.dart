@@ -137,6 +137,7 @@ class ReceiveStockDialogState extends State<ReceiveStockDialog> {
         return;
       }
 
+      if (!mounted) return;
       final inventoryProvider = context.read<InventoryProvider>();
 
       // Create a copy of the product with the new cost

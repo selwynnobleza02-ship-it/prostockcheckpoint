@@ -14,6 +14,7 @@ import 'package:prostock/utils/constants.dart';
 
 import 'package:prostock/widgets/loss_breakdown_list.dart';
 import 'package:prostock/widgets/report_helpers.dart';
+import 'package:prostock/utils/error_logger.dart';
 import 'package:prostock/widgets/top_selling_products_list.dart';
 import 'package:prostock/services/pdf_report_service.dart';
 
@@ -94,7 +95,12 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
       // Use the actual category from the product, fallback to 'Others (Iba pa)' if null
       return product.category ?? 'Others (Iba pa)';
     } catch (e) {
-      print('Error categorizing product $productId: $e');
+      ErrorLogger.logError(
+        'Error categorizing product',
+        error: e,
+        context: 'FinancialReportTab._getProductCategory',
+        metadata: {'productId': productId},
+      );
       return 'Others (Iba pa)'; // Default fallback
     }
   }
@@ -108,7 +114,12 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
         categoryRevenue[category] =
             (categoryRevenue[category] ?? 0) + item.totalPrice;
       } catch (e) {
-        print('Error calculating revenue for product ${item.productId}: $e');
+        ErrorLogger.logError(
+          'Error calculating category revenue for product',
+          error: e,
+          context: 'FinancialReportTab._calculateCategoryRevenue',
+          metadata: {'productId': item.productId},
+        );
         // Add to "Unknown Products" category
         categoryRevenue['Unknown Products'] =
             (categoryRevenue['Unknown Products'] ?? 0) + item.totalPrice;
@@ -135,8 +146,10 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
           final itemCost = product.cost * item.quantity;
           categoryCost[category] = (categoryCost[category] ?? 0) + itemCost;
         } else {
-          print(
-            'Product not found for sale item ${item.productId}, using estimated cost',
+          ErrorLogger.logInfo(
+            'Product not found for sale item, using estimated cost',
+            context: 'FinancialReportTab._calculateCategoryCost',
+            metadata: {'productId': item.productId},
           );
           // Add to "Unknown Products" category with estimated cost
           final estimatedCost = item.totalPrice * 0.6; // Assume 60% cost ratio
@@ -144,7 +157,12 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
               (categoryCost['Unknown Products'] ?? 0) + estimatedCost;
         }
       } catch (e) {
-        print('Error calculating cost for product ${item.productId}: $e');
+        ErrorLogger.logError(
+          'Error calculating category cost for product',
+          error: e,
+          context: 'FinancialReportTab._calculateCategoryCost',
+          metadata: {'productId': item.productId},
+        );
         // Add to "Unknown Products" category with estimated cost
         final estimatedCost = item.totalPrice * 0.6; // Assume 60% cost ratio
         categoryCost['Unknown Products'] =
@@ -378,7 +396,11 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                           ),
                         );
                       } catch (e) {
-                        print('PDF Export Error: $e');
+                        ErrorLogger.logError(
+                          'PDF Export Error',
+                          error: e,
+                          context: 'FinancialReportTab.ExportPDF',
+                        );
                         if (!context.mounted) return;
 
                         ScaffoldMessenger.of(context).showSnackBar(

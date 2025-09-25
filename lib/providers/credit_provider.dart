@@ -146,8 +146,10 @@ class CreditProvider with ChangeNotifier {
     // Obtain provider before any async gaps to avoid using BuildContext after awaits
     final salesProvider = Provider.of<SalesProvider>(context, listen: false);
     try {
-      print(
-        'CreditProvider: Starting payment recording for customer: $customerId, amount: $amount',
+      ErrorLogger.logInfo(
+        'Starting payment recording',
+        context: 'CreditProvider.recordPayment',
+        metadata: {'customerId': customerId, 'amount': amount},
       );
 
       final transaction = CreditTransaction(
@@ -162,13 +164,25 @@ class CreditProvider with ChangeNotifier {
       final localId = const Uuid().v4();
 
       if (_inventoryProvider.isOnline) {
-        print('CreditProvider: Recording payment transaction...');
+        ErrorLogger.logInfo(
+          'Recording payment transaction',
+          context: 'CreditProvider.recordPayment',
+        );
         await _creditService.recordPayment(transaction);
-        print('CreditProvider: Payment transaction recorded successfully');
+        ErrorLogger.logInfo(
+          'Payment transaction recorded successfully',
+          context: 'CreditProvider.recordPayment',
+        );
 
-        print('CreditProvider: Updating customer balance...');
+        ErrorLogger.logInfo(
+          'Updating customer balance',
+          context: 'CreditProvider.recordPayment',
+        );
         await _customerProvider.updateCustomerBalance(customerId, -amount);
-        print('CreditProvider: Customer balance updated successfully');
+        ErrorLogger.logInfo(
+          'Customer balance updated successfully',
+          context: 'CreditProvider.recordPayment',
+        );
         // Mirror online credit transaction locally for offline history
         try {
           final localMap = transaction.toLocalMap();
@@ -198,34 +212,49 @@ class CreditProvider with ChangeNotifier {
         await _inventoryProvider.queueOperation(opTx);
 
         // Show offline material banner notification
-        final messenger = ScaffoldMessenger.of(context);
-        messenger.hideCurrentMaterialBanner();
-        messenger.showMaterialBanner(
-          MaterialBanner(
-            content: const Text(
-              'Offline: Payment recorded locally. It will sync when online.',
-            ),
-            leading: const Icon(Icons.cloud_off),
-            backgroundColor: Colors.amber.shade100,
-            actions: [
-              TextButton(
-                onPressed: () => messenger.hideCurrentMaterialBanner(),
-                child: const Text('Dismiss'),
+        if (context.mounted) {
+          final messenger = ScaffoldMessenger.of(context);
+          messenger.hideCurrentMaterialBanner();
+          messenger.showMaterialBanner(
+            MaterialBanner(
+              content: const Text(
+                'Offline: Payment recorded locally. It will sync when online.',
               ),
-            ],
-          ),
-        );
+              leading: const Icon(Icons.cloud_off),
+              backgroundColor: Colors.amber.shade100,
+              actions: [
+                TextButton(
+                  onPressed: () => messenger.hideCurrentMaterialBanner(),
+                  child: const Text('Dismiss'),
+                ),
+              ],
+            ),
+          );
+        }
       }
 
       // Create a sale record for the payment
-      print('CreditProvider: Creating sale record for payment...');
+      ErrorLogger.logInfo(
+        'Creating sale record for payment',
+        context: 'CreditProvider.recordPayment',
+      );
       await salesProvider.createSaleFromPayment(customerId, amount);
-      print('CreditProvider: Sale record created successfully');
+      ErrorLogger.logInfo(
+        'Sale record created successfully',
+        context: 'CreditProvider.recordPayment',
+      );
 
-      print('CreditProvider: Payment recording completed successfully');
+      ErrorLogger.logInfo(
+        'Payment recording completed successfully',
+        context: 'CreditProvider.recordPayment',
+      );
       return true;
     } catch (e) {
-      print('CreditProvider: Error recording payment: $e');
+      ErrorLogger.logError(
+        'Error recording payment',
+        error: e,
+        context: 'CreditProvider.recordPayment',
+      );
       _error = 'Failed to record payment: $e';
       notifyListeners();
       return false;
@@ -238,21 +267,37 @@ class CreditProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      print('CreditProvider: Fetching transactions for customer: $customerId');
+      ErrorLogger.logInfo(
+        'Fetching transactions for customer',
+        context: 'CreditProvider.getTransactionsByCustomer',
+        metadata: {'customerId': customerId},
+      );
 
       // Check if there are any transactions at all
       final hasTransactions = await _creditService.hasAnyTransactions();
-      print('CreditProvider: Database has transactions: $hasTransactions');
+      ErrorLogger.logInfo(
+        'Database transactions presence checked',
+        context: 'CreditProvider.getTransactionsByCustomer',
+        metadata: {'hasTransactions': hasTransactions},
+      );
 
       _transactions = await _creditService.getTransactionsByCustomer(
         customerId,
       );
-      print('CreditProvider: Found ${_transactions.length} transactions');
+      ErrorLogger.logInfo(
+        'Transactions loaded',
+        context: 'CreditProvider.getTransactionsByCustomer',
+        metadata: {'count': _transactions.length},
+      );
 
       _isLoading = false;
       notifyListeners();
     } catch (e) {
-      print('CreditProvider: Error fetching transactions: $e');
+      ErrorLogger.logError(
+        'Error fetching transactions',
+        error: e,
+        context: 'CreditProvider.getTransactionsByCustomer',
+      );
       _error = 'Failed to load transactions: $e';
       _isLoading = false;
       notifyListeners();

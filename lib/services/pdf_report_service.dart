@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
+import 'package:prostock/utils/error_logger.dart';
 
 class PdfReportSection {
   final String title;
@@ -43,11 +44,16 @@ class PdfReportService {
     List<PdfSummarySection>? summaries,
   }) async {
     try {
-      print('PDF Service: Starting PDF generation...');
-      print('PDF Service: Report title: $reportTitle');
-      print('PDF Service: Sections count: ${sections.length}');
-      print('PDF Service: Calculations count: ${calculations?.length ?? 0}');
-      print('PDF Service: Summaries count: ${summaries?.length ?? 0}');
+      ErrorLogger.logInfo(
+        'Starting PDF generation',
+        context: 'PdfReportService.generateFinancialReport',
+        metadata: {
+          'reportTitle': reportTitle,
+          'sections': sections.length,
+          'calculations': calculations?.length ?? 0,
+          'summaries': summaries?.length ?? 0,
+        },
+      );
 
       final doc = pw.Document();
       final df = DateFormat('yyyy-MM-dd');
@@ -95,36 +101,53 @@ class PdfReportService {
         ),
       );
 
-      print('PDF Service: Building document structure...');
+      ErrorLogger.logInfo(
+        'Building document structure',
+        context: 'PdfReportService.generateFinancialReport',
+      );
 
       // Try to get Downloads directory, fallback to external storage if not available
       Directory? dir;
       try {
-        print('PDF Service: Getting storage directory...');
+        ErrorLogger.logInfo(
+          'Getting storage directory',
+          context: 'PdfReportService.generateFinancialReport',
+        );
         if (!kIsWeb && Platform.isAndroid) {
           // For Android, try to get the Downloads directory
           dir = Directory('/storage/emulated/0/Download');
           if (!await dir.exists()) {
-            print(
-              'PDF Service: Downloads directory not found, trying external storage...',
+            ErrorLogger.logInfo(
+              'Downloads directory not found, trying external storage',
+              context: 'PdfReportService.generateFinancialReport',
             );
             // Fallback to external storage directory
             dir = await getExternalStorageDirectory();
             if (dir != null) {
               dir = Directory('${dir.path}/Download');
               if (!await dir.exists()) {
-                print('PDF Service: Creating Download directory...');
+                ErrorLogger.logInfo(
+                  'Creating Download directory',
+                  context: 'PdfReportService.generateFinancialReport',
+                );
                 await dir.create(recursive: true);
               }
             }
           }
         } else {
           // For iOS, web, and other platforms, use application documents directory
-          print('PDF Service: Using application documents directory...');
+          ErrorLogger.logInfo(
+            'Using application documents directory',
+            context: 'PdfReportService.generateFinancialReport',
+          );
           dir = await getApplicationDocumentsDirectory();
         }
       } catch (e) {
-        print('PDF Service: Error getting storage directory: $e');
+        ErrorLogger.logError(
+          'Error getting storage directory',
+          error: e,
+          context: 'PdfReportService.generateFinancialReport',
+        );
         // Fallback to application documents directory if all else fails
         dir = await getApplicationDocumentsDirectory();
       }
@@ -133,23 +156,42 @@ class PdfReportService {
         throw Exception('Could not access storage directory');
       }
 
-      print('PDF Service: Storage directory: ${dir.path}');
+      ErrorLogger.logInfo(
+        'Resolved storage directory',
+        context: 'PdfReportService.generateFinancialReport',
+        metadata: {'path': dir.path},
+      );
 
       final fileName =
           'financial_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
       final file = File(p.join(dir.path, fileName));
 
-      print('PDF Service: Saving PDF to: ${file.path}');
+      ErrorLogger.logInfo(
+        'Saving PDF',
+        context: 'PdfReportService.generateFinancialReport',
+        metadata: {'path': file.path},
+      );
 
       final pdfBytes = await doc.save();
-      print('PDF Service: PDF generated, size: ${pdfBytes.length} bytes');
+      ErrorLogger.logInfo(
+        'PDF generated',
+        context: 'PdfReportService.generateFinancialReport',
+        metadata: {'sizeBytes': pdfBytes.length},
+      );
 
       await file.writeAsBytes(pdfBytes);
-      print('PDF Service: PDF saved successfully');
+      ErrorLogger.logInfo(
+        'PDF saved successfully',
+        context: 'PdfReportService.generateFinancialReport',
+      );
 
       return file;
     } catch (e) {
-      print('PDF Service: Error generating PDF: $e');
+      ErrorLogger.logError(
+        'Error generating PDF',
+        error: e,
+        context: 'PdfReportService.generateFinancialReport',
+      );
       rethrow;
     }
   }
@@ -294,6 +336,22 @@ class PdfReportService {
             child: pw.Text(
               calculation.formula,
               style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          pw.SizedBox(height: 8),
+
+          // Calculation result
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey100,
+              border: pw.Border.all(color: PdfColors.black, width: 0.5),
+            ),
+            child: pw.Text(
+              'Result: ${calculation.result}',
+              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
               textAlign: pw.TextAlign.center,
             ),
           ),

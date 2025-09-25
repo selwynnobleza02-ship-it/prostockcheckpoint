@@ -117,6 +117,8 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
                     return;
                   }
 
+                  if (!context.mounted) return;
+
                   final success = await creditProvider.recordPayment(
                     context: context,
                     customerId: widget.customer.id,
