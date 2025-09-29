@@ -82,11 +82,28 @@ class CreditTransaction {
       date: dateTimestamp?.toDate() ?? DateTime.now(),
       type: map['type'] ?? '',
       notes: map['notes'] ?? '',
-      items:
-          (map['items'] as List<dynamic>?)
-              ?.map((item) => CreditSaleItem.fromMap(item))
-              .toList() ??
-          const [],
+      items: _parseItems(map['items']),
     );
+  }
+
+  static List<CreditSaleItem> _parseItems(dynamic items) {
+    if (items == null) return const [];
+
+    // Handle Firestore format (List<dynamic>)
+    if (items is List<dynamic>) {
+      return items.map((item) => CreditSaleItem.fromMap(item)).toList();
+    }
+
+    // Handle SQLite format (JSON string)
+    if (items is String) {
+      try {
+        final List<dynamic> itemsList = jsonDecode(items);
+        return itemsList.map((item) => CreditSaleItem.fromMap(item)).toList();
+      } catch (e) {
+        return const [];
+      }
+    }
+
+    return const [];
   }
 }

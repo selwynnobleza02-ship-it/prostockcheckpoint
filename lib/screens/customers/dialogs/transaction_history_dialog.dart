@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/credit_provider.dart';
+import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/utils/error_logger.dart';
 import 'package:prostock/services/local_database_service.dart';
@@ -159,7 +160,27 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(transaction.notes ?? 'No description'),
+                      // Show product details for credit sales
+                      if (transaction.type == 'purchase' &&
+                          transaction.items.isNotEmpty)
+                        ...transaction.items.map((item) {
+                          final inventoryProvider =
+                              Provider.of<InventoryProvider>(
+                                context,
+                                listen: false,
+                              );
+                          final product = inventoryProvider.getProductById(
+                            item.productId,
+                          );
+                          final productName =
+                              product?.name ?? 'Unknown Product';
+                          return Text(
+                            '• ${item.quantity}x $productName (₱${item.unitPrice.toStringAsFixed(2)} each)',
+                            style: const TextStyle(fontSize: 12),
+                          );
+                        })
+                      else
+                        Text(transaction.notes ?? 'No description'),
                       Text(
                         '${transaction.date.day}/${transaction.date.month}/${transaction.date.year}',
                         style: const TextStyle(

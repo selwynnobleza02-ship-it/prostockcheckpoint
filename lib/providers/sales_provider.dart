@@ -420,85 +420,35 @@ class SalesProvider with ChangeNotifier {
           userId: currentUser.id!,
         );
 
-        if (_offlineManager.isOnline) {
-          log('Online sale');
-          final saleService = SaleService(FirebaseFirestore.instance);
-          final saleId = await saleService.insertSale(sale, productsInSale);
+        // Local-first for all connectivity states
+        final saleId = const Uuid().v4();
+        final offlineSale = sale.copyWith(id: saleId);
 
-          for (final item in _currentSaleItems) {
-            final saleItem = SaleItem(
-              saleId: saleId,
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              totalPrice: item.totalPrice,
-            );
-
-            await saleService.insertSaleItem(saleItem);
-
-            final stockReduced = await _inventoryProvider.reduceStock(
-              item.productId,
-              item.quantity,
-            );
-            if (!stockReduced) {
-              _error = 'Failed to reduce stock for product: \${item.productId}';
-              return null;
-            }
-          }
-          // Mirror the online sale to local database so demand analysis sees it immediately
-          try {
-            await LocalDatabaseService.instance.insertSale(
-              sale.copyWith(id: saleId, isSynced: 1),
-            );
-            for (final item in _currentSaleItems) {
-              final localSaleItem = SaleItem(
-                saleId: saleId,
-                productId: item.productId,
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                totalPrice: item.totalPrice,
-              );
-              await LocalDatabaseService.instance.insertSaleItem(localSaleItem);
-            }
-          } catch (e) {
-            ErrorLogger.logError(
-              'Error mirroring online sale to local DB',
-              error: e,
-              context: 'SalesProvider.completeSale',
-            );
-          }
-
-          receipt = _createReceipt(saleId, customerId, paymentMethod);
-        } else {
-          log('Offline sale');
-          final saleId = const Uuid().v4();
-          final offlineSale = sale.copyWith(id: saleId);
-
-          final List<Map<String, dynamic>> saleItems = [];
-          for (final item in _currentSaleItems) {
-            saleItems.add(item.copyWith(saleId: saleId).toMap());
-          }
-
-          await _offlineManager.queueOperation(
-            OfflineOperation(
-              id: offlineSale.id!,
-              type: OperationType.createSaleTransaction,
-              collectionName: 'sales',
-              documentId: offlineSale.id,
-              data: {'sale': offlineSale.toMap(), 'saleItems': saleItems},
-              timestamp: DateTime.now(),
-            ),
-          );
-
-          for (final item in _currentSaleItems) {
-            await _inventoryProvider.reduceStock(
-              item.productId,
-              item.quantity,
-              offline: true,
-            );
-          }
-          receipt = _createReceipt(saleId, customerId, paymentMethod);
+        final List<Map<String, dynamic>> saleItems = [];
+        for (final item in _currentSaleItems) {
+          saleItems.add(item.copyWith(saleId: saleId).toMap());
         }
+
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: offlineSale.id!,
+            type: OperationType.createSaleTransaction,
+            collectionName: 'sales',
+            documentId: offlineSale.id,
+            data: {'sale': offlineSale.toMap(), 'saleItems': saleItems},
+            timestamp: DateTime.now(),
+          ),
+        );
+
+        for (final item in _currentSaleItems) {
+          await _inventoryProvider.reduceStock(
+            item.productId,
+            item.quantity,
+            offline: true,
+          );
+        }
+
+        receipt = _createReceipt(saleId, customerId, paymentMethod);
       }
 
       // Don't await these, let them run in the background
@@ -543,23 +493,19 @@ class SalesProvider with ChangeNotifier {
       userId: currentUser.id!,
     );
 
-    if (_offlineManager.isOnline) {
-      final saleService = SaleService(FirebaseFirestore.instance);
-      await saleService.insertSale(sale, []);
-    } else {
-      final saleId = const Uuid().v4();
-      final offlineSale = sale.copyWith(id: saleId);
-      await _offlineManager.queueOperation(
-        OfflineOperation(
-          id: offlineSale.id!,
-          type: OperationType.createSaleTransaction,
-          collectionName: 'sales',
-          documentId: offlineSale.id,
-          data: {'sale': offlineSale.toMap(), 'saleItems': []},
-          timestamp: DateTime.now(),
-        ),
-      );
-    }
+    // Local-first for payment-created sales as well
+    final saleId = const Uuid().v4();
+    final offlineSale = sale.copyWith(id: saleId);
+    await _offlineManager.queueOperation(
+      OfflineOperation(
+        id: offlineSale.id!,
+        type: OperationType.createSaleTransaction,
+        collectionName: 'sales',
+        documentId: offlineSale.id,
+        data: {'sale': offlineSale.toMap(), 'saleItems': []},
+        timestamp: DateTime.now(),
+      ),
+    );
     loadSales();
   }
 

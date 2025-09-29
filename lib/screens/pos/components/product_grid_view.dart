@@ -83,10 +83,10 @@ class ProductGridView extends StatelessWidget {
         return GridView.builder(
           padding: const EdgeInsets.all(UiConstants.spacingMedium),
           gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 2,
+            crossAxisCount: 3,
             crossAxisSpacing: UiConstants.spacingSmall,
             mainAxisSpacing: UiConstants.spacingSmall,
-            childAspectRatio: 0.9,
+            childAspectRatio: 0.8,
           ),
           itemCount: productsToDisplay.length,
           physics: const AlwaysScrollableScrollPhysics(),
@@ -158,31 +158,24 @@ class ProductGridView extends StatelessWidget {
                         ],
                       ),
                       if (isOutOfStock)
-                        Positioned.fill(
+                        Positioned(
+                          top: 4,
+                          right: 4,
                           child: Container(
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              borderRadius: BorderRadius.circular(
-                                UiConstants.borderRadiusStandard,
-                              ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
                             ),
-                            child: Center(
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 4,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.withValues(alpha: 0.9),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: const Text(
-                                  'Out of stock',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withValues(alpha: 0.9),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: const Text(
+                              'Out of stock',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 10,
                               ),
                             ),
                           ),

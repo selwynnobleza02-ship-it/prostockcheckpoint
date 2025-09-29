@@ -97,20 +97,42 @@ class CreditProvider with ChangeNotifier {
     );
 
     try {
-      await _creditService.recordCreditSale(transaction);
+      // Local-first: write transaction locally and queue for sync
+      final localId = const Uuid().v4();
+      try {
+        final localMap = transaction.toLocalMap();
+        localMap['id'] = localId;
+        await LocalDatabaseService.instance.insertCreditTransaction(localMap);
+      } catch (_) {}
 
+      // Update balance locally (will queue remote update if offline)
+      await _customerProvider.updateCustomerBalance(customerId, total);
+
+      // Reduce stock locally and queue product updates
       for (final item in items) {
-        await _inventoryProvider.reduceStock(item.productId, item.quantity);
+        await _inventoryProvider.reduceStock(
+          item.productId,
+          item.quantity,
+          offline: true,
+        );
       }
 
-      await _customerProvider.updateCustomerBalance(customerId, total);
+      // Queue remote insert of the credit transaction
+      final opTx = OfflineOperation(
+        type: OperationType.insertCreditTransaction,
+        collectionName: 'credit_transactions',
+        documentId: localId,
+        data: {...transaction.toLocalMap(), 'id': localId},
+        timestamp: DateTime.now(),
+      );
+      await _inventoryProvider.queueOperation(opTx);
 
       // Trigger immediate demand analysis after credit sale
       _triggerDemandAnalysis();
 
       return Receipt(
-        saleId: transaction.id ?? '',
-        receiptNumber: transaction.id ?? '',
+        saleId: localId,
+        receiptNumber: localId,
         timestamp: transaction.date,
         customerName: customer.name,
         paymentMethod: 'credit',
@@ -163,75 +185,24 @@ class CreditProvider with ChangeNotifier {
       // Generate a local ID for mirroring in SQLite (Firestore add() doesn't return ID here)
       final localId = const Uuid().v4();
 
-      if (_inventoryProvider.isOnline) {
-        ErrorLogger.logInfo(
-          'Recording payment transaction',
-          context: 'CreditProvider.recordPayment',
-        );
-        await _creditService.recordPayment(transaction);
-        ErrorLogger.logInfo(
-          'Payment transaction recorded successfully',
-          context: 'CreditProvider.recordPayment',
-        );
+      // Local-first for payments: write locally, queue for sync, update balance
+      try {
+        final localMap = transaction.toLocalMap();
+        localMap['id'] = localId;
+        await LocalDatabaseService.instance.insertCreditTransaction(localMap);
+      } catch (_) {}
 
-        ErrorLogger.logInfo(
-          'Updating customer balance',
-          context: 'CreditProvider.recordPayment',
-        );
-        await _customerProvider.updateCustomerBalance(customerId, -amount);
-        ErrorLogger.logInfo(
-          'Customer balance updated successfully',
-          context: 'CreditProvider.recordPayment',
-        );
-        // Mirror online credit transaction locally for offline history
-        try {
-          final localMap = transaction.toLocalMap();
-          localMap['id'] = localId;
-          await LocalDatabaseService.instance.insertCreditTransaction(localMap);
-        } catch (_) {}
-      } else {
-        // Queue offline operations: insertCreditTransaction + updateCustomerBalance
-        // Insert immediately into local cache for offline history
-        try {
-          final localMap = transaction.toLocalMap();
-          localMap['id'] = localId;
-          await LocalDatabaseService.instance.insertCreditTransaction(localMap);
-        } catch (_) {}
+      await _customerProvider.updateCustomerBalance(customerId, -amount);
 
-        // Also update local balance immediately and queue remote sync via provider
-        await _customerProvider.updateCustomerBalance(customerId, -amount);
-
-        final opTx = OfflineOperation(
-          type: OperationType.insertCreditTransaction,
-          collectionName: 'credit_transactions',
-          documentId: localId,
-          // Store plain JSON without Firestore Timestamp for offline queue
-          data: {...transaction.toLocalMap(), 'id': localId},
-          timestamp: DateTime.now(),
-        );
-        await _inventoryProvider.queueOperation(opTx);
-
-        // Show offline material banner notification
-        if (context.mounted) {
-          final messenger = ScaffoldMessenger.of(context);
-          messenger.hideCurrentMaterialBanner();
-          messenger.showMaterialBanner(
-            MaterialBanner(
-              content: const Text(
-                'Offline: Payment recorded locally. It will sync when online.',
-              ),
-              leading: const Icon(Icons.cloud_off),
-              backgroundColor: Colors.amber.shade100,
-              actions: [
-                TextButton(
-                  onPressed: () => messenger.hideCurrentMaterialBanner(),
-                  child: const Text('Dismiss'),
-                ),
-              ],
-            ),
-          );
-        }
-      }
+      final opTx = OfflineOperation(
+        type: OperationType.insertCreditTransaction,
+        collectionName: 'credit_transactions',
+        documentId: localId,
+        // Store plain JSON without Firestore Timestamp for offline queue
+        data: {...transaction.toLocalMap(), 'id': localId},
+        timestamp: DateTime.now(),
+      );
+      await _inventoryProvider.queueOperation(opTx);
 
       // Create a sale record for the payment
       ErrorLogger.logInfo(

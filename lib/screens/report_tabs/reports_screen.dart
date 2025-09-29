@@ -91,10 +91,12 @@ class _ReportsScreenState extends State<ReportsScreen>
       }
     }
 
-    setState(() {
-      _losses = losses;
-      _saleItems = allSaleItems;
-    });
+    if (mounted) {
+      setState(() {
+        _losses = losses;
+        _saleItems = allSaleItems;
+      });
+    }
   }
 
   @override

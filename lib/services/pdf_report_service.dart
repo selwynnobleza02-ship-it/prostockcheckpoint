@@ -350,7 +350,7 @@ class PdfReportService {
               border: pw.Border.all(color: PdfColors.black, width: 0.5),
             ),
             child: pw.Text(
-              'Result: ${calculation.result}',
+              'Result: ${_stripCurrencySymbols(calculation.result)}',
               style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
               textAlign: pw.TextAlign.center,
             ),
@@ -381,9 +381,14 @@ class PdfReportService {
 
   String _stripCurrencySymbols(String value) {
     // Remove common currency symbols that may not be supported by the PDF font
-    final withoutSymbols = value.replaceAll(RegExp(r'[₱$€£¥₹]'), '');
-    // Also trim extra whitespace that may be left over
-    return withoutSymbols.trim();
+    // Including peso symbol and other common currency symbols
+    final withoutSymbols = value
+        .replaceAll('₱', '') // Peso symbol
+        .replaceAll(RegExp(r'[₱$€£¥₹¢]'), '') // Other currency symbols
+        .replaceAll('PHP', '') // PHP currency code
+        .replaceAll('P', '') // Sometimes P is used for peso
+        .trim();
+    return withoutSymbols;
   }
 
   bool _isNumericValue(String value) {
