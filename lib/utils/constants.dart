@@ -18,8 +18,9 @@ class AppConstants {
   static const String operationDelete = 'delete';
   static const String operationCreateSaleTransaction = 'createSaleTransaction';
 
-  // Tax rate
-  static const double taxRate = 0.12;
+  // Tubo amount (deprecated - use TaxService.getTuboAmount() instead)
+  @Deprecated('Use TaxService.getTuboAmount() instead')
+  static const double tuboAmount = 2.0;
 
   // Product Categories
   static const List<String> productCategories = [

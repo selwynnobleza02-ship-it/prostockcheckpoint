@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/inventory_provider.dart';
 import '../models/product.dart';
 import '../utils/constants.dart';
+import '../services/tax_service.dart';
 
 class BarcodeProductDialog extends StatefulWidget {
   final String barcode;
@@ -62,7 +63,6 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
 
   Widget _buildSuccessContent() {
     final cost = double.tryParse(_costController.text.trim()) ?? 0;
-    final price = cost * (1 + AppConstants.taxRate);
     return SizedBox(
       width: MediaQuery.of(context).size.width * 0.9,
       child: Column(
@@ -119,15 +119,32 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
                         ],
                       ),
                       const SizedBox(height: 4),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Selling Price:',
-                            style: TextStyle(fontWeight: FontWeight.w500),
-                          ),
-                          Text('₱${price.toStringAsFixed(2)}'),
-                        ],
+                      FutureBuilder<double>(
+                        future: TaxService.calculateSellingPrice(cost),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                const Text(
+                                  'Selling Price:',
+                                  style: TextStyle(fontWeight: FontWeight.w500),
+                                ),
+                                Text('₱${snapshot.data!.toStringAsFixed(2)}'),
+                              ],
+                            );
+                          }
+                          return const Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                'Selling Price:',
+                                style: TextStyle(fontWeight: FontWeight.w500),
+                              ),
+                              Text('Calculating...'),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),
@@ -268,49 +285,72 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
             const SizedBox(height: 16),
 
             // Profit Margin Display
-            Consumer<InventoryProvider>(
-              builder: (context, provider, child) {
+            FutureBuilder<double>(
+              future: () async {
                 final cost = double.tryParse(_costController.text) ?? 0;
-                final price = cost * (1 + AppConstants.taxRate);
-                final profit = price - cost;
-                final margin = cost > 0 ? (profit / cost * 100) : 0;
+                return await TaxService.calculateSellingPrice(cost);
+              }(),
+              builder: (context, snapshot) {
+                final cost = double.tryParse(_costController.text) ?? 0;
+
+                if (snapshot.hasData) {
+                  final price = snapshot.data!;
+                  final profit = price - cost;
+                  final margin = cost > 0 ? (profit / cost * 100) : 0;
+
+                  return Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: margin > 20
+                          ? Colors.green.shade50
+                          : Colors.orange.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(
+                        color: margin > 20 ? Colors.green : Colors.orange,
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Selling Price',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Text('₱${price.toStringAsFixed(2)}'),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Profit Margin',
+                              style: TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                            Text(
+                              '₱${profit.toStringAsFixed(2)} (${margin.toStringAsFixed(1)}%)',
+                            ),
+                          ],
+                        ),
+                        Icon(
+                          margin > 20 ? Icons.trending_up : Icons.warning,
+                          color: margin > 20 ? Colors.green : Colors.orange,
+                        ),
+                      ],
+                    ),
+                  );
+                }
 
                 return Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: margin > 20
-                        ? Colors.green.shade50
-                        : Colors.orange.shade50,
+                    color: Colors.grey.shade50,
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(
-                      color: margin > 20 ? Colors.green : Colors.orange,
-                    ),
+                    border: Border.all(color: Colors.grey),
                   ),
-                  child: Row(
+                  child: const Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Selling Price',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Text('₱${price.toStringAsFixed(2)}'),
-                          const SizedBox(height: 8),
-                          const Text(
-                            'Profit Margin',
-                            style: TextStyle(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            '₱${profit.toStringAsFixed(2)} (${margin.toStringAsFixed(1)}%)',
-                          ),
-                        ],
-                      ),
-                      Icon(
-                        margin > 20 ? Icons.trending_up : Icons.warning,
-                        color: margin > 20 ? Colors.green : Colors.orange,
-                      ),
+                      Text('Calculating profit margin...'),
+                      CircularProgressIndicator(),
                     ],
                   ),
                 );

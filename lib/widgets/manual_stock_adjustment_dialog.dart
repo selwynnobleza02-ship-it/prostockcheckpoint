@@ -4,6 +4,7 @@ import '../models/product.dart';
 import '../models/loss_reason.dart';
 import '../providers/inventory_provider.dart';
 import '../utils/currency_utils.dart';
+import '../services/tax_service.dart';
 
 enum StockAdjustmentType { receive, remove }
 
@@ -329,9 +330,22 @@ class _ManualStockAdjustmentDialogState
                             product.name,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          subtitle: Text(
-                            'Stock: ${product.stock} | Price: ${CurrencyUtils.formatCurrency(product.price)}',
-                            overflow: TextOverflow.ellipsis,
+                          subtitle: FutureBuilder<double>(
+                            future: TaxService.calculateSellingPrice(
+                              product.cost,
+                            ),
+                            builder: (context, snapshot) {
+                              if (snapshot.hasData) {
+                                return Text(
+                                  'Stock: ${product.stock} | Price: ${CurrencyUtils.formatCurrency(snapshot.data!)}',
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              }
+                              return Text(
+                                'Stock: ${product.stock} | Price: Calculating...',
+                                overflow: TextOverflow.ellipsis,
+                              );
+                            },
                           ),
                           trailing: Text(
                             product.barcode ?? 'No barcode',
@@ -371,8 +385,18 @@ class _ManualStockAdjustmentDialogState
                           overflow: TextOverflow.ellipsis,
                         ),
                         Text('Current Stock: ${_selectedProduct!.stock}'),
-                        Text(
-                          'Price: ${CurrencyUtils.formatCurrency(_selectedProduct!.price)}',
+                        FutureBuilder<double>(
+                          future: TaxService.calculateSellingPrice(
+                            _selectedProduct!.cost,
+                          ),
+                          builder: (context, snapshot) {
+                            if (snapshot.hasData) {
+                              return Text(
+                                'Price: ${CurrencyUtils.formatCurrency(snapshot.data!)}',
+                              );
+                            }
+                            return const Text('Price: Calculating...');
+                          },
                         ),
                         if (_selectedProduct!.barcode != null)
                           Text(

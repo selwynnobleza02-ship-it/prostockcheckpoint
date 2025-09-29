@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/inventory_provider.dart';
 import '../models/product.dart';
 import '../utils/constants.dart';
+import '../services/tax_service.dart';
 
 class AddProductDialog extends StatefulWidget {
   final Product? product;
@@ -247,7 +248,8 @@ class _AddProductDialogState extends State<AddProductDialog> {
 
   Widget _buildProfitMarginDisplay() {
     final cost = double.tryParse(_costController.text.trim()) ?? 0;
-    final price = cost * (1 + AppConstants.taxRate);
+
+    final price = TaxService.calculateSellingPriceSync(cost);
     final profit = price - cost;
     final margin = cost > 0 ? (profit / cost * 100) : 0;
 

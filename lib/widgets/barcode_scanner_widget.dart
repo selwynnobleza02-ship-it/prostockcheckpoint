@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/sales_provider.dart';
+import '../services/tax_service.dart';
 import '../models/product.dart';
 import '../models/loss_reason.dart';
 import 'add_product_dialog.dart';
@@ -767,7 +768,15 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Price: ₱${product.price.toStringAsFixed(2)}'),
+            FutureBuilder<double>(
+              future: TaxService.calculateSellingPrice(product.cost),
+              builder: (context, snapshot) {
+                if (snapshot.hasData) {
+                  return Text('Price: ₱${snapshot.data!.toStringAsFixed(2)}');
+                }
+                return const Text('Price: Calculating...');
+              },
+            ),
             Text('Stock: ${product.stock} available'),
             if (product.isLowStock)
               const Text(
@@ -798,7 +807,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     );
 
     if (action == 'add_to_cart' && product.stock > 0) {
-      salesProvider.addItemToCurrentSale(product, 1);
+      await salesProvider.addItemToCurrentSale(product, 1);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

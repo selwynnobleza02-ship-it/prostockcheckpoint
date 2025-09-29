@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:prostock/models/customer.dart';
+import 'package:prostock/widgets/confirmation_dialog.dart';
 
 class ManageBalanceDialog extends StatefulWidget {
   final Customer customer;
@@ -82,6 +83,23 @@ class _ManageBalanceDialogState extends State<ManageBalanceDialog> {
         ? amount
         : -amount;
 
+    // Show confirmation dialog
+    final confirmed = await showConfirmationDialog(
+      context: context,
+      title:
+          'Confirm Balance ${_selectedOperation == BalanceOperation.add ? 'Addition' : 'Deduction'}',
+      content:
+          'Are you sure you want to ${_selectedOperation == BalanceOperation.add ? 'add' : 'deduct'} ₱${amount.toStringAsFixed(2)} to/from ${widget.customer.name}\'s balance?\n\n'
+          'Current Balance: ₱${widget.customer.balance.toStringAsFixed(2)}\n'
+          'New Balance: ₱${_getNewBalance().toStringAsFixed(2)}',
+      confirmText: _selectedOperation == BalanceOperation.add
+          ? 'Add'
+          : 'Deduct',
+      cancelText: 'Cancel',
+    );
+
+    if (confirmed != true) return;
+
     setState(() {
       _isLoading = true;
     });
@@ -89,7 +107,9 @@ class _ManageBalanceDialogState extends State<ManageBalanceDialog> {
     try {
       await widget.onUpdateBalance(widget.customer.id, actualAmount);
       if (mounted) {
+        // Close dialog immediately after successful operation
         Navigator.of(context).pop(true);
+        // Show success message after dialog is closed
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(

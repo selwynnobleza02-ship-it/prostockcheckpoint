@@ -117,9 +117,7 @@ class CustomerService {
     double amountChange,
   ) async {
     try {
-      return await _firestore.runTransaction((
-        transaction,
-      ) async {
+      return await _firestore.runTransaction((transaction) async {
         final customerRef = customers.doc(customerId);
         final customerDoc = await transaction.get(customerRef);
 
@@ -150,11 +148,9 @@ class CustomerService {
     try {
       Query query = customers.orderBy('name');
 
-      if (searchQuery != null && searchQuery.isNotEmpty) {
-        query = query
-            .where('name', isGreaterThanOrEqualTo: searchQuery)
-            .where('name', isLessThan: '$searchQuery\ufff0');
-      }
+      // Note: We don't apply Firestore search filters here because they are case-sensitive
+      // and would miss results. Instead, we fetch all customers and filter client-side
+      // for better case-insensitive search results.
 
       if (lastDocument != null) {
         query = query.startAfterDocument(lastDocument);
@@ -165,6 +161,21 @@ class CustomerService {
       final snapshot = await query.get();
 
       final customersList = snapshot.docs.map(_customerFromDocument).toList();
+
+      // Apply client-side filtering for case-insensitive search
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        final filteredCustomers = customersList.where((customer) {
+          final query = searchQuery.toLowerCase();
+          return customer.name.toLowerCase().contains(query) ||
+              (customer.phone?.toLowerCase().contains(query) ?? false) ||
+              (customer.email?.toLowerCase().contains(query) ?? false);
+        }).toList();
+
+        return PaginatedResult(
+          items: filteredCustomers,
+          lastDocument: snapshot.docs.isNotEmpty ? snapshot.docs.last : null,
+        );
+      }
 
       return PaginatedResult(
         items: customersList,

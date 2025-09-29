@@ -3,6 +3,7 @@ import 'package:prostock/models/paginated_result.dart';
 import 'package:prostock/models/price_history.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/services/firestore/firestore_exception.dart';
+import 'package:prostock/services/tax_service.dart';
 import 'package:prostock/utils/app_constants.dart';
 import 'package:prostock/utils/constants.dart';
 
@@ -22,10 +23,7 @@ class ProductService {
   }
 
   bool _isValidProduct(Product product) {
-    return product.name.isNotEmpty &&
-        product.price >= 0 &&
-        product.cost >= 0 &&
-        product.stock >= 0;
+    return product.name.isNotEmpty && product.cost >= 0 && product.stock >= 0;
   }
 
   Future<void> insertProduct(Product product) async {
@@ -65,10 +63,11 @@ class ProductService {
       batch.set(productRef, product.toMap());
 
       final priceHistoryRef = priceHistory.doc();
+      final sellingPrice = await TaxService.calculateSellingPrice(product.cost);
       final priceHistoryData = PriceHistory(
         id: priceHistoryRef.id,
         productId: product.id!,
-        price: product.price,
+        price: sellingPrice,
         timestamp: DateTime.now(),
       ).toMap();
       batch.set(priceHistoryRef, priceHistoryData);
@@ -97,10 +96,13 @@ class ProductService {
 
       if (priceChanged) {
         final priceHistoryRef = priceHistory.doc();
+        final sellingPrice = await TaxService.calculateSellingPrice(
+          product.cost,
+        );
         final priceHistoryData = PriceHistory(
           id: priceHistoryRef.id,
           productId: product.id!,
-          price: product.price,
+          price: sellingPrice,
           timestamp: DateTime.now(),
         ).toMap();
         batch.set(priceHistoryRef, priceHistoryData);
