@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
+import 'package:prostock/models/credit_sale_item.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
@@ -71,6 +72,26 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
         );
       }
     }
+  }
+
+  List<Map<String, dynamic>> _groupItemsByProduct(List<CreditSaleItem> items) {
+    final Map<String, Map<String, dynamic>> grouped = {};
+
+    for (final item in items) {
+      if (grouped.containsKey(item.productId)) {
+        // Add to existing group
+        grouped[item.productId]!['totalQuantity'] += item.quantity;
+      } else {
+        // Create new group
+        grouped[item.productId] = {
+          'productId': item.productId,
+          'unitPrice': item.unitPrice,
+          'totalQuantity': item.quantity,
+        };
+      }
+    }
+
+    return grouped.values.toList();
   }
 
   @override
@@ -163,19 +184,21 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
                       // Show product details for credit sales
                       if (transaction.type == 'purchase' &&
                           transaction.items.isNotEmpty)
-                        ...transaction.items.map((item) {
+                        ..._groupItemsByProduct(transaction.items).map((
+                          groupedItem,
+                        ) {
                           final inventoryProvider =
                               Provider.of<InventoryProvider>(
                                 context,
                                 listen: false,
                               );
                           final product = inventoryProvider.getProductById(
-                            item.productId,
+                            groupedItem['productId'] as String,
                           );
                           final productName =
                               product?.name ?? 'Unknown Product';
                           return Text(
-                            '• ${item.quantity}x $productName (₱${item.unitPrice.toStringAsFixed(2)} each)',
+                            '• ${groupedItem['totalQuantity']}x $productName (₱${groupedItem['unitPrice'].toStringAsFixed(2)} each)',
                             style: const TextStyle(fontSize: 12),
                           );
                         })

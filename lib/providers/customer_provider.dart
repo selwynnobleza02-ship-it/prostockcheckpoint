@@ -54,8 +54,13 @@ class CustomerProvider with ChangeNotifier {
   }) async {
     if (_isLoading) return;
 
+    // Clear cache when search query changes to ensure fresh results
+    if (_currentSearchQuery != searchQuery) {
+      clearCache();
+    }
+
     if (!refresh && !_offlineManager.isOnline) {
-      await _loadCustomersFromLocalDB();
+      await _loadCustomersFromLocalDB(searchQuery: searchQuery);
       return;
     }
 
@@ -96,18 +101,25 @@ class CustomerProvider with ChangeNotifier {
         error: e,
         context: 'CustomerProvider.loadCustomers',
       );
-      await _loadCustomersFromLocalDB();
+      await _loadCustomersFromLocalDB(searchQuery: searchQuery);
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> _loadCustomersFromLocalDB() async {
+  Future<void> _loadCustomersFromLocalDB({String? searchQuery}) async {
     try {
       final db = await _localDatabaseService.database;
-      final maps = await db.query('customers');
-      _customers = maps.map((map) => Customer.fromMap(map)).toList();
+      final maps = await db.query('customers', orderBy: 'name ASC');
+      final allCustomers = maps.map((map) => Customer.fromMap(map)).toList();
+
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        // Apply case-insensitive search filtering
+        _customers = _filterCustomersLocally(allCustomers, searchQuery);
+      } else {
+        _customers = allCustomers;
+      }
     } catch (e) {
       _error = 'Failed to load customers from local database: ${e.toString()}';
       ErrorLogger.logError(
@@ -118,6 +130,20 @@ class CustomerProvider with ChangeNotifier {
     } finally {
       notifyListeners();
     }
+  }
+
+  List<Customer> _filterCustomersLocally(
+    List<Customer> customers,
+    String searchQuery,
+  ) {
+    final query = searchQuery.toLowerCase().trim();
+    if (query.isEmpty) return customers;
+
+    return customers.where((customer) {
+      return customer.name.toLowerCase().contains(query) ||
+          (customer.phone?.toLowerCase().contains(query) ?? false) ||
+          (customer.email?.toLowerCase().contains(query) ?? false);
+    }).toList();
   }
 
   Future<void> _cacheCustomersToLocalDB(List<Customer> customers) async {

@@ -72,14 +72,27 @@ class CreditTransaction {
 
   factory CreditTransaction.fromMap(Map<String, dynamic> map, String id) {
     // Handle both 'date' and 'createdAt' fields for backward compatibility
-    Timestamp? dateTimestamp =
-        map['date'] as Timestamp? ?? map['createdAt'] as Timestamp?;
+    // Support both Timestamp and String formats
+    DateTime? date;
+
+    final dateValue = map['date'] ?? map['createdAt'];
+    if (dateValue is Timestamp) {
+      date = dateValue.toDate();
+    } else if (dateValue is String) {
+      try {
+        date = DateTime.parse(dateValue);
+      } catch (e) {
+        date = DateTime.now();
+      }
+    } else {
+      date = DateTime.now();
+    }
 
     return CreditTransaction(
       id: id,
       customerId: map['customerId'] ?? '',
       amount: (map['amount'] ?? 0).toDouble(),
-      date: dateTimestamp?.toDate() ?? DateTime.now(),
+      date: date,
       type: map['type'] ?? '',
       notes: map['notes'] ?? '',
       items: _parseItems(map['items']),

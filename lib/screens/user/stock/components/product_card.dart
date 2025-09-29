@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/utils/currency_utils.dart';
+import 'package:prostock/services/tax_service.dart';
 
 class ProductCard extends StatelessWidget {
   final Product product;
@@ -51,12 +52,26 @@ class ProductCard extends StatelessWidget {
                     ),
                   ],
                   const SizedBox(height: 4),
-                  Text(
-                    CurrencyUtils.formatCurrency(product.price),
-                    style: TextStyle(
-                      color: Colors.teal[600],
-                      fontWeight: FontWeight.w500,
-                    ),
+                  FutureBuilder<double>(
+                    future: TaxService.calculateSellingPrice(product.cost),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasData) {
+                        return Text(
+                          CurrencyUtils.formatCurrency(snapshot.data!),
+                          style: TextStyle(
+                            color: Colors.teal[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        );
+                      }
+                      return Text(
+                        'Calculating...',
+                        style: TextStyle(
+                          color: Colors.teal[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

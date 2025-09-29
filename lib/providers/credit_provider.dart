@@ -130,21 +130,26 @@ class CreditProvider with ChangeNotifier {
       // Trigger immediate demand analysis after credit sale
       _triggerDemandAnalysis();
 
+      // Group items by product to avoid duplicates
+      final groupedItems = _groupItemsByProduct(items);
+
       return Receipt(
         saleId: localId,
         receiptNumber: localId,
         timestamp: transaction.date,
         customerName: customer.name,
         paymentMethod: 'credit',
-        items: items
+        items: groupedItems
             .map(
-              (item) => ReceiptItem(
+              (groupedItem) => ReceiptItem(
                 productName:
-                    _inventoryProvider.getProductById(item.productId)?.name ??
+                    _inventoryProvider
+                        .getProductById(groupedItem['productId'] as String)
+                        ?.name ??
                     'N/A',
-                quantity: item.quantity,
-                unitPrice: item.unitPrice,
-                totalPrice: item.totalPrice,
+                quantity: groupedItem['totalQuantity'] as int,
+                unitPrice: groupedItem['unitPrice'] as double,
+                totalPrice: groupedItem['totalPrice'] as double,
               ),
             )
             .toList(),
@@ -295,5 +300,30 @@ class CreditProvider with ChangeNotifier {
         );
       }
     });
+  }
+
+  List<Map<String, dynamic>> _groupItemsByProduct(List<SaleItem> items) {
+    final Map<String, Map<String, dynamic>> grouped = {};
+
+    for (final item in items) {
+      if (grouped.containsKey(item.productId)) {
+        // Add to existing group
+        final existing = grouped[item.productId]!;
+        existing['totalQuantity'] =
+            (existing['totalQuantity'] as int) + item.quantity;
+        existing['totalPrice'] =
+            (existing['totalPrice'] as double) + item.totalPrice;
+      } else {
+        // Create new group
+        grouped[item.productId] = {
+          'productId': item.productId,
+          'unitPrice': item.unitPrice,
+          'totalQuantity': item.quantity,
+          'totalPrice': item.totalPrice,
+        };
+      }
+    }
+
+    return grouped.values.toList();
   }
 }

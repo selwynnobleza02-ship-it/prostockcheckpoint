@@ -247,407 +247,423 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
           totalCost,
           averageInventoryValue,
         );
-        final potentialProfit = reportService.calculatePotentialInventoryProfit(
-          inventory.products,
-        );
+        // Calculate potential profit asynchronously
+        final potentialProfitFuture = reportService
+            .calculatePotentialInventoryProfit(inventory.products);
 
-        final topProducts = reportService.getTopSellingProductsByRevenue(
-          filteredSaleItems,
-          inventory.products,
-        );
+        return FutureBuilder<double>(
+          future: potentialProfitFuture,
+          builder: (context, snapshot) {
+            final potentialProfit = snapshot.hasData ? snapshot.data! : 0.0;
 
-        final lossBreakdown = reportService.getLossBreakdown(filteredLosses);
+            final topProducts = reportService.getTopSellingProductsByRevenue(
+              filteredSaleItems,
+              inventory.products,
+            );
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
+            final lossBreakdown = reportService.getLossBreakdown(
+              filteredLosses,
+            );
+
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  ElevatedButton.icon(
-                    icon: const Icon(Icons.picture_as_pdf),
-                    label: const Text('Export PDF'),
-                    onPressed: () async {
-                      try {
-                        final scaffold = ScaffoldMessenger.of(context);
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: const Text('Export PDF'),
+                        onPressed: () async {
+                          try {
+                            final scaffold = ScaffoldMessenger.of(context);
 
-                        // Show loading indicator
-                        scaffold.showSnackBar(
-                          const SnackBar(
-                            content: Text('Generating PDF...'),
-                            duration: Duration(seconds: 2),
-                          ),
-                        );
+                            // Show loading indicator
+                            scaffold.showSnackBar(
+                              const SnackBar(
+                                content: Text('Generating PDF...'),
+                                duration: Duration(seconds: 2),
+                              ),
+                            );
 
-                        final pdf = PdfReportService();
+                            final pdf = PdfReportService();
 
-                        // Calculate category revenue and cost using actual data
-                        final categoryRevenue = _calculateCategoryRevenue(
-                          filteredSaleItems,
-                        );
-                        final categoryCost = _calculateCategoryCost(
-                          filteredSaleItems,
-                          inventory.products,
-                        );
+                            // Calculate category revenue and cost using actual data
+                            final categoryRevenue = _calculateCategoryRevenue(
+                              filteredSaleItems,
+                            );
+                            final categoryCost = _calculateCategoryCost(
+                              filteredSaleItems,
+                              inventory.products,
+                            );
 
-                        // Build income section dynamically
-                        final incomeRows = <List<String>>[];
-                        final allCategories = [
-                          ...AppConstants.productCategories,
-                          'Unknown Products',
-                        ];
+                            // Build income section dynamically
+                            final incomeRows = <List<String>>[];
+                            final allCategories = [
+                              ...AppConstants.productCategories,
+                              'Unknown Products',
+                            ];
 
-                        for (final category in allCategories) {
-                          final revenue = categoryRevenue[category] ?? 0.0;
-                          if (revenue > 0) {
+                            for (final category in allCategories) {
+                              final revenue = categoryRevenue[category] ?? 0.0;
+                              if (revenue > 0) {
+                                incomeRows.add([
+                                  'Sales - $category',
+                                  CurrencyUtils.formatCurrency(revenue),
+                                ]);
+                              }
+                            }
                             incomeRows.add([
-                              'Sales - $category',
-                              CurrencyUtils.formatCurrency(revenue),
+                              'Total Sales',
+                              CurrencyUtils.formatCurrency(totalRevenue),
                             ]);
-                          }
-                        }
-                        incomeRows.add([
-                          'Total Sales',
-                          CurrencyUtils.formatCurrency(totalRevenue),
-                        ]);
 
-                        // Build COGS section dynamically
-                        final cogsRows = <List<String>>[];
-                        for (final category in allCategories) {
-                          final cost = categoryCost[category] ?? 0.0;
-                          if (cost > 0) {
+                            // Build COGS section dynamically
+                            final cogsRows = <List<String>>[];
+                            for (final category in allCategories) {
+                              final cost = categoryCost[category] ?? 0.0;
+                              if (cost > 0) {
+                                cogsRows.add([
+                                  category,
+                                  CurrencyUtils.formatCurrency(cost),
+                                ]);
+                              }
+                            }
                             cogsRows.add([
-                              category,
-                              CurrencyUtils.formatCurrency(cost),
+                              'Total COGS',
+                              CurrencyUtils.formatCurrency(totalCost),
                             ]);
+
+                            final sections = <PdfReportSection>[
+                              // 1. Income
+                              PdfReportSection(
+                                title: '1. Income',
+                                rows: incomeRows,
+                              ),
+
+                              // 2. Cost of Goods Sold
+                              PdfReportSection(
+                                title: '2. Cost of Goods Sold (COGS)',
+                                rows: cogsRows,
+                              ),
+                            ];
+
+                            final calculations = <PdfCalculationSection>[
+                              // 1. Total Revenue
+                              PdfCalculationSection(
+                                title: '1. Total Revenue',
+                                formula: 'Sum of all sales transactions',
+                                result: CurrencyUtils.formatCurrency(
+                                  totalRevenue,
+                                ),
+                              ),
+
+                              // 2. Cost of Goods Sold
+                              PdfCalculationSection(
+                                title: '2. Cost of Goods Sold',
+                                formula:
+                                    'Sum of product costs × quantities sold',
+                                result: CurrencyUtils.formatCurrency(totalCost),
+                              ),
+
+                              // 3. Total Losses
+                              PdfCalculationSection(
+                                title: '3. Total Losses',
+                                formula: 'Sum of damaged/expired items',
+                                result: CurrencyUtils.formatCurrency(totalLoss),
+                              ),
+
+                              // 4. Gross Profit
+                              PdfCalculationSection(
+                                title: '4. Gross Profit',
+                                formula:
+                                    '₱${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalLoss.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ₱${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                                result: CurrencyUtils.formatCurrency(
+                                  totalProfit,
+                                ),
+                              ),
+                            ];
+
+                            final summaries = <PdfSummarySection>[];
+                            final file = await pdf.generateFinancialReport(
+                              reportTitle: 'Financial Report - Sari-Sari Store',
+                              startDate: _startDate,
+                              endDate: _endDate,
+                              sections: sections,
+                              calculations: calculations,
+                              summaries: summaries,
+                            );
+
+                            if (!context.mounted) return;
+
+                            scaffold.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'PDF saved successfully: ${file.path}',
+                                ),
+                                backgroundColor: Colors.green,
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                          } catch (e) {
+                            ErrorLogger.logError(
+                              'PDF Export Error',
+                              error: e,
+                              context: 'FinancialReportTab.ExportPDF',
+                            );
+                            if (!context.mounted) return;
+
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error generating PDF: $e'),
+                                backgroundColor: Colors.red,
+                                duration: const Duration(seconds: 5),
+                              ),
+                            );
                           }
-                        }
-                        cogsRows.add([
-                          'Total COGS',
-                          CurrencyUtils.formatCurrency(totalCost),
-                        ]);
-
-                        final sections = <PdfReportSection>[
-                          // 1. Income
-                          PdfReportSection(
-                            title: '1. Income',
-                            rows: incomeRows,
-                          ),
-
-                          // 2. Cost of Goods Sold
-                          PdfReportSection(
-                            title: '2. Cost of Goods Sold (COGS)',
-                            rows: cogsRows,
-                          ),
-                        ];
-
-                        final calculations = <PdfCalculationSection>[
-                          // 1. Total Revenue
-                          PdfCalculationSection(
-                            title: '1. Total Revenue',
-                            formula: 'Sum of all sales transactions',
-                            result: CurrencyUtils.formatCurrency(totalRevenue),
-                          ),
-
-                          // 2. Cost of Goods Sold
-                          PdfCalculationSection(
-                            title: '2. Cost of Goods Sold',
-                            formula: 'Sum of product costs × quantities sold',
-                            result: CurrencyUtils.formatCurrency(totalCost),
-                          ),
-
-                          // 3. Total Losses
-                          PdfCalculationSection(
-                            title: '3. Total Losses',
-                            formula: 'Sum of damaged/expired items',
-                            result: CurrencyUtils.formatCurrency(totalLoss),
-                          ),
-
-                          // 4. Gross Profit
-                          PdfCalculationSection(
-                            title: '4. Gross Profit',
-                            formula:
-                                '₱${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalLoss.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ₱${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
-                            result: CurrencyUtils.formatCurrency(totalProfit),
-                          ),
-                        ];
-
-                        final summaries = <PdfSummarySection>[];
-                        final file = await pdf.generateFinancialReport(
-                          reportTitle: 'Financial Report - Sari-Sari Store',
-                          startDate: _startDate,
-                          endDate: _endDate,
-                          sections: sections,
-                          calculations: calculations,
-                          summaries: summaries,
-                        );
-
-                        if (!context.mounted) return;
-
-                        scaffold.showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              'PDF saved successfully: ${file.path}',
-                            ),
-                            backgroundColor: Colors.green,
-                            duration: const Duration(seconds: 4),
-                          ),
-                        );
-                      } catch (e) {
-                        ErrorLogger.logError(
-                          'PDF Export Error',
-                          error: e,
-                          context: 'FinancialReportTab.ExportPDF',
-                        );
-                        if (!context.mounted) return;
-
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error generating PDF: $e'),
-                            backgroundColor: Colors.red,
-                            duration: const Duration(seconds: 5),
-                          ),
-                        );
-                      }
-                    },
+                        },
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    _startDate == null
-                        ? 'All Time'
-                        : '${_startDate!.toLocal().toString().split(' ')[0]} - ${_endDate!.toLocal().toString().split(' ')[0]}',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        _startDate == null
+                            ? 'All Time'
+                            : '${_startDate!.toLocal().toString().split(' ')[0]} - ${_endDate!.toLocal().toString().split(' ')[0]}',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _selectDateRange(context),
+                        icon: const Icon(Icons.calendar_today),
+                        label: const Text('Select Date'),
+                      ),
+                    ],
                   ),
-                  TextButton.icon(
-                    onPressed: () => _selectDateRange(context),
-                    icon: const Icon(Icons.calendar_today),
-                    label: const Text('Select Date'),
-                  ),
-                ],
-              ),
 
-              // UPDATED: Expanded grid with new metrics
-              GridView.count(
-                crossAxisCount: 2,
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 1.5,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                children: [
-                  // Existing cards
+                  // UPDATED: Expanded grid with new metrics
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    childAspectRatio: 1.5,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    children: [
+                      // Existing cards
+                      buildSummaryCard(
+                        context,
+                        'Total Revenue',
+                        CurrencyUtils.formatCurrency(totalRevenue),
+                        Icons.trending_up,
+                        Colors.green,
+                      ),
+                      buildSummaryCard(
+                        context,
+                        'Total Cost',
+                        CurrencyUtils.formatCurrency(totalCost),
+                        Icons.trending_down,
+                        Colors.red,
+                      ),
+                      buildSummaryCard(
+                        context,
+                        'Total Loss',
+                        CurrencyUtils.formatCurrency(totalLoss),
+                        Icons.remove_shopping_cart,
+                        Colors.orange,
+                      ),
+                      buildSummaryCard(
+                        context,
+                        'Gross Profit',
+                        CurrencyUtils.formatCurrency(totalProfit),
+                        Icons.signal_cellular_alt,
+                        totalProfit >= 0 ? Colors.green : Colors.red,
+                      ),
+
+                      // NEW CARDS ADDED HERE
+                      buildSummaryCard(
+                        context,
+                        'Average Order',
+                        CurrencyUtils.formatCurrency(averageOrderValue),
+                        Icons.shopping_cart_checkout,
+                        Colors.purple,
+                      ),
+                      buildSummaryCard(
+                        context,
+                        'Markup %',
+                        '${markupPercentage.toStringAsFixed(1)}%',
+                        Icons.trending_up,
+                        Colors.indigo,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
                   buildSummaryCard(
                     context,
-                    'Total Revenue',
-                    CurrencyUtils.formatCurrency(totalRevenue),
-                    Icons.trending_up,
-                    Colors.green,
-                  ),
-                  buildSummaryCard(
-                    context,
-                    'Total Cost',
-                    CurrencyUtils.formatCurrency(totalCost),
-                    Icons.trending_down,
+                    'Outstanding Utang',
+                    CurrencyUtils.formatCurrency(outstandingUtang),
+                    Icons.credit_card,
                     Colors.red,
                   ),
-                  buildSummaryCard(
-                    context,
-                    'Total Loss',
-                    CurrencyUtils.formatCurrency(totalLoss),
-                    Icons.remove_shopping_cart,
-                    Colors.orange,
-                  ),
-                  buildSummaryCard(
-                    context,
-                    'Gross Profit',
-                    CurrencyUtils.formatCurrency(totalProfit),
-                    Icons.signal_cellular_alt,
-                    totalProfit >= 0 ? Colors.green : Colors.red,
-                  ),
 
-                  // NEW CARDS ADDED HERE
-                  buildSummaryCard(
-                    context,
-                    'Average Order',
-                    CurrencyUtils.formatCurrency(averageOrderValue),
-                    Icons.shopping_cart_checkout,
-                    Colors.purple,
-                  ),
-                  buildSummaryCard(
-                    context,
-                    'Markup %',
-                    '${markupPercentage.toStringAsFixed(1)}%',
-                    Icons.trending_up,
-                    Colors.indigo,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              buildSummaryCard(
-                context,
-                'Outstanding Utang',
-                CurrencyUtils.formatCurrency(outstandingUtang),
-                Icons.credit_card,
-                Colors.red,
-              ),
-
-              // NEW: Additional metrics row
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: buildSummaryCard(
-                      context,
-                      'Inventory Turnover',
-                      '${inventoryTurnover.toStringAsFixed(1)}x',
-                      Icons.sync,
-                      Colors.teal,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: buildSummaryCard(
-                      context,
-                      'Potential Profit',
-                      CurrencyUtils.formatCurrency(potentialProfit),
-                      Icons.account_balance_wallet,
-                      Colors.amber,
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // UPDATED: Enhanced Profit Analysis section
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Profit Analysis',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
+                  // NEW: Additional metrics row
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: buildSummaryCard(
+                          context,
+                          'Inventory Turnover',
+                          '${inventoryTurnover.toStringAsFixed(1)}x',
+                          Icons.sync,
+                          Colors.teal,
+                        ),
                       ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: buildSummaryCard(
+                          context,
+                          'Potential Profit',
+                          CurrencyUtils.formatCurrency(potentialProfit),
+                          Icons.account_balance_wallet,
+                          Colors.amber,
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // UPDATED: Enhanced Profit Analysis section
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(8),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Flexible(
-                          child: Text(
-                            'Profit Margin:',
-                            overflow: TextOverflow.ellipsis,
+                        const Text(
+                          'Profit Analysis',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Flexible(
-                          child: Text(
-                            '${profitMargin.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: totalProfit >= 0
-                                  ? Colors.green
-                                  : Colors.red,
+                        const SizedBox(height: 12),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Flexible(
+                              child: Text(
+                                'Profit Margin:',
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    // NEW: Markup Percentage row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Flexible(
-                          child: Text(
-                            'Markup Percentage:',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            '${markupPercentage.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: totalProfit >= 0
-                                  ? Colors.green
-                                  : Colors.red,
+                            Flexible(
+                              child: Text(
+                                '${profitMargin.toStringAsFixed(1)}%',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: totalProfit >= 0
+                                      ? Colors.green
+                                      : Colors.red,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Flexible(
-                          child: Text(
-                            'Return on Investment:',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            '${roi.toStringAsFixed(1)}%',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: totalProfit >= 0
-                                  ? Colors.green
-                                  : Colors.red,
+                        const SizedBox(height: 4),
+                        // NEW: Markup Percentage row
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Flexible(
+                              child: Text(
+                                'Markup Percentage:',
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
+                            Flexible(
+                              child: Text(
+                                '${markupPercentage.toStringAsFixed(1)}%',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: totalProfit >= 0
+                                      ? Colors.green
+                                      : Colors.red,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Flexible(
+                              child: Text(
+                                'Return on Investment:',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Flexible(
+                              child: Text(
+                                '${roi.toStringAsFixed(1)}%',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: totalProfit >= 0
+                                      ? Colors.green
+                                      : Colors.red,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        // NEW: Stock Turns Per Year
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Flexible(
+                              child: Text(
+                                'Stock Turns/Year:',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Flexible(
+                              child: Text(
+                                '${_calculateAnnualizedTurnover(inventoryTurnover).toStringAsFixed(1)}x',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    // NEW: Stock Turns Per Year
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Flexible(
-                          child: Text(
-                            'Stock Turns/Year:',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            '${_calculateAnnualizedTurnover(inventoryTurnover).toStringAsFixed(1)}x',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 24),
+                  TopSellingProductsList(
+                    topProducts: topProducts.map((entry) => entry.key).toList(),
+                    saleItems: filteredSaleItems,
+                  ),
+                  const SizedBox(height: 24),
+                  LossBreakdownList(lossBreakdown: lossBreakdown),
+                ],
               ),
-              const SizedBox(height: 24),
-              TopSellingProductsList(
-                topProducts: topProducts.map((entry) => entry.key).toList(),
-                saleItems: filteredSaleItems,
-              ),
-              const SizedBox(height: 24),
-              LossBreakdownList(lossBreakdown: lossBreakdown),
-            ],
-          ),
+            );
+          },
         );
       },
     );

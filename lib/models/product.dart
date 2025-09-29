@@ -1,4 +1,3 @@
-import '../utils/constants.dart';
 import 'package:prostock/utils/app_constants.dart';
 
 class Product {
@@ -28,7 +27,8 @@ class Product {
     _validateProduct();
   }
 
-  double get price => cost * (1 + AppConstants.taxRate);
+  // Price calculation moved to UI level using TaxService
+  // This allows dynamic tax rate configuration
 
   void _validateProduct() {
     if (name.trim().isEmpty) {
@@ -51,7 +51,8 @@ class Product {
         throw ArgumentError('Invalid barcode format');
       }
     }
-    if (category != null && category!.length > ValidationConstants.maxCategoryLength) {
+    if (category != null &&
+        category!.length > ValidationConstants.maxCategoryLength) {
       throw ArgumentError('Category name cannot exceed 50 characters');
     }
   }
@@ -62,9 +63,8 @@ class Product {
     return barcodeRegex.hasMatch(barcode);
   }
 
-  bool get isValidForSale => stock > 0 && price > 0;
-  bool get hasValidProfitMargin => price > cost;
-  double get profitMargin => price > 0 ? ((price - cost) / price) * 100 : 0;
+  // Price-dependent methods moved to UI level using TaxService
+  // This allows dynamic tax rate configuration
 
   Map<String, dynamic> toMap() {
     return {

@@ -5,6 +5,7 @@ import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/utils/app_constants.dart';
 import 'package:prostock/utils/currency_utils.dart';
+import 'package:prostock/services/tax_service.dart';
 
 class ProductGridView extends StatelessWidget {
   const ProductGridView({super.key});
@@ -97,9 +98,9 @@ class ProductGridView extends StatelessWidget {
             final isQueued = !provider.isOnline;
             return Card(
               child: InkWell(
-                onTap: () {
+                onTap: () async {
                   if (!isOutOfStock) {
-                    Provider.of<SalesProvider>(
+                    await Provider.of<SalesProvider>(
                       context,
                       listen: false,
                     ).addItemToCurrentSale(product, 1);
@@ -139,7 +140,11 @@ class ProductGridView extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                           ),
                           Text(
-                            CurrencyUtils.formatCurrency(product.price),
+                            CurrencyUtils.formatCurrency(
+                              TaxService.calculateSellingPriceSync(
+                                product.cost,
+                              ),
+                            ),
                             style: const TextStyle(
                               color: Colors.green,
                               fontWeight: FontWeight.bold,

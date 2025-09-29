@@ -19,6 +19,7 @@ import 'inventory_provider.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/services/demand_analysis_service.dart';
 import 'package:prostock/services/notification_service.dart';
+import 'package:prostock/services/tax_service.dart';
 
 class SalesProvider with ChangeNotifier {
   List<Sale> _sales = [];
@@ -213,7 +214,7 @@ class SalesProvider with ChangeNotifier {
     _cacheTimestamps.clear();
   }
 
-  void addItemToCurrentSale(Product product, int quantity) {
+  Future<void> addItemToCurrentSale(Product product, int quantity) async {
     if (quantity <= 0) {
       _error = 'Invalid quantity';
       notifyListeners();
@@ -231,6 +232,7 @@ class SalesProvider with ChangeNotifier {
       return;
     }
 
+    final price = await TaxService.calculateSellingPrice(product.cost);
     final existingIndex = _currentSaleItems.indexWhere(
       (item) => item.productId == product.id,
     );
@@ -243,8 +245,8 @@ class SalesProvider with ChangeNotifier {
         saleId: existingItem.saleId,
         productId: product.id!,
         quantity: newQuantity,
-        unitPrice: product.price,
-        totalPrice: product.price * newQuantity,
+        unitPrice: price,
+        totalPrice: price * newQuantity,
       );
     } else {
       _currentSaleItems.add(
@@ -252,8 +254,8 @@ class SalesProvider with ChangeNotifier {
           saleId: '',
           productId: product.id!,
           quantity: quantity,
-          unitPrice: product.price,
-          totalPrice: product.price * quantity,
+          unitPrice: price,
+          totalPrice: price * quantity,
         ),
       );
     }
@@ -271,7 +273,7 @@ class SalesProvider with ChangeNotifier {
     }
   }
 
-  void updateItemQuantity(int index, int newQuantity) {
+  Future<void> updateItemQuantity(int index, int newQuantity) async {
     if (index < 0 || index >= _currentSaleItems.length) {
       _error = 'Invalid item index';
       notifyListeners();
@@ -316,9 +318,10 @@ class SalesProvider with ChangeNotifier {
         );
       }
 
+      final price = await TaxService.calculateSellingPrice(product.cost);
       _currentSaleItems[index] = currentItem.copyWith(
         quantity: newQuantity,
-        totalPrice: product.price * newQuantity,
+        totalPrice: price * newQuantity,
       );
     }
     _error = null;
@@ -514,15 +517,20 @@ class SalesProvider with ChangeNotifier {
     String? customerId,
     String paymentMethod,
   ) {
+    // Group items by product to avoid duplicates
+    final groupedItems = _groupItemsByProduct(_currentSaleItems);
+
     final List<ReceiptItem> receiptItems = [];
-    for (final item in _currentSaleItems) {
-      final product = _inventoryProvider.getProductById(item.productId);
+    for (final groupedItem in groupedItems) {
+      final product = _inventoryProvider.getProductById(
+        groupedItem['productId'] as String,
+      );
       receiptItems.add(
         ReceiptItem(
           productName: product?.name ?? 'Unknown Product',
-          quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          totalPrice: item.totalPrice,
+          quantity: groupedItem['totalQuantity'] as int,
+          unitPrice: groupedItem['unitPrice'] as double,
+          totalPrice: groupedItem['totalPrice'] as double,
         ),
       );
     }
@@ -552,6 +560,31 @@ class SalesProvider with ChangeNotifier {
     _currentSaleItems.clear();
     _error = null;
     notifyListeners();
+  }
+
+  List<Map<String, dynamic>> _groupItemsByProduct(List<SaleItem> items) {
+    final Map<String, Map<String, dynamic>> grouped = {};
+
+    for (final item in items) {
+      if (grouped.containsKey(item.productId)) {
+        // Add to existing group
+        final existing = grouped[item.productId]!;
+        existing['totalQuantity'] =
+            (existing['totalQuantity'] as int) + item.quantity;
+        existing['totalPrice'] =
+            (existing['totalPrice'] as double) + item.totalPrice;
+      } else {
+        // Create new group
+        grouped[item.productId] = {
+          'productId': item.productId,
+          'unitPrice': item.unitPrice,
+          'totalQuantity': item.quantity,
+          'totalPrice': item.totalPrice,
+        };
+      }
+    }
+
+    return grouped.values.toList();
   }
 
   Future<Map<String, dynamic>?> getSalesAnalytics({

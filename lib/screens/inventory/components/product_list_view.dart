@@ -4,6 +4,7 @@ import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/add_product_dialog.dart';
 import 'package:prostock/widgets/price_history_dialog.dart';
+import 'package:prostock/services/tax_service.dart';
 import 'package:provider/provider.dart';
 
 class ProductListView extends StatelessWidget {
@@ -105,8 +106,16 @@ class ProductListView extends StatelessWidget {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'Price: ${CurrencyUtils.formatCurrency(product.price)}',
+                      FutureBuilder<double>(
+                        future: TaxService.calculateSellingPrice(product.cost),
+                        builder: (context, snapshot) {
+                          if (snapshot.hasData) {
+                            return Text(
+                              'Price: ${CurrencyUtils.formatCurrency(snapshot.data!)}',
+                            );
+                          }
+                          return const Text('Price: Calculating...');
+                        },
                       ),
                       Text(
                         'Stock: $visualStock',

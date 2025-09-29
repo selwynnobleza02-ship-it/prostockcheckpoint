@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import 'components/change_password_screen.dart';
 import 'components/printer_settings_screen.dart';
+import 'components/tax_rules_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -44,6 +45,16 @@ class SettingsScreen extends StatelessWidget {
                 MaterialPageRoute(
                   builder: (context) => const PrinterSettingsScreen(),
                 ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.rule),
+            title: const Text('Markup Rules'),
+            subtitle: const Text('Category & product-specific markups'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const TaxRulesScreen()),
               );
             },
           ),

@@ -4,6 +4,7 @@ import 'package:prostock/models/product.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/models/stock_movement.dart';
+import 'package:prostock/services/tax_service.dart';
 
 class ReportService {
   // Sales calculations
@@ -183,20 +184,28 @@ class ReportService {
 
   /// Calculate total inventory value using selling price (for retail/market value)
   /// This represents potential revenue if all inventory is sold at current prices
-  double calculateTotalInventoryRetailValue(List<Product> products) {
-    return products.fold(
-      0.0,
-      (sum, product) => sum + (product.price * product.stock),
-    );
+  Future<double> calculateTotalInventoryRetailValue(
+    List<Product> products,
+  ) async {
+    double total = 0.0;
+    for (final product in products) {
+      final price = await TaxService.calculateSellingPrice(product.cost);
+      total += price * product.stock;
+    }
+    return total;
   }
 
   /// Calculate potential profit from current inventory
   /// This shows how much profit you could make if all current stock is sold
-  double calculatePotentialInventoryProfit(List<Product> products) {
-    return products.fold(
-      0.0,
-      (sum, product) => sum + ((product.price - product.cost) * product.stock),
-    );
+  Future<double> calculatePotentialInventoryProfit(
+    List<Product> products,
+  ) async {
+    double total = 0.0;
+    for (final product in products) {
+      final price = await TaxService.calculateSellingPrice(product.cost);
+      total += (price - product.cost) * product.stock;
+    }
+    return total;
   }
 
   /// Get top selling products by quantity sold

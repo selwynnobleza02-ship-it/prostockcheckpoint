@@ -15,6 +15,7 @@ import '../utils/error_logger.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/providers/auth_provider.dart'; // New import
 import 'package:prostock/services/notification_service.dart';
+import 'package:prostock/services/tax_service.dart';
 
 class InventoryProvider with ChangeNotifier {
   List<Product> _products = [];
@@ -253,10 +254,13 @@ class InventoryProvider with ChangeNotifier {
               timestamp: DateTime.now(),
             ),
           );
+          final sellingPrice = await TaxService.calculateSellingPrice(
+            newProduct.cost,
+          );
           final priceHistory = PriceHistory(
             id: const Uuid().v4(),
             productId: newProduct.id!,
-            price: newProduct.price,
+            price: sellingPrice,
             timestamp: DateTime.now(),
           );
           await _offlineManager.queueOperation(
@@ -281,10 +285,13 @@ class InventoryProvider with ChangeNotifier {
             timestamp: DateTime.now(),
           ),
         );
+        final sellingPrice = await TaxService.calculateSellingPrice(
+          newProduct.cost,
+        );
         final priceHistory = PriceHistory(
           id: const Uuid().v4(),
           productId: newProduct.id!,
-          price: newProduct.price,
+          price: sellingPrice,
           timestamp: DateTime.now(),
         );
         await _offlineManager.queueOperation(
@@ -358,7 +365,7 @@ class InventoryProvider with ChangeNotifier {
 
         final bool priceChanged =
             originalProduct != null &&
-            originalProduct.price != productToUpdate.price;
+            originalProduct.cost != productToUpdate.cost;
 
         await productService.updateProductWithPriceHistory(
           productToUpdate,
@@ -398,11 +405,14 @@ class InventoryProvider with ChangeNotifier {
         );
 
         if (originalProduct != null &&
-            originalProduct.price != updatedProduct.price) {
+            originalProduct.cost != updatedProduct.cost) {
+          final sellingPrice = await TaxService.calculateSellingPrice(
+            updatedProduct.cost,
+          );
           final priceHistory = PriceHistory(
             id: const Uuid().v4(),
             productId: updatedProduct.id!,
-            price: updatedProduct.price,
+            price: sellingPrice,
             timestamp: DateTime.now(),
           );
           await _offlineManager.queueOperation(

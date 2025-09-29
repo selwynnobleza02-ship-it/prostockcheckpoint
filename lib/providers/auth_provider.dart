@@ -256,6 +256,31 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> canDeleteUser(AppUser user) async {
+    try {
+      // Cannot delete current user
+      if (user.id == _currentUser?.id) {
+        return false;
+      }
+
+      // Cannot delete last admin
+      final allUsers = await getAllUsersList();
+      final adminCount = allUsers.where((u) => u.role == UserRole.admin).length;
+      if (user.role == UserRole.admin && adminCount <= 1) {
+        return false;
+      }
+
+      return true;
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error checking if user can be deleted',
+        error: e,
+        context: 'AuthProvider.canDeleteUser',
+      );
+      return false;
+    }
+  }
+
   Future<bool> createUser(
     String username,
     String email,
@@ -306,7 +331,10 @@ class AuthProvider with ChangeNotifier {
         if (credential.user != null) {
           await credential.user!.sendEmailVerification();
           await credential.user!.updateDisplayName(username.trim());
-          await logActivity('CREATE_USER', details: 'User $username created');
+          await logActivity(
+            'CREATE_USER',
+            details: 'User $username created with role ${role.displayName}',
+          );
           _error =
               'A verification email has been sent to your email address. Please verify your email to login.';
           return true;
@@ -424,30 +452,176 @@ class AuthProvider with ChangeNotifier {
     }
   }
 
-  Future<void> updateUserRole(AppUser user, UserRole newRole) async {
+  Future<bool> updateUserRole(AppUser user, UserRole newRole) async {
     try {
+      // Clear previous error
+      _error = null;
+
+      // Validate that user exists and role change is valid
+      if (user.id == null) {
+        _error = 'Invalid user ID';
+        return false;
+      }
+
+      // Prevent changing role of current user to non-admin if they're the last admin
+      if (user.id == _currentUser?.id && newRole != UserRole.admin) {
+        final allUsers = await getAllUsersList();
+        final adminCount = allUsers
+            .where((u) => u.role == UserRole.admin)
+            .length;
+        if (adminCount <= 1) {
+          _error = 'Cannot remove admin role from the last admin user';
+          return false;
+        }
+      }
+
       final updatedUser = user.copyWith(role: newRole);
       await _userService.updateUser(updatedUser);
+
+      // Log the activity
+      await logActivity(
+        'UPDATE_USER_ROLE',
+        details: 'Changed role of ${user.username} to ${newRole.displayName}',
+      );
+
       notifyListeners();
+      return true;
     } catch (e) {
+      _error = 'Failed to update user role: ${e.toString()}';
       ErrorLogger.logError(
         'Error updating user role',
         error: e,
         context: 'AuthProvider.updateUserRole',
       );
+      return false;
     }
   }
 
-  Future<void> deleteUser(AppUser user) async {
+  Future<bool> deleteUser(AppUser user) async {
     try {
-      await _userService.deleteUser(user.id!);
+      // Clear previous error
+      _error = null;
+
+      // Validate that user exists
+      if (user.id == null) {
+        _error = 'Invalid user ID';
+        return false;
+      }
+
+      // Prevent deleting current user
+      if (user.id == _currentUser?.id) {
+        _error = 'Cannot delete your own account';
+        return false;
+      }
+
+      // Prevent deleting last admin
+      final allUsers = await getAllUsersList();
+      final adminCount = allUsers.where((u) => u.role == UserRole.admin).length;
+      if (user.role == UserRole.admin && adminCount <= 1) {
+        _error = 'Cannot delete the last admin user';
+        return false;
+      }
+
+      // Soft delete - deactivate user instead of hard delete
+      final deactivatedUser = user.copyWith(isActive: false);
+      await _userService.updateUser(deactivatedUser);
+
+      // Log the activity
+      await logActivity(
+        'DEACTIVATE_USER',
+        details: 'Deactivated user ${user.username} (${user.email})',
+      );
+
       notifyListeners();
+      return true;
     } catch (e) {
+      _error = 'Failed to deactivate user: ${e.toString()}';
       ErrorLogger.logError(
-        'Error deleting user',
+        'Error deactivating user',
         error: e,
         context: 'AuthProvider.deleteUser',
       );
+      return false;
+    }
+  }
+
+  Future<bool> restoreUser(AppUser user) async {
+    try {
+      // Clear previous error
+      _error = null;
+
+      // Validate that user exists
+      if (user.id == null) {
+        _error = 'Invalid user ID';
+        return false;
+      }
+
+      // Restore user - reactivate user
+      final restoredUser = user.copyWith(isActive: true);
+      await _userService.updateUser(restoredUser);
+
+      // Log the activity
+      await logActivity(
+        'RESTORE_USER',
+        details: 'Restored user ${user.username} (${user.email})',
+      );
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Failed to restore user: ${e.toString()}';
+      ErrorLogger.logError(
+        'Error restoring user',
+        error: e,
+        context: 'AuthProvider.restoreUser',
+      );
+      return false;
+    }
+  }
+
+  Future<bool> hardDeleteUser(AppUser user) async {
+    try {
+      // Clear previous error
+      _error = null;
+
+      // Validate that user exists
+      if (user.id == null) {
+        _error = 'Invalid user ID';
+        return false;
+      }
+
+      // Prevent deleting current user
+      if (user.id == _currentUser?.id) {
+        _error = 'Cannot delete your own account';
+        return false;
+      }
+
+      // Prevent deleting last admin
+      final allUsers = await getAllUsersList();
+      final adminCount = allUsers.where((u) => u.role == UserRole.admin).length;
+      if (user.role == UserRole.admin && adminCount <= 1) {
+        _error = 'Cannot delete the last admin user';
+        return false;
+      }
+
+      await _userService.deleteUser(user.id!);
+
+      // Log the activity
+      await logActivity(
+        'HARD_DELETE_USER',
+        details: 'Permanently deleted user ${user.username} (${user.email})',
+      );
+
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _error = 'Failed to delete user: ${e.toString()}';
+      ErrorLogger.logError(
+        'Error deleting user',
+        error: e,
+        context: 'AuthProvider.hardDeleteUser',
+      );
+      return false;
     }
   }
 }

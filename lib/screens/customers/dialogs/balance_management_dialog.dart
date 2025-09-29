@@ -128,7 +128,9 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
 
                   if (success) {
                     if (context.mounted) {
+                      // Close dialog immediately after successful payment
                       Navigator.pop(context);
+                      // Show success message after dialog is closed
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(

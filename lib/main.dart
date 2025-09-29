@@ -2,6 +2,7 @@ import 'package:prostock/services/credit_check_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/notification_service.dart';
 import 'package:prostock/services/printing_service.dart';
+import 'package:prostock/services/tax_service.dart';
 import 'package:flutter/material.dart';
 import 'package:prostock/providers/sync_failure_provider.dart';
 import 'package:prostock/providers/stock_movement_provider.dart';
@@ -38,6 +39,10 @@ void main() async {
   GlobalErrorHandler.initialize();
 
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Initialize TaxService
+  await TaxService.initialize();
+
   final syncFailureProvider = SyncFailureProvider();
   final offlineManager = OfflineManager(syncFailureProvider);
   await offlineManager.initialize();
@@ -160,6 +165,7 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(create: (_) => StockMovementProvider()),
         ChangeNotifierProvider(create: (_) => PrintingService()),
+        ChangeNotifierProvider(create: (_) => TaxService()),
       ],
       child: const RetailCreditApp(),
     );

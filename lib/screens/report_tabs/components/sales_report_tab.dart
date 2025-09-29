@@ -21,17 +21,21 @@ class SalesReportTab extends StatelessWidget {
         );
         final totalTransactions = provider.sales.length;
 
-        // Calculate weekly sales
-        final weekStartDate = DateTime.now().subtract(
-          Duration(days: DateTime.now().weekday - 1),
+        // Calculate weekly sales (normalize to start of day, inclusive start)
+        final nowTs = DateTime.now();
+        final todayStart = DateTime(nowTs.year, nowTs.month, nowTs.day);
+        final weekStartDate = todayStart.subtract(
+          Duration(days: todayStart.weekday - 1), // Monday 00:00
         );
-        final weekEndDate = weekStartDate.add(const Duration(days: 6));
+        final weekEndDateExclusive = weekStartDate.add(
+          const Duration(days: 7),
+        ); // next Monday 00:00
         final weeklySales = provider.sales
             .where((sale) {
-              return sale.createdAt.isAfter(weekStartDate) &&
-                  sale.createdAt.isBefore(
-                    weekEndDate.add(const Duration(days: 1)),
-                  );
+              final ts = sale.createdAt;
+              return (ts.isAtSameMomentAs(weekStartDate) ||
+                      ts.isAfter(weekStartDate)) &&
+                  ts.isBefore(weekEndDateExclusive);
             })
             .fold(0.0, (sum, sale) => sum + sale.totalAmount);
 
