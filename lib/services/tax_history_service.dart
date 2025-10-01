@@ -1,5 +1,6 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:developer' as developer;
 import '../models/tax_settings_history.dart';
 
 class TaxHistoryService {
@@ -44,7 +45,10 @@ class TaxHistoryService {
       await prefs.setString(_historyKey, jsonEncode(historyList));
     } catch (e) {
       // Silently fail - history is not critical
-      print('Failed to save tax history: $e');
+      developer.log(
+        'Failed to save tax history: $e',
+        name: 'TaxHistoryService',
+      );
     }
   }
 
@@ -75,7 +79,10 @@ class TaxHistoryService {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_historyKey);
     } catch (e) {
-      print('Failed to clear tax history: $e');
+      developer.log(
+        'Failed to clear tax history: $e',
+        name: 'TaxHistoryService',
+      );
     }
   }
 }

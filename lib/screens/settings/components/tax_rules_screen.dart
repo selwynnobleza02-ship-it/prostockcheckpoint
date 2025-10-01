@@ -478,6 +478,8 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
       await inventoryProvider.loadProducts();
     }
 
+    if (!mounted) return;
+
     final products = inventoryProvider.products;
 
     final selectedProduct = await showDialog<Product>(

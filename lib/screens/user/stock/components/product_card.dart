@@ -53,7 +53,11 @@ class ProductCard extends StatelessWidget {
                   ],
                   const SizedBox(height: 4),
                   FutureBuilder<double>(
-                    future: TaxService.calculateSellingPrice(product.cost),
+                    future: TaxService.calculateSellingPriceWithRule(
+                      product.cost,
+                      productId: product.id,
+                      categoryName: product.category,
+                    ),
                     builder: (context, snapshot) {
                       if (snapshot.hasData) {
                         return Text(

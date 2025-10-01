@@ -15,7 +15,11 @@ class InventoryChart extends StatelessWidget {
     final categoryData = <String, double>{};
     for (final product in products) {
       final category = product.category ?? 'Uncategorized';
-      final price = await TaxService.calculateSellingPrice(product.cost);
+      final price = await TaxService.calculateSellingPriceWithRule(
+        product.cost,
+        productId: product.id,
+        categoryName: product.category,
+      );
       final value = price * product.stock;
       categoryData[category] = (categoryData[category] ?? 0) + value;
     }

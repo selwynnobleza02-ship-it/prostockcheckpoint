@@ -232,7 +232,11 @@ class SalesProvider with ChangeNotifier {
       return;
     }
 
-    final price = await TaxService.calculateSellingPrice(product.cost);
+    final price = await TaxService.calculateSellingPriceWithRule(
+      product.cost,
+      productId: product.id,
+      categoryName: product.category,
+    );
     final existingIndex = _currentSaleItems.indexWhere(
       (item) => item.productId == product.id,
     );
@@ -318,7 +322,11 @@ class SalesProvider with ChangeNotifier {
         );
       }
 
-      final price = await TaxService.calculateSellingPrice(product.cost);
+      final price = await TaxService.calculateSellingPriceWithRule(
+        product.cost,
+        productId: product.id,
+        categoryName: product.category,
+      );
       _currentSaleItems[index] = currentItem.copyWith(
         quantity: newQuantity,
         totalPrice: price * newQuantity,
