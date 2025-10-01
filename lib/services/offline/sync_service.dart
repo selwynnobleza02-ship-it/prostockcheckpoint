@@ -230,10 +230,8 @@ class SyncService {
             .map((item) => SaleItem.fromMap(item as Map<String, dynamic>))
             .toList();
 
-        unawaited(_localDatabaseService.insertSale(sale.copyWith(isSynced: 1)));
-        for (final item in saleItems) {
-          unawaited(_localDatabaseService.insertSaleItem(item));
-        }
+        // Avoid duplicating local data: just mark as synced instead of re-inserting
+        unawaited(_localDatabaseService.markSaleAsSynced(sale.id!));
 
         final List<Map<String, dynamic>> operations = [];
 

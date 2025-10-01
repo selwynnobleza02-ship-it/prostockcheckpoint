@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
-import 'package:prostock/models/product.dart';
+// import 'package:prostock/models/product.dart';
 import 'package:prostock/providers/stock_movement_provider.dart';
 import 'package:prostock/services/report_service.dart';
 import 'package:provider/provider.dart';
@@ -10,7 +10,7 @@ import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
-import 'package:prostock/utils/constants.dart';
+// import 'package:prostock/utils/constants.dart';
 
 import 'package:prostock/widgets/loss_breakdown_list.dart';
 import 'package:prostock/widgets/report_helpers.dart';
@@ -83,95 +83,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
     }
   }
 
-  String _getProductCategory(String productId) {
-    try {
-      final product = Provider.of<InventoryProvider>(context, listen: false)
-          .products
-          .firstWhere(
-            (p) => p.id == productId,
-            orElse: () => throw Exception('Product not found: $productId'),
-          );
+  // Category lookup removed for product-level export
 
-      // Use the actual category from the product, fallback to 'Others (Iba pa)' if null
-      return product.category ?? 'Others (Iba pa)';
-    } catch (e) {
-      ErrorLogger.logError(
-        'Error categorizing product',
-        error: e,
-        context: 'FinancialReportTab._getProductCategory',
-        metadata: {'productId': productId},
-      );
-      return 'Others (Iba pa)'; // Default fallback
-    }
-  }
-
-  Map<String, double> _calculateCategoryRevenue(List<SaleItem> saleItems) {
-    final Map<String, double> categoryRevenue = {};
-
-    for (final item in saleItems) {
-      try {
-        final category = _getProductCategory(item.productId);
-        categoryRevenue[category] =
-            (categoryRevenue[category] ?? 0) + item.totalPrice;
-      } catch (e) {
-        ErrorLogger.logError(
-          'Error calculating category revenue for product',
-          error: e,
-          context: 'FinancialReportTab._calculateCategoryRevenue',
-          metadata: {'productId': item.productId},
-        );
-        // Add to "Unknown Products" category
-        categoryRevenue['Unknown Products'] =
-            (categoryRevenue['Unknown Products'] ?? 0) + item.totalPrice;
-      }
-    }
-
-    return categoryRevenue;
-  }
-
-  Map<String, double> _calculateCategoryCost(
-    List<SaleItem> saleItems,
-    List<Product> products,
-  ) {
-    final Map<String, double> categoryCost = {};
-    final productMap = {for (var p in products) p.id: p};
-
-    for (final item in saleItems) {
-      try {
-        final category = _getProductCategory(item.productId);
-        final product = productMap[item.productId];
-
-        if (product != null) {
-          // Use actual product cost instead of assumed percentages
-          final itemCost = product.cost * item.quantity;
-          categoryCost[category] = (categoryCost[category] ?? 0) + itemCost;
-        } else {
-          ErrorLogger.logInfo(
-            'Product not found for sale item, using estimated cost',
-            context: 'FinancialReportTab._calculateCategoryCost',
-            metadata: {'productId': item.productId},
-          );
-          // Add to "Unknown Products" category with estimated cost
-          final estimatedCost = item.totalPrice * 0.6; // Assume 60% cost ratio
-          categoryCost['Unknown Products'] =
-              (categoryCost['Unknown Products'] ?? 0) + estimatedCost;
-        }
-      } catch (e) {
-        ErrorLogger.logError(
-          'Error calculating category cost for product',
-          error: e,
-          context: 'FinancialReportTab._calculateCategoryCost',
-          metadata: {'productId': item.productId},
-        );
-        // Add to "Unknown Products" category with estimated cost
-        final estimatedCost = item.totalPrice * 0.6; // Assume 60% cost ratio
-        categoryCost['Unknown Products'] =
-            (categoryCost['Unknown Products'] ?? 0) + estimatedCost;
-      }
-    }
-
-    return categoryCost;
-  }
+  // Category helpers removed for product-level PDF export
 
   @override
   Widget build(BuildContext context) {
@@ -290,49 +204,77 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
                             final pdf = PdfReportService();
 
-                            // Calculate category revenue and cost using actual data
-                            final categoryRevenue = _calculateCategoryRevenue(
-                              filteredSaleItems,
-                            );
-                            final categoryCost = _calculateCategoryCost(
-                              filteredSaleItems,
-                              inventory.products,
-                            );
+                            // Category breakdown no longer needed for product-level export
 
-                            // Build income section dynamically
-                            final incomeRows = <List<String>>[];
-                            final allCategories = [
-                              ...AppConstants.productCategories,
-                              'Unknown Products',
-                            ];
+                            // Build income section by product with quantity
+                            final incomeRows =
+                                <List<String>>[]; // [product, qty, amount]
+                            final cogsRows =
+                                <List<String>>[]; // [product, qty, cost]
 
-                            for (final category in allCategories) {
-                              final revenue = categoryRevenue[category] ?? 0.0;
-                              if (revenue > 0) {
-                                incomeRows.add([
-                                  'Sales - $category',
-                                  CurrencyUtils.formatCurrency(revenue),
-                                ]);
-                              }
+                            // Group sale items by product
+                            final Map<String, double> qtyByProduct = {};
+                            final Map<String, double> revenueByProduct = {};
+                            for (final item in filteredSaleItems) {
+                              qtyByProduct[item.productId] =
+                                  (qtyByProduct[item.productId] ?? 0) +
+                                  item.quantity;
+                              revenueByProduct[item.productId] =
+                                  (revenueByProduct[item.productId] ?? 0) +
+                                  item.totalPrice;
                             }
+
+                            // Build lookup for product names and costs
+                            final productById = {
+                              for (final p in inventory.products) p.id: p,
+                            };
+
+                            double totalSalesQty = 0;
+                            double totalCogsQty = 0;
+
+                            for (final entry in revenueByProduct.entries) {
+                              final productId = entry.key;
+                              final revenue = entry.value;
+                              final qty = qtyByProduct[productId] ?? 0;
+                              final product = productById[productId];
+                              final name =
+                                  product?.name ??
+                                  'Unknown Product ($productId)';
+                              totalSalesQty += qty;
+                              incomeRows.add([
+                                name,
+                                qty.toStringAsFixed(0),
+                                CurrencyUtils.formatCurrency(revenue),
+                              ]);
+                            }
+
+                            // COGS rows based on product cost * qty
+                            for (final entry in qtyByProduct.entries) {
+                              final productId = entry.key;
+                              final qty = entry.value;
+                              final product = productById[productId];
+                              final name =
+                                  product?.name ??
+                                  'Unknown Product ($productId)';
+                              final costPerUnit = product?.cost ?? 0.0;
+                              final cost = costPerUnit * qty;
+                              totalCogsQty += qty;
+                              cogsRows.add([
+                                name,
+                                qty.toStringAsFixed(0),
+                                CurrencyUtils.formatCurrency(cost),
+                              ]);
+                            }
+
+                            // Totals
                             incomeRows.add([
                               'Total Sales',
+                              totalSalesQty.toStringAsFixed(0),
                               CurrencyUtils.formatCurrency(totalRevenue),
                             ]);
-
-                            // Build COGS section dynamically
-                            final cogsRows = <List<String>>[];
-                            for (final category in allCategories) {
-                              final cost = categoryCost[category] ?? 0.0;
-                              if (cost > 0) {
-                                cogsRows.add([
-                                  category,
-                                  CurrencyUtils.formatCurrency(cost),
-                                ]);
-                              }
-                            }
                             cogsRows.add([
                               'Total COGS',
+                              totalCogsQty.toStringAsFixed(0),
                               CurrencyUtils.formatCurrency(totalCost),
                             ]);
 
@@ -379,7 +321,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               PdfCalculationSection(
                                 title: '4. Gross Profit',
                                 formula:
-                                    '₱${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ₱${totalLoss.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ₱${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                                    '${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${totalLoss.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
                                 result: CurrencyUtils.formatCurrency(
                                   totalProfit,
                                 ),

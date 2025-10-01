@@ -218,85 +218,174 @@ class PdfReportService {
           pw.SizedBox(height: 8),
 
           // Table with clean formatting
-          pw.Table(
-            border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
-            columnWidths: {
-              0: const pw.FlexColumnWidth(3),
-              1: const pw.FlexColumnWidth(2),
-            },
-            children: [
-              // Header row
-              pw.TableRow(
-                decoration: const pw.BoxDecoration(color: PdfColors.grey200),
-                children: [
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text(
-                      _getHeaderText(section.title),
-                      style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                    ),
-                  ),
-                  pw.Padding(
-                    padding: const pw.EdgeInsets.all(6),
-                    child: pw.Text(
-                      'Amount',
-                      style: pw.TextStyle(
-                        fontWeight: pw.FontWeight.bold,
-                        fontSize: 11,
-                      ),
-                      textAlign: pw.TextAlign.right,
-                    ),
-                  ),
-                ],
-              ),
-
-              // Data rows
-              for (int i = 0; i < section.rows.length; i++)
-                pw.TableRow(
-                  children: [
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(6),
-                      child: pw.Text(
-                        section.rows[i][0],
-                        style: pw.TextStyle(fontSize: 10),
-                      ),
-                    ),
-                    pw.Padding(
-                      padding: const pw.EdgeInsets.all(6),
-                      child: pw.Text(
-                        _stripCurrencySymbols(section.rows[i][1]),
-                        style: pw.TextStyle(
-                          fontSize: 10,
-                          fontWeight:
-                              _isTotalRow(section.rows[i][0]) ||
-                                  _isNumericValue(section.rows[i][1])
-                              ? pw.FontWeight.bold
-                              : pw.FontWeight.normal,
-                        ),
-                        textAlign: pw.TextAlign.right,
-                      ),
-                    ),
-                  ],
-                ),
-            ],
-          ),
+          _buildFlexibleTable(section),
         ],
       ),
     );
   }
 
   String _getHeaderText(String sectionTitle) {
-    if (sectionTitle.toLowerCase().contains('income')) return 'Source';
-    if (sectionTitle.toLowerCase().contains('cogs') ||
-        sectionTitle.toLowerCase().contains('cost')) {
-      return 'Item Category';
-    }
-    if (sectionTitle.toLowerCase().contains('expense')) return 'Expense Item';
-    if (sectionTitle.toLowerCase().contains('cash flow')) return 'Description';
+    final lower = sectionTitle.toLowerCase();
+    if (lower.contains('income')) return 'Product';
+    if (lower.contains('cogs') || lower.contains('cost')) return 'Product';
+    if (lower.contains('expense')) return 'Expense Item';
+    if (lower.contains('cash flow')) return 'Description';
     return 'Description';
+  }
+
+  pw.Widget _buildFlexibleTable(PdfReportSection section) {
+    final hasQuantityColumn =
+        section.rows.isNotEmpty && section.rows.first.length >= 3;
+
+    if (!hasQuantityColumn) {
+      // Fallback to 2-column table (label, amount)
+      return pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(3),
+          1: const pw.FlexColumnWidth(2),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  _getHeaderText(section.title),
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Amount',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          for (int i = 0; i < section.rows.length; i++)
+            pw.TableRow(
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    section.rows[i][0],
+                    style: pw.TextStyle(fontSize: 10),
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    _stripCurrencySymbols(section.rows[i][1]),
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight:
+                          _isTotalRow(section.rows[i][0]) ||
+                              _isNumericValue(section.rows[i][1])
+                          ? pw.FontWeight.bold
+                          : pw.FontWeight.normal,
+                    ),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      );
+    }
+
+    // 3-column table: product, quantity, amount
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(3),
+        1: const pw.FlexColumnWidth(1),
+        2: const pw.FlexColumnWidth(2),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text(
+                'Product',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text(
+                'Qty',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 11,
+                ),
+                textAlign: pw.TextAlign.right,
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text(
+                'Amount',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 11,
+                ),
+                textAlign: pw.TextAlign.right,
+              ),
+            ),
+          ],
+        ),
+        for (int i = 0; i < section.rows.length; i++)
+          pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  section.rows[i][0],
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  section.rows[i][1],
+                  style: const pw.TextStyle(fontSize: 10),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  _stripCurrencySymbols(section.rows[i][2]),
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight:
+                        _isTotalRow(section.rows[i][0]) ||
+                            _isNumericValue(section.rows[i][2])
+                        ? pw.FontWeight.bold
+                        : pw.FontWeight.normal,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
   }
 
   bool _isTotalRow(String text) {

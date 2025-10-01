@@ -35,7 +35,7 @@ class DemandAnalysisService {
   Future<List<DemandSuggestion>> computeSuggestions({
     int windowDays = 7,
     int fallbackWindowDays = 30,
-    double highDemandThresholdPerDay = 20.0,
+    double highDemandThresholdPerDay = 10.0,
     int leadTimeDays = 2,
     int minDeltaUnits = 5,
     double minDeltaPercent = 0.2,

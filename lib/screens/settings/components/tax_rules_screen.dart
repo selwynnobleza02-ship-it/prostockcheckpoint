@@ -229,9 +229,7 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text('Tubo: ₱${rule.tubo.toStringAsFixed(2)}'),
-                        Text(
-                          'Method: ${rule.isInclusive ? "Inclusive" : "Exclusive"}',
-                        ),
+                        // Method removed; sari-sari pricing always adds tubo on top
                         Text('Priority: ${rule.priority}'),
                       ],
                     ),
@@ -418,7 +416,7 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
   final _productController = TextEditingController();
 
   String _ruleType = 'global'; // 'global', 'category', 'product'
-  bool _isInclusive = true;
+  // Inclusive removed; always add on top.
   bool _isLoading = false;
 
   // For category dropdown
@@ -438,7 +436,7 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
           ? 'category'
           : 'global';
       _tuboController.text = widget.rule!.tubo.toStringAsFixed(2);
-      _isInclusive = widget.rule!.isInclusive;
+      // Ignore any stored inclusive flag; not used anymore.
       _selectedCategory = widget.rule!.categoryName;
       _categoryController.text = widget.rule!.categoryName ?? '';
       _productController.text = widget.rule!.productId ?? '';
@@ -532,7 +530,7 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
         categoryName: _ruleType == 'category' ? _selectedCategory : null,
         productId: productId,
         tubo: tubo,
-        isInclusive: _isInclusive,
+        isInclusive: false,
         priority: _getPriority(),
         createdAt: widget.rule?.createdAt ?? now,
         updatedAt: now,
@@ -695,11 +693,15 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
                     decoration: const InputDecoration(
                       labelText: 'Tubo Amount (₱)',
                       border: OutlineInputBorder(),
+                      isDense: true,
                       suffixText: '₱',
                     ),
                     keyboardType: TextInputType.numberWithOptions(
                       decimal: true,
                     ),
+                    textInputAction: TextInputAction.done,
+                    maxLines: 1,
+                    expands: false,
                     validator: (value) {
                       if (value == null || value.isEmpty) {
                         return 'Tubo amount is required';
@@ -714,37 +716,7 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
 
                   const SizedBox(height: 16),
 
-                  // Inclusive/Exclusive
-                  const Text(
-                    'Markup Method',
-                    style: TextStyle(fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 8),
-                  RadioGroup<bool>(
-                    groupValue: _isInclusive,
-                    onChanged: (value) {
-                      setState(() {
-                        _isInclusive = value ?? true;
-                      });
-                    },
-                    child: Column(
-                      children: [
-                        RadioListTile<bool>(
-                          title: const Text('Markup Inclusive'),
-                          subtitle: const Text(
-                            'Selling equals cost (markup included)',
-                          ),
-                          value: true,
-                        ),
-                        RadioListTile<bool>(
-                          title: const Text('Markup Added on Top'),
-                          subtitle: const Text('Markup is added to cost'),
-                          value: false,
-                        ),
-                      ],
-                    ),
-                  ),
-
+                  // Sari-sari pricing always adds tubo on top; method selector removed
                   const SizedBox(height: 24),
 
                   // Buttons

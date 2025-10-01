@@ -258,10 +258,16 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
 
   Future<List<Map<String, dynamic>>> getSaleItems(String saleId) async {
     final db = await instance.database;
-    return await db.query(
-      'sale_items',
-      where: 'saleId = ?',
-      whereArgs: [saleId],
+    // Aggregate duplicates that may exist due to offline queue + sync overlap
+    return await db.rawQuery(
+      'SELECT productId, saleId, '
+      'SUM(quantity) AS quantity, '
+      'ROUND(SUM(totalPrice), 2) AS totalPrice, '
+      // Derive unitPrice from summed totals to keep consistency
+      'CASE WHEN SUM(quantity) > 0 THEN ROUND(SUM(totalPrice)/SUM(quantity), 2) ELSE 0 END AS unitPrice '
+      'FROM sale_items WHERE saleId = ? '
+      'GROUP BY saleId, productId',
+      [saleId],
     );
   }
 
@@ -273,10 +279,24 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
       return [];
     }
     final ids = saleIds.map((id) => '?').join(',');
-    return await db.query(
-      'sale_items',
-      where: 'saleId IN ($ids)',
-      whereArgs: saleIds,
+    return await db.rawQuery(
+      'SELECT productId, saleId, '
+      'SUM(quantity) AS quantity, '
+      'ROUND(SUM(totalPrice), 2) AS totalPrice, '
+      'CASE WHEN SUM(quantity) > 0 THEN ROUND(SUM(totalPrice)/SUM(quantity), 2) ELSE 0 END AS unitPrice '
+      'FROM sale_items WHERE saleId IN ($ids) '
+      'GROUP BY saleId, productId',
+      saleIds,
+    );
+  }
+
+  Future<void> markSaleAsSynced(String saleId) async {
+    final db = await instance.database;
+    await db.update(
+      'sales',
+      {'is_synced': 1},
+      where: 'id = ?',
+      whereArgs: [saleId],
     );
   }
 

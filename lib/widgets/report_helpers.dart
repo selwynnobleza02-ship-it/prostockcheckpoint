@@ -167,15 +167,42 @@ Future<void> showHistoricalReceipt(BuildContext context, Sale sale) async {
       customerName = customer?.name;
     }
 
+    // Group sale items by product to avoid duplicate lines
+    final Map<String, Map<String, dynamic>> grouped = {};
+    for (final item in saleItems) {
+      if (grouped.containsKey(item.productId)) {
+        final existing = grouped[item.productId]!;
+        existing['quantity'] = (existing['quantity'] as int) + item.quantity;
+        existing['totalPrice'] =
+            (existing['totalPrice'] as double) + item.totalPrice;
+        // Keep unitPrice consistent; if it varies, recompute later from total/qty
+      } else {
+        grouped[item.productId] = {
+          'productId': item.productId,
+          'quantity': item.quantity,
+          'unitPrice': item.unitPrice,
+          'totalPrice': item.totalPrice,
+        };
+      }
+    }
+
+    // Build receipt items from grouped data
     List<ReceiptItem> receiptItems = [];
-    for (final saleItem in saleItems) {
-      final product = await productService.getProductById(saleItem.productId);
+    for (final groupedItem in grouped.values) {
+      final productId = groupedItem['productId'] as String;
+      final product = await productService.getProductById(productId);
+      final quantity = groupedItem['quantity'] as int;
+      final totalPrice = groupedItem['totalPrice'] as double;
+      final unitPrice = quantity > 0
+          ? (totalPrice / quantity)
+          : (groupedItem['unitPrice'] as double);
+
       receiptItems.add(
         ReceiptItem(
           productName: product?.name ?? 'Unknown Product',
-          quantity: saleItem.quantity,
-          unitPrice: saleItem.unitPrice,
-          totalPrice: saleItem.totalPrice,
+          quantity: quantity,
+          unitPrice: unitPrice,
+          totalPrice: totalPrice,
         ),
       );
     }
