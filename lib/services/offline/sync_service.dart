@@ -214,6 +214,7 @@ class SyncService {
       case OperationType.insertCreditTransaction:
       case OperationType.insertLoss:
       case OperationType.insertPriceHistory:
+      case OperationType.insertStockMovement:
       case OperationType.logActivity:
         return [_getInsertOperation(operation)];
       case OperationType.updateProduct:

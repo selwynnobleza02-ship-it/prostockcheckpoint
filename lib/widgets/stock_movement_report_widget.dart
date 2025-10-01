@@ -38,15 +38,17 @@ class _StockMovementReportWidgetState extends State<StockMovementReportWidget> {
   }
 
   void _loadMovements() {
-    Provider.of<StockMovementProvider>(context, listen: false)
-        .loadMovements(startDate: _startDate, endDate: _endDate);
+    Provider.of<StockMovementProvider>(
+      context,
+      listen: false,
+    ).loadMovements(startDate: _startDate, endDate: _endDate);
   }
 
   @override
   void initState() {
     super.initState();
     // Initial load without date filter
-    // _loadMovements();
+    _loadMovements();
   }
 
   @override
@@ -87,8 +89,10 @@ class _StockMovementReportWidgetState extends State<StockMovementReportWidget> {
                 );
               }
 
-              final inventoryProvider =
-                  Provider.of<InventoryProvider>(context, listen: false);
+              final inventoryProvider = Provider.of<InventoryProvider>(
+                context,
+                listen: false,
+              );
               final movements = provider.movements;
 
               if (movements.isEmpty) {
@@ -98,53 +102,60 @@ class _StockMovementReportWidgetState extends State<StockMovementReportWidget> {
               }
 
               return ListView.builder(
-                  itemCount: movements.length,
-                  itemBuilder: (context, index) {
-                    final movement = movements[index];
-                    final product =
-                        inventoryProvider.getProductById(movement.productId);
-                    final productName = product?.name ?? movement.productName;
+                itemCount: movements.length,
+                itemBuilder: (context, index) {
+                  final movement = movements[index];
+                  final product = inventoryProvider.getProductById(
+                    movement.productId,
+                  );
+                  final productName = product?.name ?? movement.productName;
 
-                    final isStockIn = movement.movementType == 'stock_in';
-                    final isStockOut = movement.movementType == 'stock_out';
-                    final icon = isStockIn
-                        ? Icons.arrow_upward
-                        : isStockOut
-                            ? Icons.arrow_downward
-                            : Icons.sync_alt;
-                    final color = isStockIn
-                        ? Colors.green
-                        : isStockOut
-                            ? Colors.red
-                            : Colors.orange;
+                  final isStockIn = movement.movementType == 'stock_in';
+                  final isStockOut = movement.movementType == 'stock_out';
+                  final icon = isStockIn
+                      ? Icons.arrow_upward
+                      : isStockOut
+                      ? Icons.arrow_downward
+                      : Icons.sync_alt;
+                  final color = isStockIn
+                      ? Colors.green
+                      : isStockOut
+                      ? Colors.red
+                      : Colors.orange;
 
-                    return Card(
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: color,
-                          child: Icon(icon, color: Colors.white),
-                        ),
-                        title: Text(
-                          productName,
-                          style: const TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                          '${movement.reason ?? movement.movementType} - ${DateFormat.yMd().add_jm().format(movement.createdAt)}',
-                        ),
-                        trailing: Text(
-                          '${isStockIn ? '+' : isStockOut ? '-' : ''}${movement.quantity.abs()}',
-                          style: TextStyle(
-                            color: color,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                  return Card(
+                    margin: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: ListTile(
+                      leading: CircleAvatar(
+                        backgroundColor: color,
+                        child: Icon(icon, color: Colors.white),
+                      ),
+                      title: Text(
+                        productName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Text(
+                        '${movement.reason ?? movement.movementType} - ${DateFormat.yMd().add_jm().format(movement.createdAt)}',
+                      ),
+                      trailing: Text(
+                        '${isStockIn
+                            ? '+'
+                            : isStockOut
+                            ? '-'
+                            : ''}${movement.quantity.abs()}',
+                        style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
                         ),
                       ),
-                    );
-                  },
-                );
+                    ),
+                  );
+                },
+              );
             },
           ),
         ),

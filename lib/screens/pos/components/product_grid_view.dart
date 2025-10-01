@@ -139,17 +139,25 @@ class ProductGridView extends StatelessWidget {
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
-                          Text(
-                            CurrencyUtils.formatCurrency(
-                              TaxService.calculateSellingPriceSync(
-                                product.cost,
-                              ),
+                          FutureBuilder<double>(
+                            future: TaxService.calculateSellingPriceWithRule(
+                              product.cost,
+                              productId: product.id,
+                              categoryName: product.category,
                             ),
-                            style: const TextStyle(
-                              color: Colors.green,
-                              fontWeight: FontWeight.bold,
-                              fontSize: UiConstants.fontSizeSmall,
-                            ),
+                            builder: (context, snapshot) {
+                              final price = snapshot.data;
+                              return Text(
+                                price != null
+                                    ? CurrencyUtils.formatCurrency(price)
+                                    : 'Calculating...',
+                                style: const TextStyle(
+                                  color: Colors.green,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: UiConstants.fontSizeSmall,
+                                ),
+                              );
+                            },
                           ),
                           Text(
                             'Stock: $visualStock',
