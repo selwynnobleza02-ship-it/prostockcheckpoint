@@ -63,7 +63,11 @@ class ProductService {
       batch.set(productRef, product.toMap());
 
       final priceHistoryRef = priceHistory.doc();
-      final sellingPrice = await TaxService.calculateSellingPrice(product.cost);
+      final sellingPrice = await TaxService.calculateSellingPriceWithRule(
+        product.cost,
+        productId: product.id,
+        categoryName: product.category,
+      );
       final priceHistoryData = PriceHistory(
         id: priceHistoryRef.id,
         productId: product.id!,
@@ -96,8 +100,10 @@ class ProductService {
 
       if (priceChanged) {
         final priceHistoryRef = priceHistory.doc();
-        final sellingPrice = await TaxService.calculateSellingPrice(
+        final sellingPrice = await TaxService.calculateSellingPriceWithRule(
           product.cost,
+          productId: product.id,
+          categoryName: product.category,
         );
         final priceHistoryData = PriceHistory(
           id: priceHistoryRef.id,

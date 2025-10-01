@@ -480,12 +480,14 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
 
     final products = inventoryProvider.products;
 
+    if (!mounted) return;
+
     final selectedProduct = await showDialog<Product>(
       context: context,
       builder: (context) => _ProductSearchDialog(products: products),
     );
 
-    if (selectedProduct != null) {
+    if (selectedProduct != null && mounted) {
       setState(() {
         _productController.text = selectedProduct.name;
       });

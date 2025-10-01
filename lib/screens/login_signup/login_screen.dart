@@ -3,6 +3,8 @@ import 'package:prostock/screens/login_signup/forgot_password_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/utils/app_constants.dart';
 import '../../providers/auth_provider.dart';
+import '../../utils/enhanced_validation.dart';
+import '../../widgets/error_message_widget.dart';
 // Make sure UserRole is imported if defined elsewhere
 import '../../models/user_role.dart';
 
@@ -21,6 +23,8 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isPasswordVisible = false; // New state for password visibility
   String? _emailError;
   String? _passwordError;
+  String? _emailSuggestion;
+  String? _passwordSuggestion;
   int _retryCount = 0;
   static const int _maxRetries = 3;
 
@@ -35,7 +39,72 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       _emailError = null;
       _passwordError = null;
+      _emailSuggestion = null;
+      _passwordSuggestion = null;
     });
+  }
+
+  void _showDetailedErrorDialog(
+    String title,
+    String message,
+    String? suggestion,
+  ) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error_outline, color: Colors.red[600]),
+            const SizedBox(width: 8),
+            Text(title),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            if (suggestion != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.blue[200]!),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.lightbulb_outline,
+                      color: Colors.blue[600],
+                      size: 16,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        suggestion,
+                        style: TextStyle(
+                          color: Colors.blue[700],
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -68,19 +137,45 @@ class _LoginScreenState extends State<LoginScreen> {
                     fillColor: Colors.white70,
                     errorText: _emailError,
                   ),
-                  onChanged: (value) => _clearErrors(),
+                  onChanged: (value) {
+                    _clearErrors();
+                    // Real-time validation
+                    if (value.isNotEmpty) {
+                      final validation = EnhancedValidation.validateEmail(
+                        value,
+                      );
+                      if (!validation.isValid) {
+                        setState(() {
+                          _emailError = validation.errorMessage;
+                          _emailSuggestion = validation.suggestion;
+                        });
+                      }
+                    }
+                  },
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email';
                     }
-                    if (!RegExp(
-                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                    ).hasMatch(value.trim())) {
-                      return 'Please enter a valid email address';
+                    final validation = EnhancedValidation.validateEmail(value);
+                    if (!validation.isValid) {
+                      return validation.errorMessage;
                     }
                     return null;
                   },
                 ),
+                // Email suggestion widget
+                if (_emailSuggestion != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: InfoMessageWidget(
+                      message: _emailSuggestion!,
+                      onDismiss: () {
+                        setState(() {
+                          _emailSuggestion = null;
+                        });
+                      },
+                    ),
+                  ),
                 const SizedBox(height: UiConstants.spacingLarge),
                 TextFormField(
                   controller: _passwordController,
@@ -113,6 +208,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     return null;
                   },
                 ),
+                // Password suggestion widget
+                if (_passwordSuggestion != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8.0),
+                    child: InfoMessageWidget(
+                      message: _passwordSuggestion!,
+                      onDismiss: () {
+                        setState(() {
+                          _passwordSuggestion = null;
+                        });
+                      },
+                    ),
+                  ),
                 const SizedBox(height: UiConstants.spacingExtraLarge2),
                 SizedBox(
                   width: double.infinity,
@@ -155,31 +263,31 @@ class _LoginScreenState extends State<LoginScreen> {
                                 final errorMessage =
                                     authProvider.error ?? 'Login failed';
                                 setState(() {
-                                  if (errorMessage.contains('user-not-found') ||
-                                      errorMessage.contains('invalid-email')) {
+                                  if (errorMessage.contains('user-not-found')) {
                                     _emailError =
-                                        'Invalid email or user not found.';
+                                        'No account found with this email address.';
+                                    _emailSuggestion =
+                                        'Check your email address or create a new account.';
+                                  } else if (errorMessage.contains(
+                                    'invalid-email',
+                                  )) {
+                                    _emailError =
+                                        'Please enter a valid email address.';
+                                    _emailSuggestion =
+                                        'Make sure your email follows the format: user@example.com';
                                   } else if (errorMessage.contains(
                                     'wrong-password',
                                   )) {
                                     _passwordError = 'Incorrect password.';
+                                    _passwordSuggestion =
+                                        'Check your password or use "Forgot Password" to reset it.';
                                   } else if (errorMessage.contains(
                                     'too-many-requests',
                                   )) {
-                                    scaffold.showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Too many failed attempts. Please try again later.',
-                                        ),
-                                        backgroundColor: Colors.red,
-                                        duration: const Duration(seconds: 4),
-                                        action: SnackBarAction(
-                                          label: 'Dismiss',
-                                          textColor: Colors.white,
-                                          onPressed: () =>
-                                              scaffold.hideCurrentSnackBar(),
-                                        ),
-                                      ),
+                                    _showDetailedErrorDialog(
+                                      'Too Many Attempts',
+                                      'Too many failed login attempts. Please try again later.',
+                                      'Wait a few minutes before trying again, or reset your password.',
                                     );
                                   } else if (errorMessage.contains(
                                     'network-request-failed',
@@ -191,8 +299,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                           content: Text(
                                             'Network error. Retrying... ($_retryCount/$_maxRetries)',
                                           ),
-                                          backgroundColor: Colors.red,
-                                          duration: const Duration(seconds: 4),
+                                          backgroundColor: Colors.orange,
+                                          duration: const Duration(seconds: 3),
                                           action: SnackBarAction(
                                             label: 'Dismiss',
                                             textColor: Colors.white,
@@ -212,37 +320,25 @@ class _LoginScreenState extends State<LoginScreen> {
                                         },
                                       );
                                     } else {
-                                      scaffold.showSnackBar(
-                                        SnackBar(
-                                          content: const Text(
-                                            'Network error. Please check your connection and try again.',
-                                          ),
-                                          backgroundColor: Colors.red,
-                                          duration: const Duration(seconds: 4),
-                                          action: SnackBarAction(
-                                            label: 'Dismiss',
-                                            textColor: Colors.white,
-                                            onPressed: () =>
-                                                scaffold.hideCurrentSnackBar(),
-                                          ),
-                                        ),
+                                      _showDetailedErrorDialog(
+                                        'Network Error',
+                                        'Unable to connect to the server. Please check your internet connection.',
+                                        'Check your WiFi or mobile data connection and try again.',
                                       );
                                     }
+                                  } else if (errorMessage.contains(
+                                    'email-not-verified',
+                                  )) {
+                                    _showDetailedErrorDialog(
+                                      'Email Not Verified',
+                                      'Please verify your email address before logging in.',
+                                      'Check your email inbox for a verification link, or request a new one.',
+                                    );
                                   } else {
-                                    scaffold.showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Login failed. Please try again.',
-                                        ),
-                                        backgroundColor: Colors.red,
-                                        duration: const Duration(seconds: 4),
-                                        action: SnackBarAction(
-                                          label: 'Dismiss',
-                                          textColor: Colors.white,
-                                          onPressed: () =>
-                                              scaffold.hideCurrentSnackBar(),
-                                        ),
-                                      ),
+                                    _showDetailedErrorDialog(
+                                      'Login Failed',
+                                      errorMessage,
+                                      'Please check your credentials and try again.',
                                     );
                                   }
                                 });

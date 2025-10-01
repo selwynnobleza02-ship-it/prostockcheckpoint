@@ -43,7 +43,7 @@ class OfflineManager with ChangeNotifier {
 
   Future<void> initialize() async {
     await _connectivityService.initialize();
-    _connectivityService.addListener(_onConnectivityChanged);
+    _connectivityService.connectivityStream.listen((_) => _onConnectivityChanged());
     _pendingOperations = await _queueService.getPendingOperations();
     notifyListeners();
     if (isOnline) {
@@ -103,7 +103,6 @@ class OfflineManager with ChangeNotifier {
 
   @override
   void dispose() {
-    _connectivityService.removeListener(_onConnectivityChanged);
     _connectivityService.dispose();
     super.dispose();
   }

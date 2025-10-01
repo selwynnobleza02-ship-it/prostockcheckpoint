@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/providers/refactored_sales_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/utils/app_constants.dart';
-import '../../providers/sales_provider.dart';
 import '../../providers/inventory_provider.dart';
 import '../../models/customer.dart';
 import '../../widgets/barcode_scanner_widget.dart';
@@ -102,7 +102,10 @@ class _POSScreenState extends State<POSScreen> {
         );
       }
       if (!mounted) return;
-      final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+      final salesProvider = Provider.of<RefactoredSalesProvider>(
+        context,
+        listen: false,
+      );
       final receipt = await salesProvider.completeSale(
         customerId: _selectedCustomer?.id,
         paymentMethod: _paymentMethod,

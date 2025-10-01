@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/providers/refactored_credit_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/models/credit_sale_item.dart';
-import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/utils/error_logger.dart';
@@ -35,7 +35,7 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
         context: 'TransactionHistoryDialog._loadTransactions',
         metadata: {'customerId': widget.customer.id},
       );
-      await Provider.of<CreditProvider>(
+      await Provider.of<RefactoredCreditProvider>(
         context,
         listen: false,
       ).getTransactionsByCustomer(widget.customer.id);
@@ -59,7 +59,7 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
             .map((m) => CreditTransaction.fromMap(m, (m['id'] ?? '') as String))
             .toList();
         if (mounted) {
-          Provider.of<CreditProvider>(context, listen: false)
+          Provider.of<RefactoredCreditProvider>(context, listen: false)
             ..transactions.clear()
             ..transactions.addAll(cached);
         }
@@ -103,7 +103,7 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
         height:
             MediaQuery.of(context).size.height *
             0.6, // Use 60% of screen height
-        child: Consumer<CreditProvider>(
+        child: Consumer<RefactoredCreditProvider>(
           builder: (context, provider, child) {
             final transactions = provider.transactions;
 

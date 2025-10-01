@@ -10,7 +10,7 @@ class TaxService extends ChangeNotifier {
 
   // Default values
   static const double _defaultTuboAmount = 2.0; // ₱2 default tubo
-  static const bool _defaultTuboInclusive = true;
+  static const bool _defaultTuboInclusive = false;
 
   // In-memory cache
   static double? _cachedTuboAmount;

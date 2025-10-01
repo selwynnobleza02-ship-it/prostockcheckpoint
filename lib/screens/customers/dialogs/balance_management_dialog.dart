@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/providers/refactored_credit_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
-import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/confirmation_dialog.dart';
 
@@ -34,7 +34,10 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final creditProvider = Provider.of<CreditProvider>(context, listen: false);
+    final creditProvider = Provider.of<RefactoredCreditProvider>(
+      context,
+      listen: false,
+    );
     final bool canPay = widget.customer.balance > 0;
 
     return AlertDialog(

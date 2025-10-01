@@ -1,9 +1,9 @@
+import 'package:prostock/providers/refactored_credit_provider.dart';
 import 'package:prostock/screens/customers/dialogs/overdue_customers_list_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:prostock/screens/customers/dialogs/customer_options_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
-import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/screens/customers/components/customer_list.dart';
 import 'package:prostock/screens/customers/components/customer_qr_scanner.dart';
@@ -28,7 +28,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CustomerProvider>(context, listen: false).loadCustomers();
-              Provider.of<CreditProvider>(context, listen: false).fetchOverdueCustomers(context);    });
+      Provider.of<RefactoredCreditProvider>(
+        context,
+        listen: false,
+      ).fetchOverdueCustomers(context);
+    });
 
     _scrollController.addListener(() {
       if (_scrollController.position.pixels ==
@@ -119,7 +123,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
           ),
         ],
       ),
-      body: Consumer<CreditProvider>(
+      body: Consumer<RefactoredCreditProvider>(
         builder: (context, creditProvider, child) {
           final overdueCustomers = creditProvider.overdueCustomers;
           return Column(
@@ -160,7 +164,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   ),
                 ),
               ),
-              Expanded(child: CustomerList(scrollController: _scrollController)),
+              Expanded(
+                child: CustomerList(scrollController: _scrollController),
+              ),
             ],
           );
         },
@@ -170,7 +176,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
           showDialog(
             context: context,
             builder: (context) => AddCustomerDialog(
-              offlineManager: Provider.of<CustomerProvider>(context, listen: false).offlineManager,
+              offlineManager: Provider.of<CustomerProvider>(
+                context,
+                listen: false,
+              ).offlineManager,
             ),
           );
         },

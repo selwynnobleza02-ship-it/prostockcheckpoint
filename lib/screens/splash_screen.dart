@@ -4,7 +4,7 @@ import '../providers/auth_provider.dart';
 import '../models/user_role.dart';
 import '../providers/inventory_provider.dart';
 import '../providers/customer_provider.dart';
-import '../providers/sales_provider.dart';
+import '../providers/refactored_sales_provider.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -25,37 +25,70 @@ class _SplashScreenState extends State<SplashScreen> {
     await Future.delayed(const Duration(seconds: 2));
 
     if (mounted) {
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final inventoryProvider = Provider.of<InventoryProvider>(
-        context,
-        listen: false,
-      );
-      final customerProvider = Provider.of<CustomerProvider>(
-        context,
-        listen: false,
-      );
-      final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final inventoryProvider = Provider.of<InventoryProvider>(
+          context,
+          listen: false,
+        );
+        final customerProvider = Provider.of<CustomerProvider>(
+          context,
+          listen: false,
+        );
+        final salesProvider = Provider.of<RefactoredSalesProvider>(
+          context,
+          listen: false,
+        );
 
-      // Perform all initialization tasks in parallel.
-      await Future.wait([
-        authProvider.checkAuthStatus(),
-        inventoryProvider.loadProducts(),
-        customerProvider.loadCustomers(),
-        salesProvider.loadSales(),
-      ]);
+        // Perform initialization tasks with timeouts to prevent hanging
+        final List<Future> initTasks = [
+          _withTimeout(
+            authProvider.checkAuthStatus(),
+            const Duration(seconds: 10),
+          ),
+          _withTimeout(
+            inventoryProvider.loadProducts(),
+            const Duration(seconds: 10),
+          ),
+          _withTimeout(
+            customerProvider.loadCustomers(),
+            const Duration(seconds: 10),
+          ),
+          _withTimeout(salesProvider.loadSales(), const Duration(seconds: 10)),
+        ];
 
-      if (!mounted) return;
+        // Wait for all tasks to complete, but don't fail if some timeout
+        await Future.wait(initTasks, eagerError: false);
 
-      if (authProvider.isAuthenticated && authProvider.currentUser != null) {
-        final userRole = authProvider.userRole;
-        if (userRole == UserRole.admin) {
-          Navigator.of(context).pushReplacementNamed('/admin');
+        if (!mounted) return;
+
+        if (authProvider.isAuthenticated && authProvider.currentUser != null) {
+          final userRole = authProvider.userRole;
+          if (userRole == UserRole.admin) {
+            Navigator.of(context).pushReplacementNamed('/admin');
+          } else {
+            Navigator.of(context).pushReplacementNamed('/user');
+          }
         } else {
-          Navigator.of(context).pushReplacementNamed('/user');
+          Navigator.of(context).pushReplacementNamed('/login');
         }
-      } else {
-        Navigator.of(context).pushReplacementNamed('/login');
+      } catch (e) {
+        // If initialization fails, still navigate to login
+        print('Initialization error: $e');
+        if (mounted) {
+          Navigator.of(context).pushReplacementNamed('/login');
+        }
       }
+    }
+  }
+
+  /// Wraps a future with a timeout
+  Future<T> _withTimeout<T>(Future<T> future, Duration timeout) async {
+    try {
+      return await future.timeout(timeout);
+    } catch (e) {
+      print('Operation timed out: $e');
+      rethrow;
     }
   }
 

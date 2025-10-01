@@ -189,7 +189,11 @@ class ReportService {
   ) async {
     double total = 0.0;
     for (final product in products) {
-      final price = await TaxService.calculateSellingPrice(product.cost);
+      final price = await TaxService.calculateSellingPriceWithRule(
+        product.cost,
+        productId: product.id,
+        categoryName: product.category,
+      );
       total += price * product.stock;
     }
     return total;
@@ -202,7 +206,11 @@ class ReportService {
   ) async {
     double total = 0.0;
     for (final product in products) {
-      final price = await TaxService.calculateSellingPrice(product.cost);
+      final price = await TaxService.calculateSellingPriceWithRule(
+        product.cost,
+        productId: product.id,
+        categoryName: product.category,
+      );
       total += (price - product.cost) * product.stock;
     }
     return total;

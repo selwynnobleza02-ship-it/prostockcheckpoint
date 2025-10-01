@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/providers/refactored_sales_provider.dart';
 import 'package:provider/provider.dart';
-import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/services/report_service.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/report_helpers.dart';
@@ -12,7 +12,7 @@ class SalesReportTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final reportService = ReportService();
 
-    return Consumer<SalesProvider>(
+    return Consumer<RefactoredSalesProvider>(
       builder: (context, provider, child) {
         final totalSales = reportService.calculateTotalSales(provider.sales);
         final todaySales = reportService.calculateTodaySales(provider.sales);

@@ -254,8 +254,10 @@ class InventoryProvider with ChangeNotifier {
               timestamp: DateTime.now(),
             ),
           );
-          final sellingPrice = await TaxService.calculateSellingPrice(
+          final sellingPrice = await TaxService.calculateSellingPriceWithRule(
             newProduct.cost,
+            productId: newProduct.id,
+            categoryName: newProduct.category,
           );
           final priceHistory = PriceHistory(
             id: const Uuid().v4(),
@@ -285,8 +287,10 @@ class InventoryProvider with ChangeNotifier {
             timestamp: DateTime.now(),
           ),
         );
-        final sellingPrice = await TaxService.calculateSellingPrice(
+        final sellingPrice = await TaxService.calculateSellingPriceWithRule(
           newProduct.cost,
+          productId: newProduct.id,
+          categoryName: newProduct.category,
         );
         final priceHistory = PriceHistory(
           id: const Uuid().v4(),
@@ -406,8 +410,10 @@ class InventoryProvider with ChangeNotifier {
 
         if (originalProduct != null &&
             originalProduct.cost != updatedProduct.cost) {
-          final sellingPrice = await TaxService.calculateSellingPrice(
+          final sellingPrice = await TaxService.calculateSellingPriceWithRule(
             updatedProduct.cost,
+            productId: updatedProduct.id,
+            categoryName: updatedProduct.category,
           );
           final priceHistory = PriceHistory(
             id: const Uuid().v4(),

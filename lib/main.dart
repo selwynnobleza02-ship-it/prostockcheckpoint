@@ -14,13 +14,18 @@ import 'package:prostock/utils/global_error_handler.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:prostock/services/background_sync_service.dart';
+import 'package:prostock/services/operation_manager_factory.dart';
 import 'package:prostock/services/firestore/credit_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'firebase_options.dart';
 import 'providers/inventory_provider.dart';
-import 'providers/sales_provider.dart';
+// OLD PROVIDERS (COMMENTED FOR FALLBACK)
+// import 'providers/sales_provider.dart';
+// import 'providers/credit_provider.dart';
+// NEW REFACTORED PROVIDERS
+import 'providers/refactored_sales_provider.dart';
+import 'providers/refactored_credit_provider.dart';
 import 'providers/customer_provider.dart';
-import 'providers/credit_provider.dart';
 import 'providers/auth_provider.dart';
 import 'providers/demand_provider.dart';
 import 'services/demand_analysis_service.dart';
@@ -46,6 +51,14 @@ void main() async {
   final syncFailureProvider = SyncFailureProvider();
   final offlineManager = OfflineManager(syncFailureProvider);
   await offlineManager.initialize();
+
+  // Warm up UnifiedOperationManager early to avoid first-use delays
+  try {
+    await OperationManagerFactory.getInstance();
+  } catch (e) {
+    // Safe to continue; provider will fallback to offline path if needed
+    print('OperationManager warmup failed (continuing offline-first): $e');
+  }
 
   final notificationService = NotificationService();
   await notificationService.init();
@@ -111,57 +124,99 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (context) => CustomerProvider(context.read<OfflineManager>()),
         ),
-        ChangeNotifierProxyProvider2<
-          CustomerProvider,
-          InventoryProvider,
-          CreditProvider
-        >(
-          create: (context) => CreditProvider(
-            customerProvider: context.read<CustomerProvider>(),
-            inventoryProvider: context.read<InventoryProvider>(),
-            creditService: context.read<CreditService>(),
-          ),
-          update:
-              (
-                context,
-                customerProvider,
-                inventoryProvider,
-                previousCreditProvider,
-              ) =>
-                  previousCreditProvider ??
-                  CreditProvider(
-                    customerProvider: customerProvider,
-                    inventoryProvider: inventoryProvider,
-                    creditService: context.read<CreditService>(),
-                  ),
+
+        // OLD PROVIDERS (COMMENTED FOR FALLBACK)
+        // ChangeNotifierProxyProvider2<
+        //   CustomerProvider,
+        //   InventoryProvider,
+        //   CreditProvider
+        // >(
+        //   create: (context) => CreditProvider(
+        //     customerProvider: context.read<CustomerProvider>(),
+        //     inventoryProvider: context.read<InventoryProvider>(),
+        //     creditService: context.read<CreditService>(),
+        //   ),
+        //   update:
+        //       (
+        //         context,
+        //         customerProvider,
+        //         inventoryProvider,
+        //         previousCreditProvider,
+        //       ) =>
+        //           previousCreditProvider ??
+        //           CreditProvider(
+        //             customerProvider: customerProvider,
+        //             inventoryProvider: inventoryProvider,
+        //             creditService: context.read<CreditService>(),
+        //           ),
+        // ),
+        // ChangeNotifierProxyProvider3<
+        //   InventoryProvider,
+        //   AuthProvider,
+        //   CreditProvider,
+        //   SalesProvider
+        // >(
+        //   create: (context) => SalesProvider(
+        //     inventoryProvider: context.read<InventoryProvider>(),
+        //     offlineManager: context.read<OfflineManager>(),
+        //     authProvider: context.read<AuthProvider>(),
+        //     creditProvider: context.read<CreditProvider>(),
+        //   ),
+        //   update:
+        //       (
+        //         context,
+        //         inventoryProvider,
+        //         authProvider,
+        //         creditProvider,
+        //         previousSalesProvider,
+        //       ) =>
+        //           previousSalesProvider ??
+        //           SalesProvider(
+        //             inventoryProvider: inventoryProvider,
+        //             offlineManager: context.read<OfflineManager>(),
+        //             authProvider: authProvider,
+        //             creditProvider: creditProvider,
+        //           ),
+        // ),
+
+        // NEW REFACTORED PROVIDERS
+        ChangeNotifierProvider(
+          create: (context) {
+            // Initialize operation manager synchronously for now
+            // The actual async initialization will happen in the provider
+            try {
+              return RefactoredSalesProvider(
+                operationManager: null, // Will be initialized in the provider
+                authProvider: context.read<AuthProvider>(),
+                inventoryProvider: context.read<InventoryProvider>(),
+              );
+            } catch (e) {
+              print('Error creating RefactoredSalesProvider: $e');
+              // Return a minimal provider that won't cause issues
+              return RefactoredSalesProvider(
+                operationManager: null,
+                authProvider: context.read<AuthProvider>(),
+                inventoryProvider: context.read<InventoryProvider>(),
+              );
+            }
+          },
         ),
-        ChangeNotifierProxyProvider3<
-          InventoryProvider,
-          AuthProvider,
-          CreditProvider,
-          SalesProvider
-        >(
-          create: (context) => SalesProvider(
-            inventoryProvider: context.read<InventoryProvider>(),
-            offlineManager: context.read<OfflineManager>(),
-            authProvider: context.read<AuthProvider>(),
-            creditProvider: context.read<CreditProvider>(),
-          ),
-          update:
-              (
-                context,
-                inventoryProvider,
-                authProvider,
-                creditProvider,
-                previousSalesProvider,
-              ) =>
-                  previousSalesProvider ??
-                  SalesProvider(
-                    inventoryProvider: inventoryProvider,
-                    offlineManager: context.read<OfflineManager>(),
-                    authProvider: authProvider,
-                    creditProvider: creditProvider,
-                  ),
+        ChangeNotifierProvider(
+          create: (context) {
+            try {
+              return RefactoredCreditProvider(
+                operationManager: null, // Will be initialized in the provider
+                customerProvider: context.read<CustomerProvider>(),
+              );
+            } catch (e) {
+              print('Error creating RefactoredCreditProvider: $e');
+              // Return a minimal provider that won't cause issues
+              return RefactoredCreditProvider(
+                operationManager: null,
+                customerProvider: context.read<CustomerProvider>(),
+              );
+            }
+          },
         ),
         ChangeNotifierProvider(create: (_) => StockMovementProvider()),
         ChangeNotifierProvider(create: (_) => PrintingService()),

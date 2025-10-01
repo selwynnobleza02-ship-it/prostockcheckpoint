@@ -120,7 +120,10 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
                       ),
                       const SizedBox(height: 4),
                       FutureBuilder<double>(
-                        future: TaxService.calculateSellingPrice(cost),
+                        future: TaxService.calculateSellingPriceWithRule(
+                          cost,
+                          // No product ID yet; category may be chosen later
+                        ),
                         builder: (context, snapshot) {
                           if (snapshot.hasData) {
                             return Row(
@@ -288,7 +291,7 @@ class _BarcodeProductDialogState extends State<BarcodeProductDialog> {
             FutureBuilder<double>(
               future: () async {
                 final cost = double.tryParse(_costController.text) ?? 0;
-                return await TaxService.calculateSellingPrice(cost);
+                return await TaxService.calculateSellingPriceWithRule(cost);
               }(),
               builder: (context, snapshot) {
                 final cost = double.tryParse(_costController.text) ?? 0;

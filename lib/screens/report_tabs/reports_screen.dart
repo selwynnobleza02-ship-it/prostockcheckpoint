@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
-import 'package:prostock/providers/sales_provider.dart';
+import 'package:prostock/providers/refactored_sales_provider.dart';
 import 'package:prostock/providers/stock_movement_provider.dart';
 import 'package:prostock/screens/report_tabs/components/customers_report_tab.dart';
 import 'package:prostock/screens/report_tabs/components/financial_report_tab.dart';
@@ -40,7 +40,10 @@ class _ReportsScreenState extends State<ReportsScreen>
   }
 
   Future<void> _loadData({bool refresh = false}) async {
-    final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+    final salesProvider = Provider.of<RefactoredSalesProvider>(
+      context,
+      listen: false,
+    );
     final customersProvider = Provider.of<CustomerProvider>(
       context,
       listen: false,
@@ -57,7 +60,7 @@ class _ReportsScreenState extends State<ReportsScreen>
     final inventoryService = InventoryService(FirebaseFirestore.instance);
     final saleService = SaleService(FirebaseFirestore.instance);
 
-    await salesProvider.loadSales(refresh: refresh);
+    await salesProvider.loadSales();
     if (!mounted) return;
     await customersProvider.loadCustomers(refresh: refresh);
     if (!mounted) return;

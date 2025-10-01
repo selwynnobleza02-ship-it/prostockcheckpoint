@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:prostock/providers/sales_provider.dart';
+import 'package:prostock/providers/refactored_sales_provider.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
@@ -13,7 +13,7 @@ class CustomersReportTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final reportService = ReportService();
-    return Consumer2<CustomerProvider, SalesProvider>(
+    return Consumer2<CustomerProvider, RefactoredSalesProvider>(
       builder: (context, customerProvider, salesProvider, child) {
         final totalCustomers = reportService.calculateTotalCustomers(
           customerProvider.customers,

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/providers/refactored_sales_provider.dart';
 // import 'package:prostock/models/product.dart';
 import 'package:prostock/providers/stock_movement_provider.dart';
 import 'package:prostock/services/report_service.dart';
 import 'package:provider/provider.dart';
-import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
@@ -34,7 +34,10 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+      final salesProvider = Provider.of<RefactoredSalesProvider>(
+        context,
+        listen: false,
+      );
       final stockMovementProvider = Provider.of<StockMovementProvider>(
         context,
         listen: false,
@@ -65,17 +68,16 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
       });
 
       if (!context.mounted) return;
-      final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+      final salesProvider = Provider.of<RefactoredSalesProvider>(
+        context,
+        listen: false,
+      );
       final stockMovementProvider = Provider.of<StockMovementProvider>(
         context,
         listen: false,
       );
 
-      salesProvider.loadSales(
-        startDate: _startDate,
-        endDate: _endDate,
-        refresh: true,
-      );
+      salesProvider.loadSales();
       stockMovementProvider.loadAllMovements(
         startDate: _startDate,
         endDate: _endDate,
@@ -91,7 +93,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
   Widget build(BuildContext context) {
     final reportService = ReportService();
     return Consumer4<
-      SalesProvider,
+      RefactoredSalesProvider,
       InventoryProvider,
       CustomerProvider,
       StockMovementProvider

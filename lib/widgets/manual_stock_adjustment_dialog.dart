@@ -331,8 +331,10 @@ class _ManualStockAdjustmentDialogState
                             overflow: TextOverflow.ellipsis,
                           ),
                           subtitle: FutureBuilder<double>(
-                            future: TaxService.calculateSellingPrice(
+                            future: TaxService.calculateSellingPriceWithRule(
                               product.cost,
+                              productId: product.id,
+                              categoryName: product.category,
                             ),
                             builder: (context, snapshot) {
                               if (snapshot.hasData) {
@@ -386,8 +388,10 @@ class _ManualStockAdjustmentDialogState
                         ),
                         Text('Current Stock: ${_selectedProduct!.stock}'),
                         FutureBuilder<double>(
-                          future: TaxService.calculateSellingPrice(
+                          future: TaxService.calculateSellingPriceWithRule(
                             _selectedProduct!.cost,
+                            productId: _selectedProduct!.id,
+                            categoryName: _selectedProduct!.category,
                           ),
                           builder: (context, snapshot) {
                             if (snapshot.hasData) {

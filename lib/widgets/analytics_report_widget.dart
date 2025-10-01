@@ -8,7 +8,7 @@ import 'package:prostock/models/sale_item.dart';
 // Provider imports
 import '../providers/customer_provider.dart';
 import '../providers/inventory_provider.dart';
-import '../providers/sales_provider.dart';
+import '../providers/refactored_sales_provider.dart';
 
 // Widget imports
 import 'sales_over_time_chart.dart';
@@ -26,7 +26,11 @@ class AnalyticsReportWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Consumer3<SalesProvider, InventoryProvider, CustomerProvider>(
+    return Consumer3<
+      RefactoredSalesProvider,
+      InventoryProvider,
+      CustomerProvider
+    >(
       builder:
           (context, salesProvider, inventoryProvider, customerProvider, child) {
             return SingleChildScrollView(

@@ -7,7 +7,7 @@ import 'package:prostock/utils/error_logger.dart';
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../providers/inventory_provider.dart';
-import '../providers/sales_provider.dart';
+import '../providers/refactored_sales_provider.dart';
 import '../services/tax_service.dart';
 import '../models/product.dart';
 import '../models/loss_reason.dart';
@@ -458,7 +458,10 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
       context,
       listen: false,
     );
-    final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+    final salesProvider = Provider.of<RefactoredSalesProvider>(
+      context,
+      listen: false,
+    );
 
     log('BarcodeScannerWidget: Scanned barcodeValue: $barcodeValue');
     log('BarcodeScannerWidget: Products in inventory:');
@@ -754,7 +757,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
 
   Future<void> _handleExistingProduct(
     Product product,
-    SalesProvider salesProvider,
+    RefactoredSalesProvider salesProvider,
   ) async {
     await cameraController.stop();
 
@@ -769,7 +772,11 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             FutureBuilder<double>(
-              future: TaxService.calculateSellingPrice(product.cost),
+              future: TaxService.calculateSellingPriceWithRule(
+                product.cost,
+                productId: product.id,
+                categoryName: product.category,
+              ),
               builder: (context, snapshot) {
                 if (snapshot.hasData) {
                   return Text('Price: ₱${snapshot.data!.toStringAsFixed(2)}');

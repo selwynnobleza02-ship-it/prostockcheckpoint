@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:prostock/providers/refactored_sales_provider.dart';
 import 'package:provider/provider.dart';
 
 import 'package:prostock/providers/inventory_provider.dart';
-import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/utils/app_constants.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/services/tax_service.dart';
@@ -100,7 +100,7 @@ class ProductGridView extends StatelessWidget {
               child: InkWell(
                 onTap: () async {
                   if (!isOutOfStock) {
-                    await Provider.of<SalesProvider>(
+                    await Provider.of<RefactoredSalesProvider>(
                       context,
                       listen: false,
                     ).addItemToCurrentSale(product, 1);

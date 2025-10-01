@@ -3,7 +3,7 @@ import 'package:prostock/models/customer.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
-import 'package:prostock/providers/sales_provider.dart';
+import 'package:prostock/providers/refactored_sales_provider.dart';
 import 'package:prostock/utils/app_constants.dart';
 import 'package:prostock/utils/currency_utils.dart';
 
@@ -57,7 +57,7 @@ class CartViewState extends State<CartView> {
   }
 
   void _calculateChange() {
-    final total = Provider.of<SalesProvider>(
+    final total = Provider.of<RefactoredSalesProvider>(
       context,
       listen: false,
     ).currentSaleTotal;
@@ -166,7 +166,7 @@ class CartViewState extends State<CartView> {
   }
 
   Widget _buildCartItems(BuildContext context) {
-    return Consumer<SalesProvider>(
+    return Consumer<RefactoredSalesProvider>(
       builder: (context, salesProvider, child) {
         if (salesProvider.currentSaleItems.isEmpty) {
           return Container(
@@ -297,7 +297,7 @@ class CartViewState extends State<CartView> {
           ),
         ],
       ),
-      child: Consumer<SalesProvider>(
+      child: Consumer<RefactoredSalesProvider>(
         builder: (context, provider, child) {
           return Column(
             mainAxisSize: MainAxisSize.min,

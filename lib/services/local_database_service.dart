@@ -1,6 +1,7 @@
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/models/product.dart';
+import 'package:prostock/services/database/schema_updates.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 
@@ -23,7 +24,7 @@ class LocalDatabaseService {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: SchemaUpdates.currentVersion,
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -130,6 +131,7 @@ CREATE TABLE IF NOT EXISTS offline_operations (
   document_id TEXT,
   data TEXT NOT NULL,
   timestamp TEXT NOT NULL,
+  priority INTEGER NOT NULL DEFAULT 0,
   retry_count INTEGER NOT NULL DEFAULT 0,
   version INTEGER
 )
@@ -206,6 +208,32 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
   items TEXT
 )
 ''');
+    }
+
+    // Create transactions table for TransactionManager commits
+    if (oldVersion < 8) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS transactions (
+  id TEXT PRIMARY KEY,
+  status TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  operation_count INTEGER NOT NULL
+)
+''');
+    }
+
+    // Apply new schema updates for event sourcing and CQRS
+    await SchemaUpdates.applyUpdates(db, oldVersion, newVersion);
+
+    // Ensure offline_operations has priority column
+    if (oldVersion < 8) {
+      try {
+        await db.execute(
+          "ALTER TABLE offline_operations ADD COLUMN priority INTEGER NOT NULL DEFAULT 0",
+        );
+      } catch (e) {
+        // Column might already exist; ignore
+      }
     }
   }
 
