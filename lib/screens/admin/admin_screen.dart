@@ -139,10 +139,10 @@ class _AdminScreenState extends State<AdminScreen>
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Theme.of(context).colorScheme.onSurface,
+          color: Theme.of(context).colorScheme.surface,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withAlpha(26),
+              color: Theme.of(context).colorScheme.shadow.withAlpha(26),
               blurRadius: 10,
               offset: const Offset(0, -2),
             ),
@@ -165,8 +165,12 @@ class _AdminScreenState extends State<AdminScreen>
                           color: Colors.transparent,
                           child: InkWell(
                             borderRadius: BorderRadius.circular(12),
-                            splashColor: Colors.indigo.withAlpha(77),
-                            highlightColor: Colors.indigo.withAlpha(26),
+                            splashColor: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(77),
+                            highlightColor: Theme.of(
+                              context,
+                            ).colorScheme.primary.withAlpha(26),
                             onTap: () => _onNavTap(index),
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 100),
@@ -178,7 +182,8 @@ class _AdminScreenState extends State<AdminScreen>
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(12),
                                 color: isSelected
-                                    ? Colors.indigo.withValues(alpha: .1)
+                                    ? Theme.of(context).colorScheme.primary
+                                          .withValues(alpha: .1)
                                     : Colors.transparent,
                               ),
                               child: Column(
@@ -191,7 +196,9 @@ class _AdminScreenState extends State<AdminScreen>
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(8),
                                       color: isSelected
-                                          ? Colors.indigo[600]
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
                                           : Colors.transparent,
                                     ),
                                     child: AnimatedScale(
@@ -203,8 +210,12 @@ class _AdminScreenState extends State<AdminScreen>
                                       child: Icon(
                                         _icons[index],
                                         color: isSelected
-                                            ? Colors.white
-                                            : Colors.grey[600],
+                                            ? Theme.of(
+                                                context,
+                                              ).colorScheme.onPrimary
+                                            : Theme.of(
+                                                context,
+                                              ).colorScheme.onSurfaceVariant,
                                         size: 24,
                                       ),
                                     ),
@@ -219,8 +230,12 @@ class _AdminScreenState extends State<AdminScreen>
                                           ? FontWeight.w600
                                           : FontWeight.w500,
                                       color: isSelected
-                                          ? Colors.indigo[600]
-                                          : Colors.grey[600],
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurfaceVariant,
                                     ),
                                     child: Text(
                                       _labels[index],

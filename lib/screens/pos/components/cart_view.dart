@@ -71,8 +71,10 @@ class CartViewState extends State<CartView> {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.grey[300]!)),
-        color: Colors.white,
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outline),
+        ),
+        color: Theme.of(context).colorScheme.surface,
       ),
       child: SingleChildScrollView(
         // Make entire cart scrollable
@@ -92,8 +94,10 @@ class CartViewState extends State<CartView> {
     return Container(
       padding: const EdgeInsets.all(UiConstants.spacingSmall),
       decoration: BoxDecoration(
-        color: Colors.grey[100],
-        border: Border(bottom: BorderSide(color: Colors.grey[300]!)),
+        color: Theme.of(context).colorScheme.surfaceContainer,
+        border: Border(
+          bottom: BorderSide(color: Theme.of(context).colorScheme.outline),
+        ),
       ),
       child: Column(
         children: [
@@ -152,8 +156,10 @@ class CartViewState extends State<CartView> {
                   'Credit',
                   style: TextStyle(
                     color: widget.selectedCustomer != null
-                        ? Colors.black
-                        : Colors.grey,
+                        ? Theme.of(context).colorScheme.onSurface
+                        : Theme.of(
+                            context,
+                          ).colorScheme.onSurface.withOpacity(0.5),
                   ),
                 ),
               ),
@@ -286,11 +292,13 @@ class CartViewState extends State<CartView> {
         vertical: 8,
       ),
       decoration: BoxDecoration(
-        color: Colors.white,
-        border: Border(top: BorderSide(color: Colors.grey[300]!)),
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outline),
+        ),
         boxShadow: [
           BoxShadow(
-            color: Colors.grey.withAlpha(26),
+            color: Theme.of(context).colorScheme.shadow.withAlpha(26),
             spreadRadius: 1,
             blurRadius: 2,
             offset: const Offset(0, -1),
@@ -382,8 +390,12 @@ class CartViewState extends State<CartView> {
                               _cashTenderedController.clear();
                             },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.grey,
-                        foregroundColor: Colors.white,
+                        backgroundColor: Theme.of(
+                          context,
+                        ).colorScheme.secondary,
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onSecondary,
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                       child: const Text(
@@ -411,11 +423,11 @@ class CartViewState extends State<CartView> {
                         padding: const EdgeInsets.symmetric(vertical: 8),
                       ),
                       child: widget.isProcessingSale
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 16,
                               height: 16,
                               child: CircularProgressIndicator(
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.onPrimary,
                                 strokeWidth: 2,
                               ),
                             )

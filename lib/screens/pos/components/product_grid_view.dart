@@ -36,7 +36,7 @@ class ProductGridView extends StatelessWidget {
                 duration: const Duration(seconds: 4),
                 action: SnackBarAction(
                   label: 'Retry',
-                  textColor: Colors.white,
+                  textColor: Theme.of(context).colorScheme.onError,
                   onPressed: () {
                     provider.loadProducts(refresh: true);
                   },
@@ -117,15 +117,19 @@ class ProductGridView extends StatelessWidget {
                             child: Container(
                               width: double.infinity,
                               decoration: BoxDecoration(
-                                color: Colors.grey[200],
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.surfaceContainer,
                                 borderRadius: BorderRadius.circular(
                                   UiConstants.borderRadiusStandard,
                                 ),
                               ),
-                              child: const Icon(
+                              child: Icon(
                                 Icons.inventory,
                                 size: UiConstants.iconSizeMedium,
-                                color: Colors.grey,
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                             ),
                           ),
@@ -183,10 +187,10 @@ class ProductGridView extends StatelessWidget {
                               color: Colors.red.withValues(alpha: 0.9),
                               borderRadius: BorderRadius.circular(4),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Out of stock',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.onError,
                                 fontWeight: FontWeight.bold,
                                 fontSize: 10,
                               ),
@@ -206,10 +210,10 @@ class ProductGridView extends StatelessWidget {
                               color: Colors.orange[700],
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Text(
+                            child: Text(
                               'Queued',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: Theme.of(context).colorScheme.onPrimary,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w600,
                               ),
