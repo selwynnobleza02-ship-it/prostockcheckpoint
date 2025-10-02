@@ -12,6 +12,7 @@ import 'package:prostock/services/firestore/activity_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../utils/password_helper.dart';
 import '../utils/error_logger.dart'; // Added ErrorLogger import for consistent logging
+import '../utils/auth_error_handler.dart';
 
 class AuthProvider with ChangeNotifier {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
@@ -40,10 +41,19 @@ class AuthProvider with ChangeNotifier {
   String? _error;
   String? get error => _error;
 
+  Map<String, String> _fieldErrors = {};
+  Map<String, String> get fieldErrors => _fieldErrors;
+
+  void clearFieldErrors() {
+    _fieldErrors.clear();
+    notifyListeners();
+  }
+
   Future<bool> login(String email, String password) async {
     try {
-      // Clear previous error
+      // Clear previous errors
       _error = null;
+      _fieldErrors.clear();
 
       final credential = await _firebaseAuth.signInWithEmailAndPassword(
         email: email.trim(),
@@ -79,31 +89,8 @@ class AuthProvider with ChangeNotifier {
       _error = 'Login failed. Please check your credentials.';
       return false;
     } on FirebaseAuthException catch (e) {
-      String userFriendlyError;
-      switch (e.code) {
-        case 'user-not-found':
-          userFriendlyError = 'No account found with this email address.';
-          break;
-        case 'wrong-password':
-          userFriendlyError = 'Incorrect password.';
-          break;
-        case 'invalid-email':
-          userFriendlyError = 'Please enter a valid email address.';
-          break;
-        case 'user-disabled':
-          userFriendlyError = 'This account has been disabled.';
-          break;
-        case 'too-many-requests':
-          userFriendlyError =
-              'Too many failed attempts. Please try again later.';
-          break;
-        case 'network-request-failed':
-          userFriendlyError = 'Network error. Please check your connection.';
-          break;
-        default:
-          userFriendlyError = e.message ?? 'Login failed. Please try again.';
-      }
-      _error = userFriendlyError;
+      _error = AuthErrorHandler.getLoginErrorMessage(e);
+      _fieldErrors = AuthErrorHandler.getFieldSpecificError(e);
       ErrorLogger.logError(
         'Error during login',
         error: e,
@@ -289,8 +276,9 @@ class AuthProvider with ChangeNotifier {
   ) async {
     AppUser? newUser;
     try {
-      // Clear previous error
+      // Clear previous errors
       _error = null;
+      _fieldErrors.clear();
 
       // Validate inputs
       if (username.trim().isEmpty || email.trim().isEmpty || password.isEmpty) {
@@ -350,26 +338,8 @@ class AuthProvider with ChangeNotifier {
         rethrow;
       }
     } on FirebaseAuthException catch (e) {
-      String userFriendlyError;
-      switch (e.code) {
-        case 'email-already-in-use':
-          userFriendlyError = 'Email is already in use.';
-          break;
-        case 'invalid-email':
-          userFriendlyError = 'Please enter a valid email address.';
-          break;
-        case 'weak-password':
-          userFriendlyError =
-              'Password is too weak. Please use a stronger password.';
-          break;
-        case 'network-request-failed':
-          userFriendlyError = 'Network error. Please check your connection.';
-          break;
-        default:
-          userFriendlyError =
-              e.message ?? 'Failed to create account. Please try again.';
-      }
-      _error = userFriendlyError;
+      _error = AuthErrorHandler.getSignupErrorMessage(e);
+      _fieldErrors = AuthErrorHandler.getFieldSpecificError(e);
       ErrorLogger.logError(
         'Error creating user',
         error: e,
@@ -392,30 +362,12 @@ class AuthProvider with ChangeNotifier {
       await _firebaseAuth.sendPasswordResetEmail(email: email.trim());
       return null;
     } on FirebaseAuthException catch (e) {
-      String userFriendlyError;
-      switch (e.code) {
-        case 'user-not-found':
-          userFriendlyError = 'No account found with this email address.';
-          break;
-        case 'invalid-email':
-          userFriendlyError = 'Please enter a valid email address.';
-          break;
-        case 'network-request-failed':
-          userFriendlyError = 'Network error. Please check your connection.';
-          break;
-        case 'too-many-requests':
-          userFriendlyError = 'Too many requests. Please try again later.';
-          break;
-        default:
-          userFriendlyError =
-              e.message ?? 'Failed to send reset email. Please try again.';
-      }
       ErrorLogger.logError(
         'Error sending password reset email',
         error: e,
         context: 'AuthProvider.sendPasswordResetEmail',
       );
-      return userFriendlyError;
+      return AuthErrorHandler.getPasswordResetErrorMessage(e);
     } catch (e) {
       ErrorLogger.logError(
         'Unexpected error sending password reset email',

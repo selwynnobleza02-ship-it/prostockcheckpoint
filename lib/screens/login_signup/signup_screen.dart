@@ -3,6 +3,8 @@ import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../models/user_role.dart';
 import '../../utils/password_helper.dart';
+import '../../widgets/enhanced_text_field.dart';
+import '../../widgets/password_strength_checklist.dart';
 
 class SignupScreen extends StatefulWidget {
   const SignupScreen({super.key});
@@ -18,17 +20,43 @@ class _SignupScreenState extends State<SignupScreen> {
   final _passwordController = TextEditingController();
   UserRole _selectedRole = UserRole.user;
   bool _isLoading = false;
-  bool _isPasswordVisible = false; // New state for password visibility
-  String? _usernameError;
-  String? _emailError;
-  String? _passwordError;
+  bool _showPasswordChecklist = false;
+  String _currentPassword = '';
+  bool _isFormValid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _passwordController.addListener(_onPasswordChanged);
+  }
 
   @override
   void dispose() {
+    _passwordController.removeListener(_onPasswordChanged);
     _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
+  }
+
+  void _onPasswordChanged() {
+    setState(() {
+      _currentPassword = _passwordController.text;
+      _showPasswordChecklist = _currentPassword.isNotEmpty;
+    });
+    _validateForm();
+  }
+
+  void _validateForm() {
+    final isUsernameValid = _usernameController.text.trim().length >= 3;
+    final isEmailValid = RegExp(
+      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+    ).hasMatch(_emailController.text.trim());
+    final isPasswordValid = PasswordHelper.isPasswordStrong(_currentPassword);
+
+    setState(() {
+      _isFormValid = isUsernameValid && isEmailValid && isPasswordValid;
+    });
   }
 
   void _showErrorSnackBar(String message) {
@@ -46,14 +74,6 @@ class _SignupScreenState extends State<SignupScreen> {
         ),
       ),
     );
-  }
-
-  void _clearErrors() {
-    setState(() {
-      _usernameError = null;
-      _emailError = null;
-      _passwordError = null;
-    });
   }
 
   void _showVerificationDialog() {
@@ -97,89 +117,94 @@ class _SignupScreenState extends State<SignupScreen> {
                   ),
                 ),
                 const SizedBox(height: 40),
-                TextFormField(
-                  controller: _usernameController,
-                  decoration: InputDecoration(
-                    labelText: 'Username',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.person),
-                    filled: true,
-                    fillColor: Colors.white70,
-                    errorText: _usernameError,
-                  ),
-                  onChanged: (value) => _clearErrors(),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a username';
-                    }
-                    if (value.trim().length < 3) {
-                      return 'Username must be at least 3 characters long';
-                    }
-                    if (!RegExp(r'^[a-zA-Z0-9_]+$').hasMatch(value.trim())) {
-                      return 'Username can only contain letters, numbers, and underscores';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.email),
-                    filled: true,
-                    fillColor: Colors.white70,
-                    errorText: _emailError,
-                  ),
-                  onChanged: (value) => _clearErrors(),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter an email';
-                    }
-                    if (!RegExp(
-                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                    ).hasMatch(value.trim())) {
-                      return 'Please enter a valid email address';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 20),
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.lock),
-                    filled: true,
-                    fillColor: Colors.white70,
-                    helperText:
-                        'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one number, and one special character.',
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _isPasswordVisible
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _isPasswordVisible = !_isPasswordVisible;
-                        });
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    return EnhancedTextField(
+                      controller: _usernameController,
+                      labelText: 'Username',
+                      prefixIcon: Icons.person,
+                      errorText: authProvider.fieldErrors['username'],
+                      onChanged: (value) {
+                        authProvider.clearFieldErrors();
+                        _validateForm();
                       },
-                    ),
-                    errorText: _passwordError,
-                  ),
-                  obscureText: !_isPasswordVisible,
-                  onChanged: (value) => _clearErrors(),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a password';
-                    }
-                    if (!PasswordHelper.isPasswordStrong(value)) {
-                      return 'Password is not strong enough.';
-                    }
-                    return null;
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter a username';
+                        }
+                        if (value.trim().length < 3) {
+                          return 'Username must be at least 3 characters long';
+                        }
+                        if (!RegExp(
+                          r'^[a-zA-Z0-9_]+$',
+                        ).hasMatch(value.trim())) {
+                          return 'Username can only contain letters, numbers, and underscores';
+                        }
+                        return null;
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    return EnhancedTextField(
+                      controller: _emailController,
+                      labelText: 'Email',
+                      prefixIcon: Icons.email,
+                      keyboardType: TextInputType.emailAddress,
+                      errorText: authProvider.fieldErrors['email'],
+                      onChanged: (value) {
+                        authProvider.clearFieldErrors();
+                        _validateForm();
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter an email';
+                        }
+                        if (!RegExp(
+                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                        ).hasMatch(value.trim())) {
+                          return 'Please enter a valid email address';
+                        }
+                        return null;
+                      },
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        EnhancedTextField(
+                          controller: _passwordController,
+                          labelText: 'Password',
+                          prefixIcon: Icons.lock,
+                          isPassword: true,
+                          errorText: authProvider.fieldErrors['password'],
+                          showValidationIcon: false,
+                          onChanged: (value) {
+                            authProvider.clearFieldErrors();
+                            _onPasswordChanged();
+                          },
+                          validator: (value) {
+                            if (value == null || value.isEmpty) {
+                              return 'Please enter a password';
+                            }
+                            if (!PasswordHelper.isPasswordStrong(value)) {
+                              return 'Password is not strong enough.';
+                            }
+                            return null;
+                          },
+                        ),
+                        PasswordStrengthChecklist(
+                          password: _currentPassword,
+                          isVisible: _showPasswordChecklist,
+                        ),
+                      ],
+                    );
                   },
                 ),
                 const SizedBox(height: 20),
@@ -210,16 +235,14 @@ class _SignupScreenState extends State<SignupScreen> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isLoading
+                    onPressed: _isLoading || !_isFormValid
                         ? null
                         : () async {
                             if (_formKey.currentState!.validate()) {
                               setState(() {
                                 _isLoading = true;
-                                _usernameError = null;
-                                _emailError = null;
-                                _passwordError = null;
                               });
+
                               final authProvider = context.read<AuthProvider>();
                               final success = await authProvider.createUser(
                                 _usernameController.text.trim(),
@@ -235,38 +258,9 @@ class _SignupScreenState extends State<SignupScreen> {
                               } else {
                                 final errorMessage =
                                     authProvider.error ?? 'Signup failed';
-                                setState(() {
-                                  if (errorMessage.contains(
-                                    'Username already exists',
-                                  )) {
-                                    _usernameError = 'Username already exists.';
-                                  } else if (errorMessage.contains(
-                                    'email-already-in-use',
-                                  )) {
-                                    _emailError = 'Email is already in use.';
-                                  } else if (errorMessage.contains(
-                                    'invalid-email',
-                                  )) {
-                                    _emailError =
-                                        'Please enter a valid email address.';
-                                  } else if (errorMessage.contains(
-                                    'weak-password',
-                                  )) {
-                                    _passwordError =
-                                        'Password is too weak. Please use a stronger password.';
-                                  } else if (errorMessage.contains(
-                                    'network-request-failed',
-                                  )) {
-                                    _showErrorSnackBar(
-                                      'Network error. Please check your connection and try again.',
-                                    );
-                                  } else {
-                                    _showErrorSnackBar(
-                                      'Signup failed. Please try again.',
-                                    );
-                                  }
-                                });
+                                _showErrorSnackBar(errorMessage);
                               }
+
                               setState(() {
                                 _isLoading = false;
                               });
@@ -282,7 +276,12 @@ class _SignupScreenState extends State<SignupScreen> {
                     ),
                     child: _isLoading
                         ? const CircularProgressIndicator(color: Colors.white)
-                        : const Text('Sign Up', style: TextStyle(fontSize: 18)),
+                        : Text(
+                            _isFormValid
+                                ? 'Create Account'
+                                : 'Complete Form to Continue',
+                            style: const TextStyle(fontSize: 18),
+                          ),
                   ),
                 ),
                 const SizedBox(height: 10),

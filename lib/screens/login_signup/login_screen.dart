@@ -3,8 +3,8 @@ import 'package:prostock/screens/login_signup/forgot_password_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/utils/app_constants.dart';
 import '../../providers/auth_provider.dart';
-// Make sure UserRole is imported if defined elsewhere
 import '../../models/user_role.dart';
+import '../../widgets/enhanced_text_field.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -17,24 +17,33 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false; // New state for loading indicator
-  bool _isPasswordVisible = false; // New state for password visibility
-  String? _emailError;
-  String? _passwordError;
-  int _retryCount = 0;
-  static const int _maxRetries = 3;
+  bool _isLoading = false;
+  bool _isFormValid = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _emailController.addListener(_validateForm);
+    _passwordController.addListener(_validateForm);
+  }
 
   @override
   void dispose() {
+    _emailController.removeListener(_validateForm);
+    _passwordController.removeListener(_validateForm);
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _clearErrors() {
+  void _validateForm() {
+    final isEmailValid = RegExp(
+      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+    ).hasMatch(_emailController.text.trim());
+    final isPasswordValid = _passwordController.text.isNotEmpty;
+
     setState(() {
-      _emailError = null;
-      _passwordError = null;
+      _isFormValid = isEmailValid && isPasswordValid;
     });
   }
 
@@ -58,74 +67,64 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: UiConstants.spacingExtraLarge),
-                TextFormField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    labelText: 'Email',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.email),
-                    filled: true,
-                    fillColor: Colors.white70,
-                    errorText: _emailError,
-                  ),
-                  onChanged: (value) => _clearErrors(),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!RegExp(
-                      r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
-                    ).hasMatch(value.trim())) {
-                      return 'Please enter a valid email address';
-                    }
-                    return null;
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    return EnhancedTextField(
+                      controller: _emailController,
+                      labelText: 'Email',
+                      prefixIcon: Icons.email,
+                      keyboardType: TextInputType.emailAddress,
+                      errorText: authProvider.fieldErrors['email'],
+                      onChanged: (value) {
+                        authProvider.clearFieldErrors();
+                      },
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your email';
+                        }
+                        if (!RegExp(
+                          r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$',
+                        ).hasMatch(value.trim())) {
+                          return 'Please enter a valid email address';
+                        }
+                        return null;
+                      },
+                    );
                   },
                 ),
                 const SizedBox(height: UiConstants.spacingLarge),
-                TextFormField(
-                  controller: _passwordController,
-                  decoration: InputDecoration(
-                    labelText: 'Password',
-                    border: const OutlineInputBorder(),
-                    prefixIcon: const Icon(Icons.lock),
-                    filled: true,
-                    fillColor: Colors.white70,
-                    suffixIcon: IconButton(
-                      icon: Icon(
-                        _isPasswordVisible
-                            ? Icons.visibility
-                            : Icons.visibility_off,
-                      ),
-                      onPressed: () {
-                        setState(() {
-                          _isPasswordVisible = !_isPasswordVisible;
-                        });
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, child) {
+                    return EnhancedTextField(
+                      controller: _passwordController,
+                      labelText: 'Password',
+                      prefixIcon: Icons.lock,
+                      isPassword: true,
+                      errorText: authProvider.fieldErrors['password'],
+                      onChanged: (value) {
+                        authProvider.clearFieldErrors();
                       },
-                    ),
-                    errorText: _passwordError,
-                  ),
-                  obscureText: !_isPasswordVisible,
-                  onChanged: (value) => _clearErrors(),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    return null;
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter your password';
+                        }
+                        return null;
+                      },
+                    );
                   },
                 ),
                 const SizedBox(height: UiConstants.spacingExtraLarge2),
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: _isLoading
+                    onPressed: _isLoading || !_isFormValid
                         ? null
                         : () async {
                             if (_formKey.currentState!.validate()) {
                               setState(() {
                                 _isLoading = true;
-                                _emailError = null;
-                                _passwordError = null;
                               });
+
                               final navigator = Navigator.of(context);
                               final scaffold = ScaffoldMessenger.of(context);
                               final authProvider = context.read<AuthProvider>();
@@ -137,12 +136,11 @@ class _LoginScreenState extends State<LoginScreen> {
                               if (!mounted) return;
 
                               if (success) {
-                                _retryCount = 0; // Reset retry count on success
                                 scaffold.showSnackBar(
                                   const SnackBar(
                                     content: Text('Login successful!'),
                                     backgroundColor: Colors.green,
-                                    duration: Duration(seconds: 3),
+                                    duration: Duration(seconds: 2),
                                   ),
                                 );
                                 final userRole = authProvider.userRole;
@@ -154,99 +152,21 @@ class _LoginScreenState extends State<LoginScreen> {
                               } else {
                                 final errorMessage =
                                     authProvider.error ?? 'Login failed';
-                                setState(() {
-                                  if (errorMessage.contains('user-not-found') ||
-                                      errorMessage.contains('invalid-email')) {
-                                    _emailError =
-                                        'Invalid email or user not found.';
-                                  } else if (errorMessage.contains(
-                                    'wrong-password',
-                                  )) {
-                                    _passwordError = 'Incorrect password.';
-                                  } else if (errorMessage.contains(
-                                    'too-many-requests',
-                                  )) {
-                                    scaffold.showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Too many failed attempts. Please try again later.',
-                                        ),
-                                        backgroundColor: Colors.red,
-                                        duration: const Duration(seconds: 4),
-                                        action: SnackBarAction(
-                                          label: 'Dismiss',
-                                          textColor: Colors.white,
-                                          onPressed: () =>
-                                              scaffold.hideCurrentSnackBar(),
-                                        ),
-                                      ),
-                                    );
-                                  } else if (errorMessage.contains(
-                                    'network-request-failed',
-                                  )) {
-                                    _retryCount++;
-                                    if (_retryCount < _maxRetries) {
-                                      scaffold.showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Network error. Retrying... ($_retryCount/$_maxRetries)',
-                                          ),
-                                          backgroundColor: Colors.red,
-                                          duration: const Duration(seconds: 4),
-                                          action: SnackBarAction(
-                                            label: 'Dismiss',
-                                            textColor: Colors.white,
-                                            onPressed: () =>
-                                                scaffold.hideCurrentSnackBar(),
-                                          ),
-                                        ),
-                                      );
-                                      // Auto-retry after a short delay
-                                      Future.delayed(
-                                        const Duration(seconds: 2),
-                                        () {
-                                          if (mounted) {
-                                            // Trigger retry by calling the login function again
-                                            // This is a simple retry mechanism
-                                          }
-                                        },
-                                      );
-                                    } else {
-                                      scaffold.showSnackBar(
-                                        SnackBar(
-                                          content: const Text(
-                                            'Network error. Please check your connection and try again.',
-                                          ),
-                                          backgroundColor: Colors.red,
-                                          duration: const Duration(seconds: 4),
-                                          action: SnackBarAction(
-                                            label: 'Dismiss',
-                                            textColor: Colors.white,
-                                            onPressed: () =>
-                                                scaffold.hideCurrentSnackBar(),
-                                          ),
-                                        ),
-                                      );
-                                    }
-                                  } else {
-                                    scaffold.showSnackBar(
-                                      SnackBar(
-                                        content: const Text(
-                                          'Login failed. Please try again.',
-                                        ),
-                                        backgroundColor: Colors.red,
-                                        duration: const Duration(seconds: 4),
-                                        action: SnackBarAction(
-                                          label: 'Dismiss',
-                                          textColor: Colors.white,
-                                          onPressed: () =>
-                                              scaffold.hideCurrentSnackBar(),
-                                        ),
-                                      ),
-                                    );
-                                  }
-                                });
+                                scaffold.showSnackBar(
+                                  SnackBar(
+                                    content: Text(errorMessage),
+                                    backgroundColor: Colors.red,
+                                    duration: const Duration(seconds: 4),
+                                    action: SnackBarAction(
+                                      label: 'Dismiss',
+                                      textColor: Colors.white,
+                                      onPressed: () =>
+                                          scaffold.hideCurrentSnackBar(),
+                                    ),
+                                  ),
+                                );
                               }
+
                               setState(() {
                                 _isLoading = false;
                               });
@@ -273,49 +193,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               strokeWidth: UiConstants.strokeWidthSmall,
                             ),
                           )
-                        : const Text(
-                            'Login',
-                            style: TextStyle(
+                        : Text(
+                            _isFormValid ? 'Login' : 'Enter Email & Password',
+                            style: const TextStyle(
                               fontSize: UiConstants.fontSizeButton,
                             ),
                           ),
                   ),
                 ),
                 const SizedBox(height: UiConstants.spacingLarge),
-                const Row(
-                  children: [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(
-                        horizontal: UiConstants.spacingSmall,
-                      ),
-                      child: Text('Or sign in with'),
-                    ),
-                    Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: UiConstants.spacingLarge),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.g_mobiledata, color: Colors.red),
-                    label: const Text('Sign in with Google'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: UiConstants.spacingMedium,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(
-                          UiConstants.borderRadiusStandard,
-                        ),
-                      ),
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: UiConstants.spacingSmall),
                 TextButton(
                   onPressed: () {
                     Navigator.of(context).pushNamed('/signup');
