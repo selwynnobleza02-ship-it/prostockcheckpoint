@@ -14,7 +14,7 @@ class ActivityItem extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Theme.of(context).colorScheme.onSurface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: Colors.grey[200]!),
       ),
@@ -25,7 +25,7 @@ class ActivityItem extends StatelessWidget {
             radius: 16,
             child: Icon(
               _getActionIcon(activity['action']),
-              color: Colors.white,
+              color: Theme.of(context).colorScheme.onSurface,
               size: 16,
             ),
           ),

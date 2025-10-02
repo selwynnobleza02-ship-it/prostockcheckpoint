@@ -39,7 +39,11 @@ Widget buildSummaryCard(
                           content: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(icon, color: Colors.white, size: 16),
+                              Icon(
+                                icon,
+                                color: Theme.of(context).colorScheme.onPrimary,
+                                size: 16,
+                              ),
                               const SizedBox(width: 8),
                               Expanded(
                                 child: Text(

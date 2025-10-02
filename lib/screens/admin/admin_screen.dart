@@ -139,7 +139,7 @@ class _AdminScreenState extends State<AdminScreen>
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.onSurface,
           boxShadow: [
             BoxShadow(
               color: Colors.black.withAlpha(26),

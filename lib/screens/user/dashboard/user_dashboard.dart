@@ -34,10 +34,10 @@ class UserDashboard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Quick Actions',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.onSurface,
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
@@ -46,7 +46,9 @@ class UserDashboard extends StatelessWidget {
                 Text(
                   'Make sales and manage inventory',
                   style: TextStyle(
-                    color: Colors.white.withAlpha(230),
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withAlpha(230),
                     fontSize: 16,
                   ),
                 ),
@@ -124,7 +126,7 @@ class UserDashboard extends StatelessWidget {
                     return Container(
                       padding: const EdgeInsets.all(32),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: Theme.of(context).colorScheme.onSurface,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Center(

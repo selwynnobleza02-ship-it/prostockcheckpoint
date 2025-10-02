@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/services/offline_manager.dart';
@@ -17,7 +16,7 @@ class ConnectivityStatus extends StatelessWidget {
       child: Text(
         offlineManager.isOnline ? 'Online' : 'Offline',
         textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.white),
+        style: TextStyle(color: Theme.of(context).colorScheme.onError),
       ),
     );
   }
