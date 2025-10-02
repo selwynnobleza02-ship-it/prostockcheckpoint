@@ -455,7 +455,7 @@ class SalesProvider with ChangeNotifier {
           await _inventoryProvider.reduceStock(
             item.productId,
             item.quantity,
-            offline: true,
+            offline: !_inventoryProvider.isOnline,
           );
         }
 

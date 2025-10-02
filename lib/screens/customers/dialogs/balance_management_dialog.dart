@@ -107,10 +107,10 @@ class _BalanceManagementDialogState extends State<BalanceManagementDialog> {
 
                   final confirmed = await showConfirmationDialog(
                     context: context,
-                    title: 'Record Payment',
+                    title: 'Confirm Record Payment',
                     content:
-                        'Record payment of ₱${amount.toStringAsFixed(2)} for ${widget.customer.name}? This will reduce their outstanding balance.',
-                    confirmText: 'Record',
+                        'Are you sure you want to record a payment of ₱${amount.toStringAsFixed(2)} for ${widget.customer.name}?\n\nCurrent Balance: ${CurrencyUtils.formatCurrency(widget.customer.balance)}\nNew Balance: ${CurrencyUtils.formatCurrency(widget.customer.balance - amount)}',
+                    confirmText: 'Confirm',
                     cancelText: 'Cancel',
                   );
                   if (confirmed != true) {

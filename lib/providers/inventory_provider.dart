@@ -16,6 +16,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/providers/auth_provider.dart'; // New import
 import 'package:prostock/services/notification_service.dart';
 import 'package:prostock/services/tax_service.dart';
+import 'package:prostock/utils/constants.dart';
 
 class InventoryProvider with ChangeNotifier {
   List<Product> _products = [];
@@ -726,6 +727,22 @@ class InventoryProvider with ChangeNotifier {
               timestamp: DateTime.now(),
             ),
           );
+          // Also queue stock movement so it appears in reports after sync
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              type: OperationType.insertStockMovement,
+              collectionName: AppConstants.stockMovementsCollection,
+              data: {
+                'productId': productId,
+                'productName': product.name,
+                'movementType': 'stock_out',
+                'quantity': quantity,
+                'reason': reason ?? 'Sale',
+                'createdAt': FieldValue.serverTimestamp(),
+              },
+              timestamp: DateTime.now(),
+            ),
+          );
         }
       } else {
         // If explicitly offline mode or connectivity is offline, queue the update
@@ -736,6 +753,22 @@ class InventoryProvider with ChangeNotifier {
             collectionName: 'products',
             documentId: updatedProduct.id,
             data: updatedProduct.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+        // Queue stock movement for offline reduce stock (e.g., sales/credit)
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            type: OperationType.insertStockMovement,
+            collectionName: AppConstants.stockMovementsCollection,
+            data: {
+              'productId': productId,
+              'productName': product.name,
+              'movementType': 'stock_out',
+              'quantity': quantity,
+              'reason': reason ?? 'Sale',
+              'createdAt': FieldValue.serverTimestamp(),
+            },
             timestamp: DateTime.now(),
           ),
         );

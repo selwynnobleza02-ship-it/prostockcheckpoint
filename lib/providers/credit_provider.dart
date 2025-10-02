@@ -108,12 +108,13 @@ class CreditProvider with ChangeNotifier {
       // Update balance locally (will queue remote update if offline)
       await _customerProvider.updateCustomerBalance(customerId, total);
 
-      // Reduce stock locally and queue product updates
+      // Reduce stock and record stock movement (online inserts immediately, offline queues)
       for (final item in items) {
         await _inventoryProvider.reduceStock(
           item.productId,
           item.quantity,
-          offline: true,
+          reason: 'Credit sale',
+          offline: !_inventoryProvider.isOnline,
         );
       }
 
@@ -187,6 +188,13 @@ class CreditProvider with ChangeNotifier {
         notes: notes,
       );
 
+      // Basic validations
+      if (amount <= 0) {
+        _error = 'Payment amount must be greater than zero';
+        notifyListeners();
+        return false;
+      }
+
       // Generate a local ID for mirroring in SQLite (Firestore add() doesn't return ID here)
       final localId = const Uuid().v4();
 
@@ -197,7 +205,15 @@ class CreditProvider with ChangeNotifier {
         await LocalDatabaseService.instance.insertCreditTransaction(localMap);
       } catch (_) {}
 
-      await _customerProvider.updateCustomerBalance(customerId, -amount);
+      final balanceUpdated = await _customerProvider.updateCustomerBalance(
+        customerId,
+        -amount,
+      );
+      if (!balanceUpdated) {
+        _error = _customerProvider.error ?? 'Failed to update customer balance';
+        notifyListeners();
+        return false;
+      }
 
       final opTx = OfflineOperation(
         type: OperationType.insertCreditTransaction,
