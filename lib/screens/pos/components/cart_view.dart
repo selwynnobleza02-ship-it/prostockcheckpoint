@@ -237,41 +237,94 @@ class CartViewState extends State<CartView> {
                     overflow: TextOverflow.ellipsis,
                   ),
                   subtitle: Text(
-                    'Qty: ${item.quantity}',
+                    '@ ${CurrencyUtils.formatCurrency(item.unitPrice)} each',
                     style: const TextStyle(
                       fontSize: UiConstants.fontSizeExtraSmall,
                     ),
                   ),
                   trailing: SizedBox(
-                    width: 80,
-                    child: Row(
+                    width: 120,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Expanded(
-                          child: Text(
-                            CurrencyUtils.formatCurrency(item.totalPrice),
-                            style: const TextStyle(
-                              fontSize: UiConstants.fontSizeExtraSmall,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                            textAlign: TextAlign.center,
+                        Text(
+                          CurrencyUtils.formatCurrency(item.totalPrice),
+                          style: const TextStyle(
+                            fontSize: UiConstants.fontSizeExtraSmall,
+                            fontWeight: FontWeight.w500,
                           ),
+                          overflow: TextOverflow.ellipsis,
+                          textAlign: TextAlign.center,
                         ),
-                        SizedBox(
-                          width: UiConstants.spacingLarge,
-                          child: IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            icon: const Icon(
-                              Icons.remove_circle_outline,
-                              size: UiConstants.spacingMedium,
-                              color: Colors.red,
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            SizedBox(
+                              width: 24,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: const Icon(
+                                  Icons.remove_circle_outline,
+                                  size: 16,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () {
+                                  if (item.quantity > 1) {
+                                    salesProvider.updateItemQuantity(
+                                      index,
+                                      item.quantity - 1,
+                                    );
+                                  } else {
+                                    // Remove item completely when quantity reaches 0
+                                    salesProvider.removeItemFromCurrentSale(
+                                      index,
+                                    );
+                                  }
+                                },
+                              ),
                             ),
-                            onPressed: () {
-                              salesProvider.removeItemFromCurrentSale(index);
-                            },
-                          ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                border: Border.all(
+                                  color: Theme.of(context).colorScheme.outline,
+                                  width: 0.5,
+                                ),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                '${item.quantity}',
+                                style: const TextStyle(
+                                  fontSize: UiConstants.fontSizeExtraSmall,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            SizedBox(
+                              width: 24,
+                              child: IconButton(
+                                padding: EdgeInsets.zero,
+                                constraints: const BoxConstraints(),
+                                icon: const Icon(
+                                  Icons.add_circle_outline,
+                                  size: 16,
+                                  color: Colors.green,
+                                ),
+                                onPressed: () {
+                                  salesProvider.updateItemQuantity(
+                                    index,
+                                    item.quantity + 1,
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/auth_provider.dart';
+import 'package:prostock/screens/settings/components/change_password_screen.dart';
 import 'package:prostock/screens/user/profile/components/profile_action.dart';
 
 class UserProfile extends StatelessWidget {
@@ -116,20 +117,8 @@ class UserProfile extends StatelessWidget {
   }
 
   void _showChangePasswordDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Change Password'),
-        content: const Text(
-          'Password change functionality will be implemented in a future update.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
     );
   }
 
