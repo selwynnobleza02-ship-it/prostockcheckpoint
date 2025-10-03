@@ -385,12 +385,14 @@ class SalesProvider with ChangeNotifier {
           customerId: customerId!,
           items: _currentSaleItems,
           total: currentSaleTotal,
+          dueDate: dueDate,
+          userId: currentUser.id!,
         );
         if (receipt == null) {
           _error = _creditProvider.error;
           return null;
         }
-        // Mirror the credit sale to local database for demand analysis
+        // Mirror the credit sale to local database for demand analysis and notifications
         try {
           final localSaleId = const Uuid().v4();
           final localSale = Sale(
@@ -400,6 +402,7 @@ class SalesProvider with ChangeNotifier {
             paymentMethod: 'credit',
             status: 'completed',
             createdAt: DateTime.now(),
+            dueDate: dueDate, // Include dueDate for notification system
             userId: currentUser.id!,
           );
           await LocalDatabaseService.instance.insertSale(localSale);

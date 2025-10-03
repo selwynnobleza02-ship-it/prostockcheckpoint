@@ -3,6 +3,7 @@ import 'package:prostock/models/credit_sale_item.dart';
 import 'package:prostock/models/credit_transaction.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/models/receipt.dart';
+import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
@@ -74,6 +75,8 @@ class CreditProvider with ChangeNotifier {
     required String customerId,
     required List<SaleItem> items,
     required double total,
+    DateTime? dueDate,
+    required String userId,
   }) async {
     final customer = await _customerProvider.getCustomerById(customerId);
     if (customer == null) {
@@ -130,6 +133,45 @@ class CreditProvider with ChangeNotifier {
 
       // Trigger immediate demand analysis after credit sale
       _triggerDemandAnalysis();
+
+      // Create Sale record for notification system if dueDate is provided
+      if (dueDate != null) {
+        try {
+          // Create Sale record for notification system using passed userId
+          final saleId = const Uuid().v4();
+          final sale = Sale(
+            id: saleId,
+            customerId: customerId,
+            totalAmount: total,
+            paymentMethod: 'credit',
+            status: 'completed',
+            createdAt: DateTime.now(),
+            dueDate: dueDate,
+            userId: userId,
+          );
+
+          // Store sale locally for notification system
+          await LocalDatabaseService.instance.insertSale(sale);
+
+          // Store sale items for complete record
+          for (final item in items) {
+            final localItem = SaleItem(
+              saleId: saleId,
+              productId: item.productId,
+              quantity: item.quantity,
+              unitPrice: item.unitPrice,
+              totalPrice: item.totalPrice,
+            );
+            await LocalDatabaseService.instance.insertSaleItem(localItem);
+          }
+        } catch (e) {
+          ErrorLogger.logError(
+            'Error creating Sale record for notifications',
+            error: e,
+            context: 'CreditProvider.recordCreditSale',
+          );
+        }
+      }
 
       // Group items by product to avoid duplicates
       final groupedItems = _groupItemsByProduct(items);
