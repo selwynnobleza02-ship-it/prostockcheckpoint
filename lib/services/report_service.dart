@@ -3,18 +3,23 @@ import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/models/credit_transaction.dart';
 import 'package:prostock/models/stock_movement.dart';
 import 'package:prostock/services/tax_service.dart';
 
 class ReportService {
   // Sales calculations
+  // Treat only cash-like sales as sales (exclude credit checkouts and payment entries)
   double calculateTotalSales(List<Sale> sales) {
-    return sales.fold(0.0, (sum, sale) => sum + sale.totalAmount);
+    return sales
+        .where((s) => _isCashLikeSale(s.paymentMethod))
+        .fold(0.0, (sum, sale) => sum + sale.totalAmount);
   }
 
   double calculateTodaySales(List<Sale> sales) {
     final today = DateTime.now();
     return sales
+        .where((s) => _isCashLikeSale(s.paymentMethod))
         .where(
           (sale) =>
               sale.createdAt.day == today.day &&
@@ -36,6 +41,13 @@ class ReportService {
         .fold(0.0, (sum, sale) => sum + sale.totalAmount);
   }
 
+  // New: Calculate total credit payments from credit transactions (preferred source)
+  double calculateTotalCreditPayments(List<CreditTransaction> transactions) {
+    return transactions
+        .where((t) => t.type.toLowerCase() == 'payment')
+        .fold(0.0, (sum, t) => sum + t.amount);
+  }
+
   // Customer calculations
   int calculateTotalCustomers(List<Customer> customers) {
     return customers.length;
@@ -51,9 +63,13 @@ class ReportService {
 
   // Financial calculations - CORRECTED VERSIONS
 
-  /// Calculate total revenue from sales
+  /// Calculate total revenue: cash-like sales + credit payments
   double calculateTotalRevenue(List<Sale> sales) {
-    return calculateTotalSales(sales);
+    final cashLike = sales
+        .where((s) => _isCashLikeSale(s.paymentMethod))
+        .fold(0.0, (sum, s) => sum + s.totalAmount);
+    final creditPayments = calculateTotalCreditReceived(sales);
+    return cashLike + creditPayments;
   }
 
   /// Calculate Cost of Goods Sold (COGS) based on actual items sold
@@ -68,6 +84,26 @@ class ReportService {
       }
       return sum;
     });
+  }
+
+  // New: Calculate COGS for credit purchases from transaction items (uses product cost)
+  double calculateTotalCostFromCreditTransactions(
+    List<CreditTransaction> transactions,
+    List<Product> products,
+  ) {
+    final productMap = {for (var p in products) p.id: p};
+    double total = 0.0;
+    for (final tx in transactions.where(
+      (t) => t.type.toLowerCase() == 'purchase',
+    )) {
+      for (final item in tx.items) {
+        final product = productMap[item.productId];
+        if (product != null) {
+          total += product.cost * item.quantity;
+        }
+      }
+    }
+    return total;
   }
 
   /// Calculate total losses (damaged goods, expired items, etc.)
@@ -292,8 +328,10 @@ class ReportService {
   /// Calculate average order value
   double calculateAverageOrderValue(List<Sale> sales) {
     if (sales.isEmpty) return 0.0;
-    final totalRevenue = calculateTotalRevenue(sales);
-    return totalRevenue / sales.length;
+    final filtered = sales.where((s) => _isCashLikeSale(s.paymentMethod));
+    if (filtered.isEmpty) return 0.0;
+    final totalSales = calculateTotalSales(filtered.toList());
+    return totalSales / filtered.length;
   }
 
   /// Calculate conversion rate (if you have visitor/inquiry data)
@@ -309,5 +347,11 @@ class ReportService {
     double customerLifespanYears,
   ) {
     return averageOrderValue * purchaseFrequency * customerLifespanYears;
+  }
+
+  bool _isCashLikeSale(String method) {
+    final m = method.toLowerCase();
+    // Treat standard immediate methods as sales; exclude credit and any payment entries
+    return m == 'cash' || m == 'card' || m == 'gcash' || m == 'paymaya';
   }
 }

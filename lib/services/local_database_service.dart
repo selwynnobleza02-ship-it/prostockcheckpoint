@@ -256,6 +256,11 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
     );
   }
 
+  Future<List<Map<String, dynamic>>> getAllCreditTransactions() async {
+    final db = await instance.database;
+    return await db.query('credit_transactions', orderBy: 'date DESC');
+  }
+
   Future<List<Map<String, dynamic>>> getSaleItems(String saleId) async {
     final db = await instance.database;
     // Aggregate duplicates that may exist due to offline queue + sync overlap

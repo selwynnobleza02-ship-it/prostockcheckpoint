@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/providers/sales_provider.dart';
+import 'package:prostock/models/credit_transaction.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/services/report_service.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/report_helpers.dart';
+import 'package:prostock/services/pdf_report_service.dart';
 
 class CustomersReportTab extends StatelessWidget {
-  const CustomersReportTab({super.key});
+  final List<CreditTransaction> creditTransactions;
+  const CustomersReportTab({super.key, this.creditTransactions = const []});
 
   @override
   Widget build(BuildContext context) {
@@ -31,8 +34,8 @@ class CustomersReportTab extends StatelessWidget {
         final averageBalance = customersWithBalance > 0
             ? totalBalance / customersWithBalance
             : 0.0;
-        final totalCreditReceived = reportService.calculateTotalCreditReceived(
-          salesProvider.sales,
+        final totalCreditReceived = reportService.calculateTotalCreditPayments(
+          creditTransactions,
         );
         final highestBalance = customerProvider.customers.isNotEmpty
             ? customerProvider.customers
@@ -45,6 +48,184 @@ class CustomersReportTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.picture_as_pdf),
+                    label: const Text('Export PDF'),
+                    onPressed: () async {
+                      final scaffold = ScaffoldMessenger.of(context);
+                      scaffold.showSnackBar(
+                        const SnackBar(
+                          content: Text('Generating PDF...'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+
+                      try {
+                        final pdf = PdfReportService();
+                        final sections = <PdfReportSection>[
+                          PdfReportSection(
+                            title: 'Customer Summary',
+                            rows: [
+                              ['Total Customers', totalCustomers.toString()],
+                              ['Active Customers', activeCustomers.toString()],
+                              ['With Balance', customersWithBalance.toString()],
+                              [
+                                'Total Outstanding',
+                                CurrencyUtils.formatCurrency(totalBalance),
+                              ],
+                              [
+                                'Average Balance',
+                                CurrencyUtils.formatCurrency(averageBalance),
+                              ],
+                              [
+                                'Total Credit Received',
+                                CurrencyUtils.formatCurrency(
+                                  totalCreditReceived,
+                                ),
+                              ],
+                              [
+                                'Highest Balance',
+                                CurrencyUtils.formatCurrency(highestBalance),
+                              ],
+                            ],
+                          ),
+                        ];
+
+                        // Build per-customer total payments received
+                        final Map<String, double> paymentsByCustomer = {};
+                        for (final tx in creditTransactions.where(
+                          (t) => t.type.toLowerCase() == 'payment',
+                        )) {
+                          paymentsByCustomer.update(
+                            tx.customerId,
+                            (v) => v + tx.amount,
+                            ifAbsent: () => tx.amount,
+                          );
+                        }
+
+                        if (paymentsByCustomer.isNotEmpty) {
+                          final nameById = {
+                            for (final c in customerProvider.customers)
+                              c.id: c.name,
+                          };
+                          final paymentRows = <List<String>>[];
+                          double totalReceived = 0.0;
+                          final customerIds =
+                              paymentsByCustomer.keys.toList(growable: false)
+                                ..sort(
+                                  (a, b) => (nameById[a] ?? a).compareTo(
+                                    nameById[b] ?? b,
+                                  ),
+                                );
+                          for (final id in customerIds) {
+                            final name = nameById[id] ?? 'Unknown Customer';
+                            final amount = paymentsByCustomer[id] ?? 0.0;
+                            paymentRows.add([
+                              name,
+                              CurrencyUtils.formatCurrency(amount),
+                            ]);
+                            totalReceived += amount;
+                          }
+                          paymentRows.add([
+                            'Total Received',
+                            CurrencyUtils.formatCurrency(totalReceived),
+                          ]);
+                          sections.add(
+                            PdfReportSection(
+                              title: 'Customer Payments Received',
+                              rows: paymentRows,
+                            ),
+                          );
+                        }
+
+                        // Build per-customer balances
+                        final balanceRows = <List<String>>[];
+                        double totalOutstanding = 0.0;
+                        final customersSorted = [...customerProvider.customers]
+                          ..sort((a, b) => a.name.compareTo(b.name));
+                        for (final c in customersSorted) {
+                          balanceRows.add([
+                            c.name,
+                            CurrencyUtils.formatCurrency(c.balance),
+                          ]);
+                          totalOutstanding += c.balance;
+                        }
+                        if (balanceRows.isNotEmpty) {
+                          balanceRows.add([
+                            'Total Outstanding',
+                            CurrencyUtils.formatCurrency(totalOutstanding),
+                          ]);
+                          sections.add(
+                            PdfReportSection(
+                              title: 'Customer Balances',
+                              rows: balanceRows,
+                            ),
+                          );
+                        }
+
+                        // Combined: Payments vs Balance per customer (3 columns)
+                        if (customerProvider.customers.isNotEmpty) {
+                          final combinedRows =
+                              <List<String>>[]; // [Customer, Payment, Balance]
+                          double combinedTotalPayments = 0.0;
+                          double combinedTotalBalances = 0.0;
+                          final customersByName = [
+                            ...customerProvider.customers,
+                          ]..sort((a, b) => a.name.compareTo(b.name));
+                          for (final c in customersByName) {
+                            final payments = paymentsByCustomer[c.id] ?? 0.0;
+                            combinedRows.add([
+                              c.name,
+                              CurrencyUtils.formatCurrency(payments),
+                              CurrencyUtils.formatCurrency(c.balance),
+                            ]);
+                            combinedTotalPayments += payments;
+                            combinedTotalBalances += c.balance;
+                          }
+                          combinedRows.add([
+                            'Totals',
+                            CurrencyUtils.formatCurrency(combinedTotalPayments),
+                            CurrencyUtils.formatCurrency(combinedTotalBalances),
+                          ]);
+                          sections.add(
+                            PdfReportSection(
+                              title: 'Customer Payments vs Balance',
+                              rows: combinedRows,
+                            ),
+                          );
+                        }
+
+                        final file = await pdf.generateFinancialReport(
+                          reportTitle:
+                              'Customer Activity Report - Sari-Sari Store',
+                          startDate: null,
+                          endDate: null,
+                          sections: sections,
+                        );
+
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            content: Text('PDF saved: ${file.path}'),
+                            backgroundColor: Colors.green,
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error generating PDF: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               // Enhanced summary cards grid
               GridView.count(
                 crossAxisCount: 2,
@@ -79,7 +260,7 @@ class CustomersReportTab extends StatelessWidget {
                     context,
                     'Total Credit Received',
                     CurrencyUtils.formatCurrency(totalCreditReceived),
-                    Icons.attach_money,
+                    Icons.credit_card,
                     Colors.purple,
                   ),
                 ],

@@ -16,12 +16,9 @@ class CreditCheckService {
 
     final today = DateTime.now();
     final todayStart = DateTime(today.year, today.month, today.day);
-    final almostDueStart = todayStart.add(
-      const Duration(days: 2),
-    ); // 2 days from now
-    final almostDueEnd = todayStart.add(
-      const Duration(days: 4),
-    ); // 4 days from now
+    // Almost due: 1-2 days from now
+    final almostDueStart = todayStart.add(const Duration(days: 1));
+    final almostDueEnd = todayStart.add(const Duration(days: 3));
 
     final List<Sale> almostDue = [];
     final List<Sale> due = [];
@@ -38,9 +35,10 @@ class CreditCheckService {
         } else if (dueDateStart.isAtSameMomentAs(todayStart)) {
           // Due today
           due.add(sale);
-        } else if (dueDateStart.isAfter(almostDueStart) &&
+        } else if ((dueDateStart.isAtSameMomentAs(almostDueStart) ||
+                dueDateStart.isAfter(almostDueStart)) &&
             dueDateStart.isBefore(almostDueEnd)) {
-          // Almost due: 2-4 days from now
+          // Almost due: 1-2 days from now
           almostDue.add(sale);
         }
       }

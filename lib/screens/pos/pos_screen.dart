@@ -171,32 +171,40 @@ class _POSScreenState extends State<POSScreen> {
             flex: 7, // Increased from 3 to give more space to products
             child: Column(
               children: [
-                // Search bar with consistent height
-                SizedBox(
-                  height: 70,
-                  child: ProductSearchView(
-                    controller: _productSearchController,
-                    onChanged: (value) => _onProductSearchChanged(),
-                  ),
+                // Search bar (let it size itself to avoid overflow on loading/keyboard)
+                ProductSearchView(
+                  controller: _productSearchController,
+                  onChanged: (value) => _onProductSearchChanged(),
                 ),
                 // Product grid takes remaining space in this section
                 const Expanded(child: ProductGridView()),
               ],
             ),
           ),
-          // Cart section - fixed height, fully scrollable (30%)
-          SizedBox(
-            height:
-                MediaQuery.of(context).size.height * 0.3, // Fixed 30% of screen
-            child: CartView(
-              key: _cartViewKey,
-              selectedCustomer: _selectedCustomer,
-              paymentMethod: _paymentMethod,
-              isProcessingSale: _isProcessingSale,
-              onCustomerChanged: _onCustomerChanged,
-              onPaymentMethodChanged: _onPaymentMethodChanged,
-              onCompleteSale: _completeSale,
-            ),
+          // Cart section - adaptive height (30% of available space, respects keyboard)
+          Builder(
+            builder: (context) {
+              final media = MediaQuery.of(context);
+              final availableHeight =
+                  (media.size.height - media.viewInsets.bottom).clamp(
+                    0.0,
+                    double.infinity,
+                  );
+              final targetHeight = (availableHeight * 0.3).clamp(160.0, 360.0);
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: targetHeight,
+                child: CartView(
+                  key: _cartViewKey,
+                  selectedCustomer: _selectedCustomer,
+                  paymentMethod: _paymentMethod,
+                  isProcessingSale: _isProcessingSale,
+                  onCustomerChanged: _onCustomerChanged,
+                  onPaymentMethodChanged: _onPaymentMethodChanged,
+                  onCompleteSale: _completeSale,
+                ),
+              );
+            },
           ),
         ],
       ),

@@ -3,7 +3,6 @@ import 'package:prostock/models/credit_sale_item.dart';
 import 'package:prostock/models/credit_transaction.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/models/receipt.dart';
-import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
@@ -134,39 +133,39 @@ class CreditProvider with ChangeNotifier {
       // Trigger immediate demand analysis after credit sale
       _triggerDemandAnalysis();
 
-      // Create Sale record for notification system if dueDate is provided
+      // Schedule due-date notifications without creating a Sale record
       if (dueDate != null) {
         try {
-          // Create Sale record for notification system using passed userId
-          final saleId = const Uuid().v4();
-          final sale = Sale(
-            id: saleId,
-            customerId: customerId,
-            totalAmount: total,
-            paymentMethod: 'credit',
-            status: 'completed',
-            createdAt: DateTime.now(),
-            dueDate: dueDate,
-            userId: userId,
-          );
+          final notifier = NotificationService();
+          await notifier.init();
+          await notifier.requestPermission();
 
-          // Store sale locally for notification system
-          await LocalDatabaseService.instance.insertSale(sale);
+          final dueStart = DateTime(dueDate.year, dueDate.month, dueDate.day);
+          final dayOf = dueStart.add(const Duration(hours: 9));
+          final dayBefore = dayOf.subtract(const Duration(days: 1));
 
-          // Store sale items for complete record
-          for (final item in items) {
-            final localItem = SaleItem(
-              saleId: saleId,
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              totalPrice: item.totalPrice,
+          if (dayBefore.isAfter(DateTime.now())) {
+            await notifier.scheduleNotification(
+              id: localId.hashCode & 0x7fffffff,
+              title: 'Payment Due Tomorrow',
+              body: 'Payment for customer $customerId is due tomorrow.',
+              scheduledDate: dayBefore,
+              payload: 'credit_due_tomorrow',
             );
-            await LocalDatabaseService.instance.insertSaleItem(localItem);
+          }
+
+          if (dayOf.isAfter(DateTime.now())) {
+            await notifier.scheduleNotification(
+              id: (localId.hashCode + 1) & 0x7fffffff,
+              title: 'Payment Due Today',
+              body: 'Payment for customer $customerId is due today.',
+              scheduledDate: dayOf,
+              payload: 'credit_due_today',
+            );
           }
         } catch (e) {
           ErrorLogger.logError(
-            'Error creating Sale record for notifications',
+            'Error scheduling notifications for credit due date',
             error: e,
             context: 'CreditProvider.recordCreditSale',
           );
@@ -214,7 +213,6 @@ class CreditProvider with ChangeNotifier {
     required String notes,
   }) async {
     // Obtain provider before any async gaps to avoid using BuildContext after awaits
-    final salesProvider = Provider.of<SalesProvider>(context, listen: false);
     try {
       ErrorLogger.logInfo(
         'Starting payment recording',
@@ -267,14 +265,9 @@ class CreditProvider with ChangeNotifier {
       );
       await _inventoryProvider.queueOperation(opTx);
 
-      // Create a sale record for the payment
+      // Do not create a Sale record for payments; treat as collection only
       ErrorLogger.logInfo(
-        'Creating sale record for payment',
-        context: 'CreditProvider.recordPayment',
-      );
-      await salesProvider.createSaleFromPayment(customerId, amount);
-      ErrorLogger.logInfo(
-        'Sale record created successfully',
+        'Skipping sale record creation for payment (collection only)',
         context: 'CreditProvider.recordPayment',
       );
 

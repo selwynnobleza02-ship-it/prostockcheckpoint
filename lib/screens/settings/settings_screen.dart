@@ -9,6 +9,7 @@ import '../../providers/auth_provider.dart';
 import 'components/change_password_screen.dart';
 import 'components/printer_settings_screen.dart';
 import 'components/tax_rules_screen.dart';
+import 'components/notification_test_screen.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -65,6 +66,18 @@ class SettingsScreen extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute(
                   builder: (context) => const UserManagementScreen(),
+                ),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.notifications_active),
+            title: const Text('Test Notifications'),
+            subtitle: const Text('Test push notifications system'),
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (context) => const NotificationTestScreen(),
                 ),
               );
             },

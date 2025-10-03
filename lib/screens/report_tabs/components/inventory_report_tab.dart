@@ -6,6 +6,7 @@ import 'package:prostock/services/tax_service.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/inventory_chart.dart';
 import 'package:prostock/widgets/report_helpers.dart';
+import 'package:prostock/services/pdf_report_service.dart';
 
 class InventoryReportTab extends StatelessWidget {
   const InventoryReportTab({super.key});
@@ -61,6 +62,247 @@ class InventoryReportTab extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          ElevatedButton.icon(
+                            icon: const Icon(Icons.picture_as_pdf),
+                            label: const Text('Export PDF'),
+                            onPressed: () async {
+                              final scaffold = ScaffoldMessenger.of(context);
+                              scaffold.showSnackBar(
+                                const SnackBar(
+                                  content: Text('Generating PDF...'),
+                                  duration: Duration(seconds: 2),
+                                ),
+                              );
+
+                              try {
+                                final pdf = PdfReportService();
+                                final sections = <PdfReportSection>[
+                                  PdfReportSection(
+                                    title: 'Inventory Summary',
+                                    rows: [
+                                      [
+                                        'Total Products',
+                                        totalProducts.toString(),
+                                      ],
+                                      [
+                                        'Low Stock Items',
+                                        lowStockCount.toString(),
+                                      ],
+                                      [
+                                        'Out of Stock',
+                                        outOfStockCount.toString(),
+                                      ],
+                                      ['Categories', categoryCount.toString()],
+                                      [
+                                        'Cost Value',
+                                        CurrencyUtils.formatCurrency(
+                                          totalValue,
+                                        ),
+                                      ],
+                                      [
+                                        'Retail Value',
+                                        CurrencyUtils.formatCurrency(
+                                          totalRetailValue,
+                                        ),
+                                      ],
+                                      [
+                                        'Potential Profit',
+                                        CurrencyUtils.formatCurrency(
+                                          potentialProfit,
+                                        ),
+                                      ],
+                                      [
+                                        'Average Stock Value',
+                                        CurrencyUtils.formatCurrency(
+                                          averageStockValue,
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ];
+
+                                // Product Stock Breakdown (Product, Qty, Cost Value)
+                                final productRows = <List<String>>[];
+                                double productRowsTotalCost = 0.0;
+                                int productRowsTotalQty = 0;
+                                final sortedProducts = [...provider.products]
+                                  ..sort((a, b) => a.name.compareTo(b.name));
+                                for (final p in sortedProducts) {
+                                  final qty = p.stock;
+                                  final costValue = p.cost * qty;
+                                  productRows.add([
+                                    p.name,
+                                    qty.toString(),
+                                    CurrencyUtils.formatCurrency(costValue),
+                                  ]);
+                                  productRowsTotalQty += qty;
+                                  productRowsTotalCost += costValue;
+                                }
+                                if (productRows.isNotEmpty) {
+                                  productRows.add([
+                                    'Total',
+                                    productRowsTotalQty.toString(),
+                                    CurrencyUtils.formatCurrency(
+                                      productRowsTotalCost,
+                                    ),
+                                  ]);
+                                  sections.add(
+                                    PdfReportSection(
+                                      title: 'Product Stock Breakdown',
+                                      rows: productRows,
+                                    ),
+                                  );
+                                }
+
+                                // Inventory Distribution by Category (Category, Qty, Cost Value)
+                                final Map<String, int> qtyByCategory = {};
+                                final Map<String, double> costByCategory = {};
+                                for (final p in provider.products) {
+                                  final cat = (p.category?.isNotEmpty == true)
+                                      ? p.category!
+                                      : 'Uncategorized';
+                                  qtyByCategory.update(
+                                    cat,
+                                    (v) => v + p.stock,
+                                    ifAbsent: () => p.stock,
+                                  );
+                                  costByCategory.update(
+                                    cat,
+                                    (v) => v + (p.cost * p.stock),
+                                    ifAbsent: () => (p.cost * p.stock),
+                                  );
+                                }
+                                final distributionRows = <List<String>>[];
+                                int distTotalQty = 0;
+                                double distTotalCost = 0.0;
+                                final cats = qtyByCategory.keys.toList(
+                                  growable: false,
+                                )..sort();
+                                for (final c in cats) {
+                                  final q = qtyByCategory[c] ?? 0;
+                                  final v = costByCategory[c] ?? 0.0;
+                                  distributionRows.add([
+                                    c,
+                                    q.toString(),
+                                    CurrencyUtils.formatCurrency(v),
+                                  ]);
+                                  distTotalQty += q;
+                                  distTotalCost += v;
+                                }
+                                if (distributionRows.isNotEmpty) {
+                                  distributionRows.add([
+                                    'Total',
+                                    distTotalQty.toString(),
+                                    CurrencyUtils.formatCurrency(distTotalCost),
+                                  ]);
+                                  sections.add(
+                                    PdfReportSection(
+                                      title:
+                                          'Inventory Distribution by Category',
+                                      rows: distributionRows,
+                                    ),
+                                  );
+                                }
+
+                                // Low Stock Products (Product, Qty, Cost Value)
+                                final lowRows = <List<String>>[];
+                                int lowTotalQty = 0;
+                                double lowTotalCost = 0.0;
+                                final lowProducts = [
+                                  ...provider.lowStockProducts,
+                                ]..sort((a, b) => a.name.compareTo(b.name));
+                                for (final p in lowProducts.where(
+                                  (p) => p.stock > 0,
+                                )) {
+                                  final qty = p.stock;
+                                  final costValue = p.cost * qty;
+                                  lowRows.add([
+                                    p.name,
+                                    qty.toString(),
+                                    CurrencyUtils.formatCurrency(costValue),
+                                  ]);
+                                  lowTotalQty += qty;
+                                  lowTotalCost += costValue;
+                                }
+                                if (lowRows.isNotEmpty) {
+                                  lowRows.add([
+                                    'Total',
+                                    lowTotalQty.toString(),
+                                    CurrencyUtils.formatCurrency(lowTotalCost),
+                                  ]);
+                                  sections.add(
+                                    PdfReportSection(
+                                      title: 'Low Stock Products',
+                                      rows: lowRows,
+                                    ),
+                                  );
+                                }
+
+                                // Out of Stock Products (Product, Qty, Cost Value)
+                                final outRows = <List<String>>[];
+                                int outTotalQty =
+                                    0; // will be zero but keep for consistency
+                                double outTotalCost =
+                                    0.0; // zero as qty is zero
+                                final outProducts =
+                                    provider.products
+                                        .where((p) => p.stock == 0)
+                                        .toList()
+                                      ..sort(
+                                        (a, b) => a.name.compareTo(b.name),
+                                      );
+                                for (final p in outProducts) {
+                                  outRows.add([
+                                    p.name,
+                                    '0',
+                                    CurrencyUtils.formatCurrency(0),
+                                  ]);
+                                }
+                                if (outRows.isNotEmpty) {
+                                  outRows.add([
+                                    'Total',
+                                    outTotalQty.toString(),
+                                    CurrencyUtils.formatCurrency(outTotalCost),
+                                  ]);
+                                  sections.add(
+                                    PdfReportSection(
+                                      title: 'Out of Stock Products',
+                                      rows: outRows,
+                                    ),
+                                  );
+                                }
+
+                                final file = await pdf.generateFinancialReport(
+                                  reportTitle:
+                                      'Inventory Report - Sari-Sari Store',
+                                  startDate: null,
+                                  endDate: null,
+                                  sections: sections,
+                                );
+
+                                scaffold.showSnackBar(
+                                  SnackBar(
+                                    content: Text('PDF saved: ${file.path}'),
+                                    backgroundColor: Colors.green,
+                                    duration: const Duration(seconds: 4),
+                                  ),
+                                );
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error generating PDF: $e'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
                       // Enhanced summary cards grid
                       GridView.count(
                         crossAxisCount: 2,

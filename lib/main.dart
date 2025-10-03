@@ -15,6 +15,7 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:prostock/services/background_sync_service.dart';
 import 'package:prostock/services/firestore/credit_service.dart';
+import 'package:prostock/services/firestore/pricing_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'firebase_options.dart';
 import 'providers/inventory_provider.dart';
@@ -85,6 +86,9 @@ class MyApp extends StatelessWidget {
       providers: [
         Provider<ActivityService>(
           create: (_) => ActivityService(FirebaseFirestore.instance),
+        ),
+        Provider<PricingService>(
+          create: (_) => PricingService(FirebaseFirestore.instance),
         ),
         Provider<CreditService>(create: (_) => CreditService()),
         Provider<NotificationService>(create: (_) => NotificationService()),

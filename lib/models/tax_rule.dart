@@ -1,3 +1,5 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class TaxRule {
   final String id;
   final String? categoryName; // null for global rule
@@ -33,16 +35,27 @@ class TaxRule {
   }
 
   factory TaxRule.fromMap(Map<String, dynamic> map) {
+    DateTime parseDate(dynamic v) {
+      if (v is int) return DateTime.fromMillisecondsSinceEpoch(v);
+      if (v is Timestamp) return v.toDate();
+      if (v is String) {
+        final n = int.tryParse(v);
+        if (n != null) return DateTime.fromMillisecondsSinceEpoch(n);
+        return DateTime.tryParse(v) ?? DateTime.fromMillisecondsSinceEpoch(0);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(0);
+    }
+
     return TaxRule(
       id: map['id'] ?? '',
       categoryName: map['categoryName'],
       productId: map['productId'],
       tubo: (map['tubo'] ?? map['rate'] ?? 2.0)
           .toDouble(), // Support both old and new field names
-      isInclusive: map['isInclusive'] ?? true,
+      isInclusive: false, // Inclusive disabled, always added on top
       priority: map['priority'] ?? 0,
-      createdAt: DateTime.fromMillisecondsSinceEpoch(map['createdAt'] ?? 0),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(map['updatedAt'] ?? 0),
+      createdAt: parseDate(map['createdAt']),
+      updatedAt: parseDate(map['updatedAt']),
     );
   }
 

@@ -56,7 +56,9 @@ class SalesProvider with ChangeNotifier {
     );
   }
 
-  List<Sale> get sales => _sales;
+  List<Sale> get sales => _sales
+      .where((s) => !_isPaymentSale(s.paymentMethod))
+      .toList(growable: false);
   List<SaleItem> get saleItems => _saleItems;
   List<SaleItem> get currentSaleItems => _currentSaleItems;
   bool get isLoading => _isLoading;
@@ -127,7 +129,9 @@ class SalesProvider with ChangeNotifier {
         for (var s in pendingSales) s.id!: s,
       };
 
-      _sales = mergedSalesMap.values.toList();
+      _sales = mergedSalesMap.values
+          .where((s) => !_isPaymentSale(s.paymentMethod))
+          .toList();
       _sales.sort((a, b) => b.createdAt.compareTo(a.createdAt));
       log('SalesProvider: Merged ${_sales.length} total sales.');
 
@@ -205,7 +209,9 @@ class SalesProvider with ChangeNotifier {
   }
 
   void _setCachedData(String key, List<Sale> data) {
-    _cache[key] = List.from(data);
+    _cache[key] = List.from(
+      data.where((s) => !_isPaymentSale(s.paymentMethod)),
+    );
     _cacheTimestamps[key] = DateTime.now();
   }
 
@@ -380,7 +386,7 @@ class SalesProvider with ChangeNotifier {
         throw Exception('User not authenticated or user ID is null');
       }
       if (paymentMethod == 'credit') {
-        // Delegate to CreditProvider for credit sales
+        // Delegate to CreditProvider for credit sales (no Sale record creation)
         receipt = await _creditProvider.recordCreditSale(
           customerId: customerId!,
           items: _currentSaleItems,
@@ -391,37 +397,6 @@ class SalesProvider with ChangeNotifier {
         if (receipt == null) {
           _error = _creditProvider.error;
           return null;
-        }
-        // Mirror the credit sale to local database for demand analysis and notifications
-        try {
-          final localSaleId = const Uuid().v4();
-          final localSale = Sale(
-            id: localSaleId,
-            customerId: customerId,
-            totalAmount: currentSaleTotal,
-            paymentMethod: 'credit',
-            status: 'completed',
-            createdAt: DateTime.now(),
-            dueDate: dueDate, // Include dueDate for notification system
-            userId: currentUser.id!,
-          );
-          await LocalDatabaseService.instance.insertSale(localSale);
-          for (final item in _currentSaleItems) {
-            final localItem = SaleItem(
-              saleId: localSaleId,
-              productId: item.productId,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              totalPrice: item.totalPrice,
-            );
-            await LocalDatabaseService.instance.insertSaleItem(localItem);
-          }
-        } catch (e) {
-          ErrorLogger.logError(
-            'Error mirroring credit sale to local DB',
-            error: e,
-            context: 'SalesProvider.completeSale',
-          );
         }
       } else {
         final sale = Sale(
@@ -596,6 +571,14 @@ class SalesProvider with ChangeNotifier {
     }
 
     return grouped.values.toList();
+  }
+
+  bool _isPaymentSale(String method) {
+    final m = method.toLowerCase();
+    return m == 'credit_payment' ||
+        m == 'debt_payment' ||
+        m == 'credit payment' ||
+        m == 'debt payment';
   }
 
   Future<Map<String, dynamic>?> getSalesAnalytics({

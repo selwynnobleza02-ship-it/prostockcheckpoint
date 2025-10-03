@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/models/credit_transaction.dart';
 // import 'package:prostock/models/product.dart';
 import 'package:prostock/providers/stock_movement_provider.dart';
 import 'package:prostock/services/report_service.dart';
@@ -20,7 +21,12 @@ import 'package:prostock/services/pdf_report_service.dart';
 
 class FinancialReportTab extends StatefulWidget {
   final List<Loss> losses;
-  const FinancialReportTab({super.key, required this.losses});
+  final List<CreditTransaction> creditTransactions;
+  const FinancialReportTab({
+    super.key,
+    required this.losses,
+    this.creditTransactions = const [],
+  });
 
   @override
   State<FinancialReportTab> createState() => _FinancialReportTabState();
@@ -114,11 +120,22 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
           );
         }
 
-        final totalRevenue = reportService.calculateTotalRevenue(filteredSales);
-        final totalCost = reportService.calculateTotalCost(
+        final cashSalesRevenue = reportService.calculateTotalSales(
+          filteredSales,
+        );
+        final creditPaymentsRevenue = reportService
+            .calculateTotalCreditPayments(widget.creditTransactions);
+        final totalRevenue = cashSalesRevenue + creditPaymentsRevenue;
+        final totalCostSales = reportService.calculateTotalCost(
           filteredSaleItems,
           inventory.products,
         );
+        final totalCostCredit = reportService
+            .calculateTotalCostFromCreditTransactions(
+              widget.creditTransactions,
+              inventory.products,
+            );
+        final totalCost = totalCostSales + totalCostCredit;
         final totalLoss = reportService.calculateTotalLoss(filteredLosses);
         final totalProfit = reportService.calculateGrossProfit(
           totalRevenue,

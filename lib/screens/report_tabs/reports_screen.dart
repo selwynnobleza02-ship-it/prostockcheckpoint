@@ -10,12 +10,14 @@ import 'package:prostock/screens/report_tabs/components/inventory_report_tab.dar
 import 'package:prostock/screens/report_tabs/components/report_tabs.dart';
 import 'package:prostock/screens/report_tabs/components/sales_report_tab.dart';
 import 'package:prostock/services/firestore/inventory_service.dart';
+import 'package:prostock/services/firestore/sale_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:prostock/widgets/analytics_report_widget.dart';
 import 'package:prostock/widgets/stock_movement_report_widget.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/models/credit_transaction.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class ReportsScreen extends StatefulWidget {
@@ -30,6 +32,7 @@ class _ReportsScreenState extends State<ReportsScreen>
   late TabController _tabController;
   List<Loss> _losses = [];
   List<SaleItem> _saleItems = [];
+  List<CreditTransaction> _creditTransactions = [];
 
   @override
   void initState() {
@@ -92,11 +95,32 @@ class _ReportsScreenState extends State<ReportsScreen>
       }
     }
 
+    final creditTx = await _loadCreditTransactions(offlineManager);
     if (mounted) {
       setState(() {
         _losses = losses;
         _saleItems = allSaleItems;
+        _creditTransactions = creditTx;
       });
+    }
+  }
+
+  Future<List<CreditTransaction>> _loadCreditTransactions(
+    OfflineManager offlineManager,
+  ) async {
+    try {
+      if (offlineManager.isOnline) {
+        final saleService = SaleService(FirebaseFirestore.instance);
+        return await saleService.getAllCreditTransactions();
+      } else {
+        final rows = await LocalDatabaseService.instance
+            .getAllCreditTransactions();
+        return rows
+            .map((m) => CreditTransaction.fromMap(m, m['id']?.toString() ?? ''))
+            .toList();
+      }
+    } catch (_) {
+      return [];
     }
   }
 
@@ -128,8 +152,11 @@ class _ReportsScreenState extends State<ReportsScreen>
         children: [
           const SalesReportTab(),
           const InventoryReportTab(),
-          const CustomersReportTab(),
-          FinancialReportTab(losses: _losses),
+          CustomersReportTab(creditTransactions: _creditTransactions),
+          FinancialReportTab(
+            losses: _losses,
+            creditTransactions: _creditTransactions,
+          ),
           AnalyticsReportWidget(saleItems: _saleItems, losses: _losses),
           const StockMovementReportWidget(),
         ],

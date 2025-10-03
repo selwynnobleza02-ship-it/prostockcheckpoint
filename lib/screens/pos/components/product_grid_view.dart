@@ -15,15 +15,26 @@ class ProductGridView extends StatelessWidget {
     return Consumer<InventoryProvider>(
       builder: (context, provider, child) {
         if (provider.isLoading) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                CircularProgressIndicator(),
-                SizedBox(height: 16),
-                Text('Loading products...'),
-              ],
-            ),
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(UiConstants.spacingMedium),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: const Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        CircularProgressIndicator(),
+                        SizedBox(height: 16),
+                        Text('Loading products...'),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           );
         }
 
@@ -50,34 +61,51 @@ class ProductGridView extends StatelessWidget {
         final productsToDisplay = provider.products;
 
         if (productsToDisplay.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.search_off, size: 64, color: Colors.grey[400]),
-                const SizedBox(height: 16),
-                Text(
-                  'No products found',
-                  style: TextStyle(
-                    fontSize: 18,
-                    color: Colors.grey[600],
-                    fontWeight: FontWeight.w500,
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(UiConstants.spacingMedium),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No products found',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Try adjusting your search or add new products',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[500],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton.icon(
+                          onPressed: () => provider.loadProducts(refresh: true),
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Refresh'),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  'Try adjusting your search or add new products',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton.icon(
-                  onPressed: () => provider.loadProducts(refresh: true),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Refresh'),
-                ),
-              ],
-            ),
+              );
+            },
           );
         }
 

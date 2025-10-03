@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
+import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/screens/customers/dialogs/balance_management_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/transaction_history_dialog.dart';
@@ -16,11 +17,8 @@ class CustomerListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final customerProvider = Provider.of<CustomerProvider>(
-      context,
-      listen: false,
-    );
-    final isOverdue = customerProvider.overdueCustomers.any(
+    final creditProvider = Provider.of<CreditProvider>(context, listen: true);
+    final isOverdue = creditProvider.overdueCustomers.any(
       (c) => c.id == customer.id,
     );
 
@@ -46,6 +44,18 @@ class CustomerListItem extends StatelessWidget {
               const Padding(
                 padding: EdgeInsets.only(left: 8.0),
                 child: Icon(Icons.warning, color: Colors.red, size: 16),
+              ),
+            if (isOverdue)
+              const Padding(
+                padding: EdgeInsets.only(left: 4.0),
+                child: Text(
+                  'Overdue',
+                  style: TextStyle(
+                    color: Colors.red,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
               ),
           ],
         ),

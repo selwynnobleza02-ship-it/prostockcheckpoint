@@ -126,7 +126,7 @@ class UserDashboard extends StatelessWidget {
                     return Container(
                       padding: const EdgeInsets.all(32),
                       decoration: BoxDecoration(
-                        color: Theme.of(context).colorScheme.onSurface,
+                        color: Colors.white,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: const Center(

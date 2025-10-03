@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/sales_provider.dart';
 import 'package:prostock/services/report_service.dart';
+import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/report_helpers.dart';
+import 'package:prostock/services/pdf_report_service.dart';
 
 class SalesReportTab extends StatelessWidget {
   const SalesReportTab({super.key});
@@ -58,6 +60,248 @@ class SalesReportTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  ElevatedButton.icon(
+                    icon: const Icon(Icons.picture_as_pdf),
+                    label: const Text('Export PDF'),
+                    onPressed: () async {
+                      final scaffold = ScaffoldMessenger.of(context);
+                      scaffold.showSnackBar(
+                        const SnackBar(
+                          content: Text('Generating PDF...'),
+                          duration: Duration(seconds: 2),
+                        ),
+                      );
+
+                      try {
+                        final pdf = PdfReportService();
+
+                        // Build breakdowns per period with product name and quantity
+                        final inventory = context.read<InventoryProvider>();
+                        final productById = {
+                          for (final p in inventory.products) p.id: p,
+                        };
+
+                        List<PdfReportSection> buildBreakdownSections() {
+                          // Helper to group sale items by product for a set of saleIds
+                          List<List<String>> buildRowsForSaleIds(
+                            Set<String> saleIds,
+                          ) {
+                            final Map<String, int> qtyByProduct = {};
+                            final Map<String, double> amtByProduct = {};
+                            for (final item in provider.saleItems) {
+                              if (saleIds.contains(item.saleId)) {
+                                qtyByProduct.update(
+                                  item.productId,
+                                  (v) => v + item.quantity,
+                                  ifAbsent: () => item.quantity,
+                                );
+                                amtByProduct.update(
+                                  item.productId,
+                                  (v) => v + item.totalPrice,
+                                  ifAbsent: () => item.totalPrice,
+                                );
+                              }
+                            }
+
+                            final rows = <List<String>>[];
+                            double totalQty = 0;
+                            double totalAmt = 0;
+                            final productIds =
+                                qtyByProduct.keys.toList(growable: false)..sort(
+                                  (a, b) => (productById[b]?.name ?? b)
+                                      .compareTo(productById[a]?.name ?? a),
+                                );
+                            for (final pid in productIds) {
+                              final name =
+                                  productById[pid]?.name ?? 'Unknown Product';
+                              final qty = qtyByProduct[pid] ?? 0;
+                              final amt = amtByProduct[pid] ?? 0.0;
+                              rows.add([
+                                name,
+                                qty.toString(),
+                                CurrencyUtils.formatCurrency(amt),
+                              ]);
+                              totalQty += qty;
+                              totalAmt += amt;
+                            }
+
+                            if (rows.isNotEmpty) {
+                              rows.add([
+                                'Total',
+                                totalQty.toStringAsFixed(0),
+                                CurrencyUtils.formatCurrency(totalAmt),
+                              ]);
+                            }
+                            return rows;
+                          }
+
+                          // Helper to get saleIds for a period
+                          Set<String> saleIdsWhere(
+                            bool Function(DateTime ts) predicate,
+                          ) {
+                            return provider.sales
+                                .where((s) => predicate(s.createdAt))
+                                .map((s) => s.id)
+                                .whereType<String>()
+                                .toSet();
+                          }
+
+                          final now = DateTime.now();
+                          final todayStart = DateTime(
+                            now.year,
+                            now.month,
+                            now.day,
+                          );
+                          final tomorrowStart = todayStart.add(
+                            const Duration(days: 1),
+                          );
+
+                          final weekStart = todayStart.subtract(
+                            Duration(days: todayStart.weekday - 1),
+                          );
+                          final nextWeekStart = weekStart.add(
+                            const Duration(days: 7),
+                          );
+
+                          final monthStart = DateTime(now.year, now.month, 1);
+                          final nextMonthStart = DateTime(
+                            now.year,
+                            now.month + 1,
+                            1,
+                          );
+
+                          final todaySaleIds = saleIdsWhere(
+                            (ts) =>
+                                (ts.isAtSameMomentAs(todayStart) ||
+                                    ts.isAfter(todayStart)) &&
+                                ts.isBefore(tomorrowStart),
+                          );
+                          final weekSaleIds = saleIdsWhere(
+                            (ts) =>
+                                (ts.isAtSameMomentAs(weekStart) ||
+                                    ts.isAfter(weekStart)) &&
+                                ts.isBefore(nextWeekStart),
+                          );
+                          final monthSaleIds = saleIdsWhere(
+                            (ts) =>
+                                (ts.isAtSameMomentAs(monthStart) ||
+                                    ts.isAfter(monthStart)) &&
+                                ts.isBefore(nextMonthStart),
+                          );
+                          final totalSaleIds = provider.sales
+                              .map((s) => s.id)
+                              .whereType<String>()
+                              .toSet();
+
+                          final sections = <PdfReportSection>[
+                            PdfReportSection(
+                              title: 'Sales Summary',
+                              rows: [
+                                [
+                                  "Today's Sales",
+                                  CurrencyUtils.formatCurrency(todaySales),
+                                ],
+                                [
+                                  'Weekly Sales',
+                                  CurrencyUtils.formatCurrency(weeklySales),
+                                ],
+                                [
+                                  'Monthly Sales',
+                                  CurrencyUtils.formatCurrency(monthlySales),
+                                ],
+                                [
+                                  'Total Sales',
+                                  CurrencyUtils.formatCurrency(totalSales),
+                                ],
+                                [
+                                  'Total Transactions',
+                                  totalTransactions.toString(),
+                                ],
+                                [
+                                  'Average Order Value',
+                                  CurrencyUtils.formatCurrency(
+                                    averageOrderValue,
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ];
+
+                          final todayRows = buildRowsForSaleIds(todaySaleIds);
+                          if (todayRows.isNotEmpty) {
+                            sections.add(
+                              PdfReportSection(
+                                title: "Today's Sales Breakdown",
+                                rows: todayRows,
+                              ),
+                            );
+                          }
+
+                          final weekRows = buildRowsForSaleIds(weekSaleIds);
+                          if (weekRows.isNotEmpty) {
+                            sections.add(
+                              PdfReportSection(
+                                title: 'Weekly Sales Breakdown',
+                                rows: weekRows,
+                              ),
+                            );
+                          }
+
+                          final monthRows = buildRowsForSaleIds(monthSaleIds);
+                          if (monthRows.isNotEmpty) {
+                            sections.add(
+                              PdfReportSection(
+                                title: 'Monthly Sales Breakdown',
+                                rows: monthRows,
+                              ),
+                            );
+                          }
+
+                          final totalRows = buildRowsForSaleIds(totalSaleIds);
+                          if (totalRows.isNotEmpty) {
+                            sections.add(
+                              PdfReportSection(
+                                title: 'Total Sales Breakdown',
+                                rows: totalRows,
+                              ),
+                            );
+                          }
+
+                          return sections;
+                        }
+
+                        final sections = buildBreakdownSections();
+
+                        final file = await pdf.generateFinancialReport(
+                          reportTitle: 'Sales Report - Sari-Sari Store',
+                          startDate: null,
+                          endDate: null,
+                          sections: sections,
+                        );
+
+                        scaffold.showSnackBar(
+                          SnackBar(
+                            content: Text('PDF saved: ${file.path}'),
+                            backgroundColor: Colors.green,
+                            duration: const Duration(seconds: 4),
+                          ),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('Error generating PDF: $e'),
+                            backgroundColor: Colors.red,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
               // Enhanced summary cards grid
               GridView.count(
                 crossAxisCount: 2,

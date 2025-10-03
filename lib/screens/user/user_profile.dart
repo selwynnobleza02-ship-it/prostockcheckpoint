@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/auth_provider.dart';
+import 'package:prostock/models/user_role.dart';
 import 'package:prostock/screens/settings/components/change_password_screen.dart';
 import 'package:prostock/screens/user/profile/components/profile_action.dart';
 
@@ -19,7 +20,7 @@ class UserProfile extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.onSurface,
+                  color: Theme.of(context).colorScheme.surface,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
@@ -55,13 +56,21 @@ class UserProfile extends StatelessWidget {
                         vertical: 4,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.teal[50],
+                        color:
+                            (authProvider.userRole ?? UserRole.user) ==
+                                UserRole.admin
+                            ? Colors.blue.withValues(alpha: 0.1)
+                            : Colors.grey.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        'Regular User',
+                        (authProvider.userRole ?? UserRole.user).displayName,
                         style: TextStyle(
-                          color: Colors.teal[600],
+                          color:
+                              (authProvider.userRole ?? UserRole.user) ==
+                                  UserRole.admin
+                              ? Colors.blue
+                              : Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
                       ),
@@ -82,13 +91,6 @@ class UserProfile extends StatelessWidget {
                 subtitle: 'Get help with using the app',
                 icon: Icons.help,
                 onTap: () => _showHelpDialog(context),
-              ),
-              const SizedBox(height: 12),
-              ProfileAction(
-                title: 'About',
-                subtitle: 'App version and information',
-                icon: Icons.info,
-                onTap: () => _showAboutDialog(context),
               ),
               const SizedBox(height: 24),
               SizedBox(
@@ -137,15 +139,6 @@ class UserProfile extends StatelessWidget {
           ),
         ],
       ),
-    );
-  }
-
-  void _showAboutDialog(BuildContext context) {
-    showAboutDialog(
-      context: context,
-      applicationName: 'Retail Credit Manager',
-      applicationVersion: '1.0.0',
-      applicationLegalese: '© 2024 Retail Credit Manager',
     );
   }
 }
