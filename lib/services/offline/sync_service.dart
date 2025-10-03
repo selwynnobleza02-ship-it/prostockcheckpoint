@@ -236,19 +236,39 @@ class SyncService {
 
         final List<Map<String, dynamic>> operations = [];
 
+        // Normalize sale payload for Firestore: camelCase + Timestamp
+        final Map<String, dynamic> saleData = {
+          'userId': sale.userId,
+          'customerId': sale.customerId,
+          'totalAmount': sale.totalAmount,
+          'paymentMethod': sale.paymentMethod,
+          'status': sale.status,
+          'createdAt': Timestamp.fromDate(sale.createdAt),
+        };
+        if (sale.dueDate != null) {
+          saleData['dueDate'] = Timestamp.fromDate(sale.dueDate!);
+        }
+
         operations.add({
           'type': AppConstants.operationInsert,
           'collection': AppConstants.salesCollection,
           'docId': sale.id,
-          'data': sale.toMap(),
+          'data': saleData,
         });
 
         for (final item in saleItems) {
+          final Map<String, dynamic> itemData = {
+            'saleId': item.saleId,
+            'productId': item.productId,
+            'quantity': item.quantity,
+            'unitPrice': item.unitPrice,
+            'totalPrice': item.totalPrice,
+          };
           operations.add({
             'type': AppConstants.operationInsert,
             'collection': AppConstants.saleItemsCollection,
             'docId': item.id,
-            'data': item.toMap(),
+            'data': itemData,
           });
         }
 

@@ -2,6 +2,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'tax_history_service.dart';
 import 'tax_rules_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firestore/pricing_service.dart';
+import 'dart:async';
 import '../models/tax_rule.dart';
 
 class TaxService extends ChangeNotifier {
@@ -17,6 +20,7 @@ class TaxService extends ChangeNotifier {
   static bool? _cachedTuboInclusive;
   static bool _isInitialized = false;
   static final TaxService _instance = TaxService._internal();
+  static StreamSubscription? _settingsSubscription;
 
   factory TaxService() => _instance;
   TaxService._internal();
@@ -31,11 +35,43 @@ class TaxService extends ChangeNotifier {
       _cachedTuboInclusive =
           prefs.getBool(_tuboInclusiveKey) ?? _defaultTuboInclusive;
       _isInitialized = true;
+
+      // Hydrate from Firestore and subscribe for updates (best-effort)
+      try {
+        final pricing = PricingService(FirebaseFirestore.instance);
+        final remote = await pricing.getGlobalSettings();
+        if (remote != null) {
+          final remoteAmount =
+              (remote['tuboAmount'] ?? _defaultTuboAmount) * 1.0;
+          final remoteInclusive =
+              (remote['isInclusive'] ?? _defaultTuboInclusive) == true;
+          await _writeLocal(remoteAmount, remoteInclusive);
+        }
+
+        _settingsSubscription = pricing.watchGlobalSettings().listen((
+          data,
+        ) async {
+          if (data == null) return;
+          final amount = (data['tuboAmount'] ?? _defaultTuboAmount) * 1.0;
+          final inclusive =
+              (data['isInclusive'] ?? _defaultTuboInclusive) == true;
+          await _writeLocal(amount, inclusive);
+          _instance.notifyListeners();
+        });
+      } catch (_) {}
     } catch (e) {
       _cachedTuboAmount = _defaultTuboAmount;
       _cachedTuboInclusive = _defaultTuboInclusive;
       _isInitialized = true;
     }
+  }
+
+  static Future<void> _writeLocal(double amount, bool inclusive) async {
+    final prefs = await SharedPreferences.getInstance();
+    _cachedTuboAmount = amount;
+    _cachedTuboInclusive = inclusive;
+    await prefs.setDouble(_tuboAmountKey, amount);
+    await prefs.setBool(_tuboInclusiveKey, inclusive);
   }
 
   /// Get cached tubo amount (synchronous)
@@ -77,8 +113,8 @@ class TaxService extends ChangeNotifier {
       }
 
       final oldAmount = _cachedTuboAmount;
-      final prefs = await SharedPreferences.getInstance();
-      final success = await prefs.setDouble(_tuboAmountKey, amount);
+      await _writeLocal(amount, getCachedTuboInclusive());
+      final success = true;
 
       if (success) {
         _cachedTuboAmount = amount;
@@ -94,6 +130,15 @@ class TaxService extends ChangeNotifier {
             source: source,
           );
         }
+        // Push to Firestore (best-effort)
+        try {
+          final pricing = PricingService(FirebaseFirestore.instance);
+          await pricing.setGlobalSettings(
+            tuboAmount: amount,
+            isInclusive: getCachedTuboInclusive(),
+            updatedBy: changedByUserName,
+          );
+        } catch (_) {}
       }
       return success;
     } catch (e) {
@@ -110,8 +155,8 @@ class TaxService extends ChangeNotifier {
   }) async {
     try {
       final oldInclusive = _cachedTuboInclusive;
-      final prefs = await SharedPreferences.getInstance();
-      final success = await prefs.setBool(_tuboInclusiveKey, inclusive);
+      await _writeLocal(getCachedTuboAmount(), inclusive);
+      final success = true;
 
       if (success) {
         _cachedTuboInclusive = inclusive;
@@ -128,6 +173,15 @@ class TaxService extends ChangeNotifier {
           );
         }
       }
+      // Push to Firestore (best-effort)
+      try {
+        final pricing = PricingService(FirebaseFirestore.instance);
+        await pricing.setGlobalSettings(
+          tuboAmount: getCachedTuboAmount(),
+          isInclusive: inclusive,
+          updatedBy: changedByUserName,
+        );
+      } catch (_) {}
       return success;
     } catch (e) {
       return false;
@@ -136,17 +190,10 @@ class TaxService extends ChangeNotifier {
 
   /// Calculate selling price based on cost and tubo settings (synchronous)
   static double calculateSellingPriceSync(double cost) {
+    // Added-on-top only: selling price = cost + tubo, rounded to nearest peso
     final tuboAmount = getCachedTuboAmount();
-    final isInclusive = getCachedTuboInclusive();
-
-    if (isInclusive) {
-      // Tubo inclusive: selling price = cost (tubo already included)
-      return cost.round().toDouble();
-    } else {
-      // Tubo exclusive: selling price = cost + tubo, rounded to nearest peso
-      final rawPrice = cost + tuboAmount;
-      return rawPrice.round().toDouble();
-    }
+    final rawPrice = cost + tuboAmount;
+    return rawPrice.round().toDouble();
   }
 
   /// Calculate selling price based on cost and tubo settings (async)
@@ -178,16 +225,9 @@ class TaxService extends ChangeNotifier {
 
   /// Calculate cost from selling price based on tubo settings (synchronous)
   static double calculateCostFromSellingPriceSync(double sellingPrice) {
+    // Added-on-top only: cost = selling price - tubo
     final tuboAmount = getCachedTuboAmount();
-    final isInclusive = getCachedTuboInclusive();
-
-    if (isInclusive) {
-      // Tubo inclusive: cost = selling price (tubo already included)
-      return sellingPrice;
-    } else {
-      // Tubo exclusive: cost = selling price - tubo
-      return sellingPrice - tuboAmount;
-    }
+    return sellingPrice - tuboAmount;
   }
 
   /// Calculate cost from selling price based on tubo settings (async)
@@ -222,16 +262,9 @@ class TaxService extends ChangeNotifier {
 
   /// Calculate tubo amount from selling price (synchronous)
   static double calculateTuboAmountSync(double sellingPrice) {
+    // Added-on-top only: tubo is the fixed amount added
     final tuboAmount = getCachedTuboAmount();
-    final isInclusive = getCachedTuboInclusive();
-
-    if (isInclusive) {
-      // Tubo inclusive: tubo is already included in selling price
-      return tuboAmount;
-    } else {
-      // Tubo exclusive: tubo is the fixed amount added
-      return tuboAmount;
-    }
+    return tuboAmount;
   }
 
   /// Calculate tubo amount from selling price (async)
@@ -273,17 +306,12 @@ class TaxService extends ChangeNotifier {
     );
 
     if (rule != null && rule.id.isNotEmpty) {
-      // Use specific rule
-      if (rule.isInclusive) {
-        return cost.round().toDouble();
-      } else {
-        final rawPrice = cost + rule.tubo;
-        return rawPrice.round().toDouble();
-      }
-    } else {
-      // Fall back to global settings
-      return calculateSellingPriceSync(cost);
+      // Use rule: always add-on-top
+      final rawPrice = cost + rule.tubo;
+      return rawPrice.round().toDouble();
     }
+    // Fallback to global
+    return calculateSellingPriceSync(cost);
   }
 
   /// Calculate selling price with category-specific tubo rule (synchronous)
@@ -364,13 +392,12 @@ class TaxService extends ChangeNotifier {
   /// Get tubo information for display
   static Future<Map<String, dynamic>> getTuboInfo() async {
     final tuboAmount = await getTuboAmount();
-    final isInclusive = await isTuboInclusive();
 
     return {
       'tuboAmount': tuboAmount,
-      'isInclusive': isInclusive,
+      'isInclusive': false,
       'tuboAmountFormatted': '₱${tuboAmount.toStringAsFixed(2)}',
-      'pricingMethod': isInclusive ? 'Tubo Inclusive' : 'Tubo Added on Top',
+      'pricingMethod': 'Tubo Added on Top',
     };
   }
 

@@ -1,6 +1,8 @@
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/tax_rule.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'firestore/pricing_service.dart';
 
 class TaxRulesService {
   static const String _rulesKey = 'tax_rules';
@@ -8,16 +10,26 @@ class TaxRulesService {
 
   /// Get all tax rules
   static Future<List<TaxRule>> getAllRules() async {
+    // Try Firestore first
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final rulesJson = prefs.getString(_rulesKey) ?? '[]';
-      final List<dynamic> rulesList = jsonDecode(rulesJson);
-
-      return rulesList.map((rule) => TaxRule.fromMap(rule)).toList()..sort(
-        (a, b) => b.priority.compareTo(a.priority),
-      ); // Sort by priority desc
-    } catch (e) {
-      return [];
+      final pricing = PricingService(FirebaseFirestore.instance);
+      final docs = await pricing.getAllRules();
+      final rules = docs.map((m) => TaxRule.fromMap(m)).toList()
+        ..sort((a, b) => b.priority.compareTo(a.priority));
+      // Cache locally for offline fallback
+      await _writeLocal(rules);
+      return rules;
+    } catch (_) {
+      // Fallback to local cache
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final rulesJson = prefs.getString(_rulesKey) ?? '[]';
+        final List<dynamic> rulesList = jsonDecode(rulesJson);
+        return rulesList.map((rule) => TaxRule.fromMap(rule)).toList()
+          ..sort((a, b) => b.priority.compareTo(a.priority));
+      } catch (e) {
+        return [];
+      }
     }
   }
 
@@ -96,66 +108,56 @@ class TaxRulesService {
     );
   }
 
-  /// Add a new tax rule
+  static Future<void> _writeLocal(List<TaxRule> rules) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final jsonStr = jsonEncode(rules.map((r) => r.toMap()).toList());
+      await prefs.setString(_rulesKey, jsonStr);
+    } catch (_) {}
+  }
+
   static Future<bool> addRule(TaxRule rule) async {
     try {
-      final allRules = await getAllRules();
-
-      // Check if we're at the limit
-      if (allRules.length >= _maxRules) {
-        return false;
-      }
-
-      // Check for duplicates
-      final exists = allRules.any(
-        (existingRule) =>
-            existingRule.id == rule.id ||
-            (rule.isProduct && existingRule.productId == rule.productId) ||
-            (rule.isCategory &&
-                existingRule.categoryName == rule.categoryName &&
-                existingRule.productId == null) ||
-            (rule.isGlobal && existingRule.isGlobal),
-      );
-
-      if (exists) {
-        return false;
-      }
-
-      allRules.add(rule);
-      await _saveRules(allRules);
+      final pricing = PricingService(FirebaseFirestore.instance);
+      await pricing.upsertRule(rule.id, rule.toMap());
       return true;
-    } catch (e) {
-      return false;
+    } catch (_) {
+      // Local fallback
+      final existing = await getAllRules();
+      existing.add(rule);
+      await _writeLocal(existing);
+      return true;
     }
   }
 
-  /// Update an existing tax rule
   static Future<bool> updateRule(TaxRule rule) async {
     try {
-      final allRules = await getAllRules();
-      final index = allRules.indexWhere((r) => r.id == rule.id);
-
-      if (index == -1) return false;
-
-      allRules[index] = rule;
-      await _saveRules(allRules);
+      final pricing = PricingService(FirebaseFirestore.instance);
+      await pricing.upsertRule(rule.id, rule.toMap());
       return true;
-    } catch (e) {
-      return false;
+    } catch (_) {
+      final existing = await getAllRules();
+      final idx = existing.indexWhere((r) => r.id == rule.id);
+      if (idx != -1) existing[idx] = rule;
+      await _writeLocal(existing);
+      return true;
     }
   }
 
-  /// Delete a tax rule
   static Future<bool> deleteRule(String ruleId) async {
     try {
-      final allRules = await getAllRules();
-      allRules.removeWhere((rule) => rule.id == ruleId);
-      await _saveRules(allRules);
+      final pricing = PricingService(FirebaseFirestore.instance);
+      await pricing.deleteRule(ruleId);
       return true;
-    } catch (e) {
-      return false;
+    } catch (_) {
+      final existing = await getAllRules();
+      existing.removeWhere((r) => r.id == ruleId);
+      await _writeLocal(existing);
+      return true;
     }
   }
+
+  // Removed duplicate local-only CRUD; Firestore-backed versions above handle writes
 
   /// Clear all rules
   static Future<bool> clearAllRules() async {
