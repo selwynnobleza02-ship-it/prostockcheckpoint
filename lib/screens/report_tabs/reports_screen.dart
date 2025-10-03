@@ -10,7 +10,6 @@ import 'package:prostock/screens/report_tabs/components/inventory_report_tab.dar
 import 'package:prostock/screens/report_tabs/components/report_tabs.dart';
 import 'package:prostock/screens/report_tabs/components/sales_report_tab.dart';
 import 'package:prostock/services/firestore/inventory_service.dart';
-import 'package:prostock/services/firestore/sale_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:prostock/widgets/analytics_report_widget.dart';
@@ -55,7 +54,7 @@ class _ReportsScreenState extends State<ReportsScreen>
     );
     final offlineManager = Provider.of<OfflineManager>(context, listen: false);
     final inventoryService = InventoryService(FirebaseFirestore.instance);
-    final saleService = SaleService(FirebaseFirestore.instance);
+    // final saleService = SaleService(FirebaseFirestore.instance);
 
     await salesProvider.loadSales(refresh: refresh);
     if (!mounted) return;
@@ -74,13 +73,15 @@ class _ReportsScreenState extends State<ReportsScreen>
       losses = localLossesData.map((loss) => Loss.fromMap(loss)).toList();
     }
 
-    final List<SaleItem> allSaleItems = [];
-    for (final sale in salesProvider.sales) {
-      if (sale.id != null) {
-        if (sale.isSynced == 1) {
-          final items = await saleService.getSaleItemsBySaleId(sale.id!);
-          allSaleItems.addAll(items);
-        } else {
+    // Prefer provider-managed sale items when available.
+    // If online, provider already fetched sale items from Firestore for all loaded sales.
+    // If offline, fall back to local DB per sale.
+    List<SaleItem> allSaleItems = [];
+    if (offlineManager.isOnline && salesProvider.saleItems.isNotEmpty) {
+      allSaleItems = salesProvider.saleItems;
+    } else {
+      for (final sale in salesProvider.sales) {
+        if (sale.id != null) {
           final localItems = await LocalDatabaseService.instance.getSaleItems(
             sale.id!,
           );

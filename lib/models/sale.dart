@@ -83,22 +83,67 @@ class Sale {
   }
 
   factory Sale.fromMap(Map<String, dynamic> map) {
-    final totalAmount = map['total_amount'];
-    if (totalAmount == null) {
+    // Support both snake_case (local DB) and camelCase (Firestore) field names
+    final dynamic totalAmountRaw = map['total_amount'] ?? map['totalAmount'];
+    if (totalAmountRaw == null) {
       throw ArgumentError('Total amount cannot be null');
     }
+
+    final String userId = (map['user_id'] ?? map['userId'] ?? '').toString();
+    final String? customerId = (map['customer_id'] ?? map['customerId'])
+        ?.toString();
+    final String paymentMethod =
+        (map['payment_method'] ?? map['paymentMethod'] ?? '').toString();
+    final String status = (map['status'] ?? 'pending').toString();
+
+    // createdAt may be an ISO string (local) or a Firestore Timestamp
+    final dynamic createdAtRaw = map['created_at'] ?? map['createdAt'];
+    DateTime createdAt;
+    if (createdAtRaw == null) {
+      createdAt = DateTime.now();
+    } else if (createdAtRaw is DateTime) {
+      createdAt = createdAtRaw;
+    } else if (createdAtRaw is String) {
+      createdAt = DateTime.parse(createdAtRaw);
+    } else {
+      // Attempt to call toDate() if it's a Firestore Timestamp-like object
+      try {
+        createdAt = createdAtRaw.toDate();
+      } catch (_) {
+        createdAt = DateTime.now();
+      }
+    }
+
+    // dueDate may be ISO string or Firestore Timestamp or null
+    final dynamic dueDateRaw = map['due_date'] ?? map['dueDate'];
+    DateTime? dueDate;
+    if (dueDateRaw == null) {
+      dueDate = null;
+    } else if (dueDateRaw is DateTime) {
+      dueDate = dueDateRaw;
+    } else if (dueDateRaw is String) {
+      dueDate = DateTime.parse(dueDateRaw);
+    } else {
+      try {
+        dueDate = dueDateRaw.toDate();
+      } catch (_) {
+        dueDate = null;
+      }
+    }
+
+    final int isSynced =
+        (map['is_synced'] ?? map['isSynced'] ?? AppDefaults.notSynced) as int;
+
     return Sale(
       id: map['id']?.toString(),
-      userId: map['user_id']?.toString() ?? '',
-      customerId: map['customer_id']?.toString(),
-      totalAmount: totalAmount.toDouble(),
-      paymentMethod: map['payment_method'] ?? '',
-      status: map['status'] ?? 'pending',
-      createdAt: DateTime.parse(
-        map['created_at'] ?? DateTime.now().toIso8601String(),
-      ),
-      dueDate: map['due_date'] != null ? DateTime.parse(map['due_date']) : null,
-      isSynced: map['is_synced'] ?? AppDefaults.notSynced,
+      userId: userId,
+      customerId: customerId,
+      totalAmount: (totalAmountRaw as num).toDouble(),
+      paymentMethod: paymentMethod,
+      status: status,
+      createdAt: createdAt,
+      dueDate: dueDate,
+      isSynced: isSynced,
     );
   }
 
