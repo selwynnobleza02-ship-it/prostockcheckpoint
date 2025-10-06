@@ -162,8 +162,22 @@ class PdfReportService {
         metadata: {'path': dir.path},
       );
 
+      // Generate filename based on report title
+      String baseFileName = 'financial_report';
+      if (reportTitle.toLowerCase().contains('sales')) {
+        baseFileName = 'sales_report';
+      } else if (reportTitle.toLowerCase().contains('inventory')) {
+        baseFileName = 'inventory_report';
+      } else if (reportTitle.toLowerCase().contains('customer')) {
+        baseFileName = 'customer_report';
+      } else if (reportTitle.toLowerCase().contains('staff')) {
+        baseFileName = 'staff_report';
+      } else if (reportTitle.toLowerCase().contains('financial')) {
+        baseFileName = 'financial_report';
+      }
+
       final fileName =
-          'financial_report_${DateTime.now().millisecondsSinceEpoch}.pdf';
+          '${baseFileName}_${DateTime.now().millisecondsSinceEpoch}.pdf';
       final file = File(p.join(dir.path, fileName));
 
       ErrorLogger.logInfo(
@@ -230,14 +244,17 @@ class PdfReportService {
     if (lower.contains('cogs') || lower.contains('cost')) return 'Product';
     if (lower.contains('expense')) return 'Expense Item';
     if (lower.contains('cash flow')) return 'Description';
+    if (lower.contains('inventory distribution')) return 'Category';
     return 'Description';
   }
 
   pw.Widget _buildFlexibleTable(PdfReportSection section) {
-    final hasQuantityColumn =
+    final hasAtLeastThreeColumns =
         section.rows.isNotEmpty && section.rows.first.length >= 3;
+    final hasFourColumns =
+        section.rows.isNotEmpty && section.rows.first.length >= 4;
 
-    if (!hasQuantityColumn) {
+    if (!hasAtLeastThreeColumns) {
       // Fallback to 2-column table (label, amount)
       return pw.Table(
         border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
@@ -303,7 +320,116 @@ class PdfReportService {
       );
     }
 
+    if (hasFourColumns) {
+      // 4-column table: product, quantity, price, amount
+      return pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(3),
+          1: const pw.FlexColumnWidth(1),
+          2: const pw.FlexColumnWidth(1.5),
+          3: const pw.FlexColumnWidth(2),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Product',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Quantity',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Price',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Amount',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          for (int i = 0; i < section.rows.length; i++)
+            pw.TableRow(
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    section.rows[i][0],
+                    style: pw.TextStyle(fontSize: 10),
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    section.rows[i][1],
+                    style: const pw.TextStyle(fontSize: 10),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    _stripCurrencySymbols(section.rows[i][2]),
+                    style: const pw.TextStyle(fontSize: 10),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    _stripCurrencySymbols(section.rows[i][3]),
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight:
+                          _isTotalRow(section.rows[i][0]) ||
+                              _isNumericValue(section.rows[i][3])
+                          ? pw.FontWeight.bold
+                          : pw.FontWeight.normal,
+                    ),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      );
+    }
+
     // 3-column table: product, quantity, amount
+    final isInventoryDistribution = section.title.toLowerCase().contains(
+      'inventory distribution',
+    );
     return pw.Table(
       border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
       columnWidths: {
@@ -318,7 +444,7 @@ class PdfReportService {
             pw.Padding(
               padding: const pw.EdgeInsets.all(6),
               child: pw.Text(
-                'Product',
+                isInventoryDistribution ? 'Category' : 'Product',
                 style: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold,
                   fontSize: 11,
@@ -328,7 +454,7 @@ class PdfReportService {
             pw.Padding(
               padding: const pw.EdgeInsets.all(6),
               child: pw.Text(
-                'Qty',
+                isInventoryDistribution ? 'Distribution' : 'Quantity',
                 style: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold,
                   fontSize: 11,
@@ -339,7 +465,7 @@ class PdfReportService {
             pw.Padding(
               padding: const pw.EdgeInsets.all(6),
               child: pw.Text(
-                'Amount',
+                isInventoryDistribution ? 'Quantity' : 'Amount',
                 style: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold,
                   fontSize: 11,

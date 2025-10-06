@@ -157,9 +157,8 @@ class InventoryReportTab extends StatelessWidget {
                                   );
                                 }
 
-                                // Inventory Distribution by Category (Category, Qty, Cost Value)
+                                // Inventory Distribution by Category (Category, Distribution %, Quantity)
                                 final Map<String, int> qtyByCategory = {};
-                                final Map<String, double> costByCategory = {};
                                 for (final p in provider.products) {
                                   final cat = (p.category?.isNotEmpty == true)
                                       ? p.category!
@@ -169,34 +168,32 @@ class InventoryReportTab extends StatelessWidget {
                                     (v) => v + p.stock,
                                     ifAbsent: () => p.stock,
                                   );
-                                  costByCategory.update(
-                                    cat,
-                                    (v) => v + (p.cost * p.stock),
-                                    ifAbsent: () => (p.cost * p.stock),
-                                  );
                                 }
                                 final distributionRows = <List<String>>[];
                                 int distTotalQty = 0;
-                                double distTotalCost = 0.0;
                                 final cats = qtyByCategory.keys.toList(
                                   growable: false,
                                 )..sort();
                                 for (final c in cats) {
                                   final q = qtyByCategory[c] ?? 0;
-                                  final v = costByCategory[c] ?? 0.0;
+                                  distTotalQty += q;
+                                }
+                                for (final c in cats) {
+                                  final q = qtyByCategory[c] ?? 0;
+                                  final percentage = distTotalQty > 0
+                                      ? '${(q / distTotalQty * 100).toStringAsFixed(1)}%'
+                                      : '0.0%';
                                   distributionRows.add([
                                     c,
+                                    percentage,
                                     q.toString(),
-                                    CurrencyUtils.formatCurrency(v),
                                   ]);
-                                  distTotalQty += q;
-                                  distTotalCost += v;
                                 }
                                 if (distributionRows.isNotEmpty) {
                                   distributionRows.add([
                                     'Total',
+                                    '100.0%',
                                     distTotalQty.toString(),
-                                    CurrencyUtils.formatCurrency(distTotalCost),
                                   ]);
                                   sections.add(
                                     PdfReportSection(

@@ -223,21 +223,42 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
                             // Category breakdown no longer needed for product-level export
 
-                            // Build income section by product with quantity
-                            final incomeRows =
-                                <List<String>>[]; // [product, qty, amount]
-                            final cogsRows =
-                                <List<String>>[]; // [product, qty, cost]
+                            // Build income section by product with quantity and price
+                            // incomeRows: [product, quantity, unit price, amount]
+                            final incomeRows = <List<String>>[];
+                            // cogsRows: [product, quantity, cost]
+                            final cogsRows = <List<String>>[];
 
-                            // Group sale items by product
+                            // Group sale items by product and unit price
+                            final Map<String, Map<double, double>>
+                            qtyByProductPrice = {};
+                            final Map<String, Map<double, double>>
+                            revenueByProductPrice = {};
+                            // Also track total quantity per product for COGS computation
                             final Map<String, double> qtyByProduct = {};
-                            final Map<String, double> revenueByProduct = {};
                             for (final item in filteredSaleItems) {
+                              // Round unit price to 2 decimals to avoid floating noise
+                              final roundedUnitPrice =
+                                  (item.unitPrice * 100).round() / 100.0;
+
                               qtyByProduct[item.productId] =
                                   (qtyByProduct[item.productId] ?? 0) +
                                   item.quantity;
-                              revenueByProduct[item.productId] =
-                                  (revenueByProduct[item.productId] ?? 0) +
+
+                              qtyByProductPrice[item.productId] ??= {};
+                              qtyByProductPrice[item
+                                      .productId]![roundedUnitPrice] =
+                                  (qtyByProductPrice[item
+                                          .productId]![roundedUnitPrice] ??
+                                      0) +
+                                  item.quantity;
+
+                              revenueByProductPrice[item.productId] ??= {};
+                              revenueByProductPrice[item
+                                      .productId]![roundedUnitPrice] =
+                                  (revenueByProductPrice[item
+                                          .productId]![roundedUnitPrice] ??
+                                      0) +
                                   item.totalPrice;
                             }
 
@@ -248,21 +269,38 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
                             double totalSalesQty = 0;
                             double totalCogsQty = 0;
+                            // Build income rows per product per unit price
+                            final productIdsSorted =
+                                qtyByProductPrice.keys.toList(growable: false)
+                                  ..sort(
+                                    (a, b) => (productById[a]?.name ?? a)
+                                        .compareTo(productById[b]?.name ?? b),
+                                  );
 
-                            for (final entry in revenueByProduct.entries) {
-                              final productId = entry.key;
-                              final revenue = entry.value;
-                              final qty = qtyByProduct[productId] ?? 0;
+                            for (final productId in productIdsSorted) {
                               final product = productById[productId];
                               final name =
                                   product?.name ??
                                   'Unknown Product ($productId)';
-                              totalSalesQty += qty;
-                              incomeRows.add([
-                                name,
-                                qty.toStringAsFixed(0),
-                                CurrencyUtils.formatCurrency(revenue),
-                              ]);
+                              final priceMap =
+                                  qtyByProductPrice[productId] ?? {};
+                              final pricesSorted = priceMap.keys.toList(
+                                growable: false,
+                              )..sort();
+                              for (final price in pricesSorted) {
+                                final qty = priceMap[price] ?? 0;
+                                final revenue =
+                                    (revenueByProductPrice[productId] ??
+                                        {})[price] ??
+                                    0.0;
+                                totalSalesQty += qty;
+                                incomeRows.add([
+                                  name,
+                                  qty.toStringAsFixed(0),
+                                  CurrencyUtils.formatCurrency(price),
+                                  CurrencyUtils.formatCurrency(revenue),
+                                ]);
+                              }
                             }
 
                             // COGS rows based on product cost * qty
@@ -287,6 +325,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                             incomeRows.add([
                               'Total Sales',
                               totalSalesQty.toStringAsFixed(0),
+                              '-',
                               CurrencyUtils.formatCurrency(totalRevenue),
                             ]);
                             cogsRows.add([
@@ -341,6 +380,46 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                     '${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${totalLoss.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
                                 result: CurrencyUtils.formatCurrency(
                                   totalProfit,
+                                ),
+                              ),
+
+                              // 5. Profit Margin
+                              PdfCalculationSection(
+                                title: '5. Profit Margin',
+                                formula: '(Gross Profit ÷ Total Revenue) × 100',
+                                result: '${profitMargin.toStringAsFixed(1)}%',
+                              ),
+
+                              // 6. Markup Percentage
+                              PdfCalculationSection(
+                                title: '6. Markup Percentage',
+                                formula: '((Revenue − Cost) ÷ Cost) × 100',
+                                result:
+                                    '${markupPercentage.toStringAsFixed(1)}%',
+                              ),
+
+                              // 7. Return on Investment (ROI)
+                              PdfCalculationSection(
+                                title: '7. Return on Investment (ROI)',
+                                formula: '(Total Profit ÷ Total Cost) × 100',
+                                result: '${roi.toStringAsFixed(1)}%',
+                              ),
+
+                              // 8. Inventory Turnover
+                              PdfCalculationSection(
+                                title: '8. Inventory Turnover',
+                                formula: 'COGS ÷ Average Inventory Value',
+                                result:
+                                    '${inventoryTurnover.toStringAsFixed(1)}x',
+                              ),
+
+                              // 9. Potential Profit
+                              PdfCalculationSection(
+                                title: '9. Potential Profit',
+                                formula:
+                                    'Estimated profit from current inventory at retail',
+                                result: CurrencyUtils.formatCurrency(
+                                  potentialProfit,
                                 ),
                               ),
                             ];

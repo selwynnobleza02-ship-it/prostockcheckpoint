@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/providers/sales_provider.dart';
+import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/models/credit_transaction.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:provider/provider.dart';
@@ -65,6 +66,10 @@ class CustomersReportTab extends StatelessWidget {
 
                       try {
                         final pdf = PdfReportService();
+                        final inventory = context.read<InventoryProvider>();
+                        final productById = {
+                          for (final p in inventory.products) p.id: p,
+                        };
                         final sections = <PdfReportSection>[
                           PdfReportSection(
                             title: 'Customer Summary',
@@ -166,34 +171,77 @@ class CustomersReportTab extends StatelessWidget {
                           );
                         }
 
-                        // Combined: Payments vs Balance per customer (3 columns)
-                        if (customerProvider.customers.isNotEmpty) {
-                          final combinedRows =
-                              <List<String>>[]; // [Customer, Payment, Balance]
-                          double combinedTotalPayments = 0.0;
-                          double combinedTotalBalances = 0.0;
-                          final customersByName = [
-                            ...customerProvider.customers,
-                          ]..sort((a, b) => a.name.compareTo(b.name));
-                          for (final c in customersByName) {
-                            final payments = paymentsByCustomer[c.id] ?? 0.0;
-                            combinedRows.add([
-                              c.name,
-                              CurrencyUtils.formatCurrency(payments),
-                              CurrencyUtils.formatCurrency(c.balance),
-                            ]);
-                            combinedTotalPayments += payments;
-                            combinedTotalBalances += c.balance;
+                        // Utang breakdown per customer: products bought on credit
+                        // For each customer, gather credit sales and group items by product
+                        for (final customer in customersSorted) {
+                          final creditSalesForCustomer = salesProvider.sales
+                              .where(
+                                (s) =>
+                                    (s.customerId == customer.id) &&
+                                    s.paymentMethod.toLowerCase() == 'credit',
+                              )
+                              .toList();
+
+                          if (creditSalesForCustomer.isEmpty) continue;
+
+                          final saleIds = creditSalesForCustomer
+                              .map((s) => s.id)
+                              .whereType<String>()
+                              .toSet();
+
+                          final Map<String, int> qtyByProduct = {};
+                          final Map<String, double> amountByProduct = {};
+                          for (final item in salesProvider.saleItems) {
+                            if (saleIds.contains(item.saleId)) {
+                              qtyByProduct.update(
+                                item.productId,
+                                (v) => v + item.quantity,
+                                ifAbsent: () => item.quantity,
+                              );
+                              amountByProduct.update(
+                                item.productId,
+                                (v) => v + item.totalPrice,
+                                ifAbsent: () => item.totalPrice,
+                              );
+                            }
                           }
-                          combinedRows.add([
-                            'Totals',
-                            CurrencyUtils.formatCurrency(combinedTotalPayments),
-                            CurrencyUtils.formatCurrency(combinedTotalBalances),
+
+                          if (qtyByProduct.isEmpty) continue;
+
+                          final rows =
+                              <List<String>>[]; // [Product, Quantity, Amount]
+                          int totalQty = 0;
+                          double totalAmt = 0.0;
+                          final productIds =
+                              qtyByProduct.keys.toList(growable: false)..sort(
+                                (a, b) => (productById[a]?.name ?? a).compareTo(
+                                  productById[b]?.name ?? b,
+                                ),
+                              );
+                          for (final pid in productIds) {
+                            final name =
+                                productById[pid]?.name ?? 'Unknown Product';
+                            final qty = qtyByProduct[pid] ?? 0;
+                            final amt = amountByProduct[pid] ?? 0.0;
+                            rows.add([
+                              name,
+                              qty.toString(),
+                              CurrencyUtils.formatCurrency(amt),
+                            ]);
+                            totalQty += qty;
+                            totalAmt += amt;
+                          }
+
+                          rows.add([
+                            'Total',
+                            totalQty.toString(),
+                            CurrencyUtils.formatCurrency(totalAmt),
                           ]);
+
                           sections.add(
                             PdfReportSection(
-                              title: 'Customer Payments vs Balance',
-                              rows: combinedRows,
+                              title: 'Utang Breakdown - ${customer.name}',
+                              rows: rows,
                             ),
                           );
                         }

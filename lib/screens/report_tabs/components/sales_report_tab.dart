@@ -119,9 +119,11 @@ class SalesReportTab extends StatelessWidget {
                                   productById[pid]?.name ?? 'Unknown Product';
                               final qty = qtyByProduct[pid] ?? 0;
                               final amt = amtByProduct[pid] ?? 0.0;
+                              final unitPrice = qty > 0 ? (amt / qty) : 0.0;
                               rows.add([
                                 name,
                                 qty.toString(),
+                                CurrencyUtils.formatCurrency(unitPrice),
                                 CurrencyUtils.formatCurrency(amt),
                               ]);
                               totalQty += qty;
@@ -132,6 +134,7 @@ class SalesReportTab extends StatelessWidget {
                               rows.add([
                                 'Total',
                                 totalQty.toStringAsFixed(0),
+                                '-',
                                 CurrencyUtils.formatCurrency(totalAmt),
                               ]);
                             }
