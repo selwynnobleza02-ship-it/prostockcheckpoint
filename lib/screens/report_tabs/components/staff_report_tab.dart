@@ -85,12 +85,14 @@ class _StaffReportTabState extends State<StaffReportTab> {
                     ),
                   );
                 } catch (e) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('Error generating PDF: $e'),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
+                  if (mounted && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error generating PDF: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
                 }
               },
             ),

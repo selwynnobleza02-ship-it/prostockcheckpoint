@@ -22,13 +22,27 @@ class CustomerListItem extends StatelessWidget {
       (c) => c.id == customer.id,
     );
 
+    // Determine customer status for UI display
+    Color statusColor;
+    String statusText = '';
+    IconData? statusIcon;
+
+    if (isOverdue) {
+      statusColor = Colors.red;
+      statusText = 'Overdue';
+      statusIcon = Icons.warning;
+    } else if (customer.balance > 0) {
+      statusColor = Colors.orange;
+      // Removed statusText for "Has Balance" to prevent overflow
+    } else {
+      statusColor = Colors.green;
+    }
+
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: isOverdue
-              ? Colors.red
-              : (customer.balance > 0 ? Colors.orange : Colors.green),
+          backgroundColor: statusColor,
           child: Text(
             customer.name.substring(0, 1).toUpperCase(),
             style: const TextStyle(
@@ -39,22 +53,29 @@ class CustomerListItem extends StatelessWidget {
         ),
         title: Row(
           children: [
-            Text(customer.name),
-            if (isOverdue)
-              const Padding(
-                padding: EdgeInsets.only(left: 8.0),
-                child: Icon(Icons.warning, color: Colors.red, size: 16),
+            Expanded(
+              child: Text(
+                customer.name,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w500),
               ),
-            if (isOverdue)
-              const Padding(
-                padding: EdgeInsets.only(left: 4.0),
+            ),
+            if (statusIcon != null)
+              Padding(
+                padding: const EdgeInsets.only(left: 8.0),
+                child: Icon(statusIcon, color: statusColor, size: 16),
+              ),
+            if (statusText.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(left: 4.0),
                 child: Text(
-                  'Overdue',
+                  statusText,
                   style: TextStyle(
-                    color: Colors.red,
+                    color: statusColor,
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
                   ),
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
           ],
@@ -62,8 +83,10 @@ class CustomerListItem extends StatelessWidget {
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (customer.phone != null) Text('Phone: ${customer.phone}'),
-            if (customer.email != null) Text('Email: ${customer.email}'),
+            if (customer.phone != null)
+              Text('Phone: ${customer.phone}', overflow: TextOverflow.ellipsis),
+            if (customer.email != null)
+              Text('Email: ${customer.email}', overflow: TextOverflow.ellipsis),
             Text(
               'Balance: ${CurrencyUtils.formatCurrency(customer.balance)}',
               style: TextStyle(
@@ -72,6 +95,7 @@ class CustomerListItem extends StatelessWidget {
                     : (customer.balance > 0 ? Colors.orange : Colors.green),
                 fontWeight: FontWeight.bold,
               ),
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

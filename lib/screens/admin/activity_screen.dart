@@ -6,6 +6,7 @@ import 'package:prostock/services/firestore/activity_service.dart';
 import 'package:prostock/models/user_activity.dart';
 import 'package:prostock/models/app_user.dart';
 import 'package:prostock/models/user_role.dart';
+import 'package:prostock/widgets/sync_status_indicator.dart';
 
 class ActivityScreen extends StatelessWidget {
   const ActivityScreen({super.key});
@@ -17,6 +18,7 @@ class ActivityScreen extends StatelessWidget {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Activity & Monitoring'),
+          actions: const [SyncStatusIndicator()],
           bottom: const TabBar(
             tabs: [
               Tab(text: 'Activity'),
@@ -61,7 +63,9 @@ class _UserActivityListState extends State<UserActivityList> {
   @override
   void initState() {
     super.initState();
-    _activityStream = context.read<ActivityService>().getAllUserActivitiesStream();
+    _activityStream = context
+        .read<ActivityService>()
+        .getAllUserActivitiesStream();
     _fetchUsers();
   }
 
@@ -101,9 +105,7 @@ class _UserActivityListState extends State<UserActivityList> {
             return ListTile(
               title: Text('${activity.action} by $username'),
               subtitle: Text(activity.details ?? ''),
-              trailing: Text(
-                '${activity.timestamp.toLocal()}'.split(' ')[0],
-              ),
+              trailing: Text('${activity.timestamp.toLocal()}'.split(' ')[0]),
             );
           },
         );

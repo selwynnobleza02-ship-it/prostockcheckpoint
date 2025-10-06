@@ -8,6 +8,7 @@ import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/screens/customers/components/customer_list.dart';
 import 'package:prostock/screens/customers/components/customer_qr_scanner.dart';
 import 'package:prostock/widgets/add_customer_dialog.dart';
+import 'package:prostock/widgets/sync_status_indicator.dart';
 import 'dart:async';
 
 class CustomersScreen extends StatefulWidget {
@@ -28,7 +29,11 @@ class _CustomersScreenState extends State<CustomersScreen> {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<CustomerProvider>(context, listen: false).loadCustomers();
-              Provider.of<CreditProvider>(context, listen: false).fetchOverdueCustomers(context);    });
+      Provider.of<CreditProvider>(
+        context,
+        listen: false,
+      ).fetchOverdueCustomers(context);
+    });
 
     _scrollController.addListener(() {
       if (_scrollController.position.pixels ==
@@ -107,6 +112,7 @@ class _CustomersScreenState extends State<CustomersScreen> {
       appBar: AppBar(
         title: const Text('Customers'),
         actions: [
+          const SyncStatusIndicator(),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
             onPressed: _scanCustomerQRCode,
@@ -160,7 +166,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                   ),
                 ),
               ),
-              Expanded(child: CustomerList(scrollController: _scrollController)),
+              Expanded(
+                child: CustomerList(scrollController: _scrollController),
+              ),
             ],
           );
         },
@@ -170,7 +178,10 @@ class _CustomersScreenState extends State<CustomersScreen> {
           showDialog(
             context: context,
             builder: (context) => AddCustomerDialog(
-              offlineManager: Provider.of<CustomerProvider>(context, listen: false).offlineManager,
+              offlineManager: Provider.of<CustomerProvider>(
+                context,
+                listen: false,
+              ).offlineManager,
             ),
           );
         },

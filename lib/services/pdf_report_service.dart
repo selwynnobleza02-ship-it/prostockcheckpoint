@@ -18,11 +18,13 @@ class PdfReportSection {
 class PdfCalculationSection {
   final String title;
   final String formula;
+  final String calculation;
   final String result;
 
   PdfCalculationSection({
     required this.title,
     required this.formula,
+    required this.calculation,
     required this.result,
   });
 }
@@ -541,7 +543,7 @@ class PdfReportService {
           ),
           pw.SizedBox(height: 8),
 
-          // Calculation formula
+          // Formula
           pw.Container(
             width: double.infinity,
             padding: const pw.EdgeInsets.all(8),
@@ -549,14 +551,33 @@ class PdfReportService {
               border: pw.Border.all(color: PdfColors.black, width: 0.5),
             ),
             child: pw.Text(
-              calculation.formula,
+              'Formula: ${calculation.formula}',
               style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
               textAlign: pw.TextAlign.center,
             ),
           ),
           pw.SizedBox(height: 8),
 
-          // Calculation result
+          // Calculation
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey200,
+              border: pw.Border.all(color: PdfColors.black, width: 0.5),
+            ),
+            child: pw.Text(
+              'Calculation: ${calculation.calculation}',
+              style: pw.TextStyle(
+                fontSize: 11,
+                fontWeight: pw.FontWeight.normal,
+              ),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          pw.SizedBox(height: 8),
+
+          // Result
           pw.Container(
             width: double.infinity,
             padding: const pw.EdgeInsets.all(8),
@@ -595,8 +616,7 @@ class PdfReportService {
   }
 
   String _stripCurrencySymbols(String value) {
-    // Remove common currency symbols that may not be supported by the PDF font
-    // Including peso symbol and other common currency symbols
+    // Remove currency symbols that the default PDF font may not support
     final withoutSymbols = value
         .replaceAll('₱', '') // Peso symbol
         .replaceAll(RegExp(r'[₱$€£¥₹¢]'), '') // Other currency symbols

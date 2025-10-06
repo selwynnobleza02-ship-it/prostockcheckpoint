@@ -12,6 +12,7 @@ import '../utils/error_logger.dart';
 import 'package:prostock/services/local_database_service.dart';
 import '../widgets/delete_confirmation_dialog.dart';
 import '../widgets/dialog_helpers.dart';
+import '../services/customer_status_monitor.dart';
 
 class CustomerProvider with ChangeNotifier {
   List<Customer> _customers = [];
@@ -28,8 +29,18 @@ class CustomerProvider with ChangeNotifier {
   DocumentSnapshot? _lastDocument;
   bool _hasMoreData = true;
   String? _currentSearchQuery;
+  final CustomerStatusMonitor _statusMonitor = CustomerStatusMonitor();
 
-  CustomerProvider(this._offlineManager);
+  CustomerProvider(this._offlineManager) {
+    _initializeStatusMonitor();
+  }
+
+  /// Initialize the customer status monitor
+  void _initializeStatusMonitor() {
+    _statusMonitor.initialize().catchError((e) {
+      ErrorLogger.logError('Failed to initialize status monitor', error: e);
+    });
+  }
 
   List<Customer> get customers => _customers;
   bool get isLoading => _isLoading;
@@ -102,6 +113,14 @@ class CustomerProvider with ChangeNotifier {
         context: 'CustomerProvider.loadCustomers',
       );
       await _loadCustomersFromLocalDB(searchQuery: searchQuery);
+
+      // Check for customer status changes and send notifications
+      try {
+        await _statusMonitor.checkStatusChanges(_customers);
+      } catch (e) {
+        // Don't fail the main operation if status monitoring fails
+        ErrorLogger.logError('Status monitoring failed', error: e);
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -563,6 +582,15 @@ class CustomerProvider with ChangeNotifier {
       );
 
       _customers[customerIndex] = updatedCustomer;
+
+      // Check for customer status changes after balance update
+      try {
+        await _statusMonitor.checkStatusChanges(_customers);
+      } catch (e) {
+        // Don't fail the main operation if status monitoring fails
+        ErrorLogger.logError('Status monitoring failed', error: e);
+      }
+
       notifyListeners();
       return true;
     } catch (e) {

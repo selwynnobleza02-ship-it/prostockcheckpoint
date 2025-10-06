@@ -3,6 +3,7 @@ import 'package:prostock/services/tax_service.dart';
 import 'package:prostock/models/tax_rule.dart';
 import 'package:prostock/models/product.dart';
 import 'package:prostock/providers/inventory_provider.dart';
+import 'package:prostock/utils/constants.dart';
 import 'package:provider/provider.dart';
 
 class TaxRulesScreen extends StatefulWidget {
@@ -50,13 +51,62 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
     );
 
     if (result != null) {
+      // Check for conflicts using the service method
+      final conflictRule = await TaxService.checkForConflicts(result);
+
+      if (conflictRule != null) {
+        // Determine the scope for the confirmation dialog
+        String scope = 'Rule';
+        if (result.isGlobal) {
+          scope = 'Global';
+        } else if (result.isCategory) {
+          scope = 'Category (${result.categoryName})';
+        } else if (result.isProduct) {
+          scope = 'Product';
+        }
+
+        if (!mounted) return;
+        final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: Text('Replace $scope Rule'),
+            content: Text(
+              'A $scope markup rule already exists with tubo amount ₱${conflictRule.tubo.toStringAsFixed(2)}.\n\n'
+              'Do you want to replace it with the new rule (₱${result.tubo.toStringAsFixed(2)})?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Replace'),
+              ),
+            ],
+          ),
+        );
+
+        if (confirmed != true) {
+          return; // User cancelled
+        }
+      }
+
       final success = await TaxService.addTaxRule(result);
       if (success) {
         _loadRules();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Tax rule added successfully!'),
+            SnackBar(
+              content: Text(
+                result.isGlobal
+                    ? 'Global rule replaced successfully!'
+                    : result.isCategory
+                    ? 'Category rule replaced successfully!'
+                    : result.isProduct
+                    ? 'Product rule replaced successfully!'
+                    : 'Tax rule added successfully!',
+              ),
               backgroundColor: Colors.green,
             ),
           );
@@ -81,25 +131,52 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
     );
 
     if (result != null) {
-      final success = await TaxService.updateTaxRule(result);
-      if (success) {
-        _loadRules();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Tax rule updated successfully!'),
-              backgroundColor: Colors.green,
+      // Show confirmation dialog for updating rule
+      if (!mounted) return;
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Update Markup Rule'),
+          content: Text(
+            'Are you sure you want to update this markup rule?\n\n'
+            'Current: ${rule.description} (₱${rule.tubo.toStringAsFixed(2)})\n'
+            'New: ${result.description} (₱${result.tubo.toStringAsFixed(2)})\n\n'
+            'This will affect pricing for all products using this rule.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Cancel'),
             ),
-          );
-        }
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Failed to update tax rule'),
-              backgroundColor: Colors.red,
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Update'),
             ),
-          );
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        final success = await TaxService.updateTaxRule(result);
+        if (success) {
+          _loadRules();
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Tax rule updated successfully!'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        } else {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Failed to update tax rule'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
         }
       }
     }
@@ -109,9 +186,13 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Delete Tax Rule'),
+        title: const Text('Delete Markup Rule'),
         content: Text(
-          'Are you sure you want to delete this tax rule?\n\n${rule.description}',
+          'Are you sure you want to delete this markup rule?\n\n'
+          'Rule: ${rule.description}\n'
+          'Tubo Amount: ₱${rule.tubo.toStringAsFixed(2)}\n\n'
+          'This will affect pricing for all products using this rule. '
+          'Products will fall back to the next applicable rule or global settings.',
         ),
         actions: [
           TextButton(
@@ -120,6 +201,7 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
             child: const Text('Delete'),
           ),
         ],
@@ -445,24 +527,37 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
 
   Future<void> _loadCategories() async {
     try {
+      // Use predefined categories from AppConstants
+      final predefinedCategories = AppConstants.productCategories;
+
+      // Also get categories from existing products to include any custom categories
       final inventoryProvider = context.read<InventoryProvider>();
       final products = inventoryProvider.products;
-      final categories =
-          products
-              .map((product) => product.category)
-              .where((category) => category != null && category.isNotEmpty)
-              .cast<String>()
-              .toSet()
-              .toList()
-            ..sort();
+      final productCategories = products
+          .map((product) => product.category)
+          .where((category) => category != null && category.isNotEmpty)
+          .cast<String>()
+          .toSet()
+          .toList();
+
+      // Combine predefined and product categories, remove duplicates, and sort
+      final allCategories = <String>{
+        ...predefinedCategories,
+        ...productCategories,
+      }.toList()..sort();
 
       if (mounted) {
         setState(() {
-          _availableCategories = categories;
+          _availableCategories = allCategories;
         });
       }
     } catch (e) {
-      // Handle error silently
+      // Fallback to predefined categories only
+      if (mounted) {
+        setState(() {
+          _availableCategories = AppConstants.productCategories;
+        });
+      }
     }
   }
 
@@ -646,7 +741,11 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
                       items: _availableCategories.map((category) {
                         return DropdownMenuItem<String>(
                           value: category,
-                          child: Text(category),
+                          child: Text(
+                            category,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                          ),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -661,6 +760,7 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
                         }
                         return null;
                       },
+                      isExpanded: true,
                     ),
                     const SizedBox(height: 16),
                   ],

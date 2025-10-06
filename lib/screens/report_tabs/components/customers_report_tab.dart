@@ -172,8 +172,12 @@ class CustomersReportTab extends StatelessWidget {
                         }
 
                         // Utang breakdown per customer: products bought on credit
-                        // For each customer, gather credit sales and group items by product
+                        // Include both credit sales and credit transactions
                         for (final customer in customersSorted) {
+                          final Map<String, int> qtyByProduct = {};
+                          final Map<String, double> amountByProduct = {};
+
+                          // 1. Process credit sales (from salesProvider.sales)
                           final creditSalesForCustomer = salesProvider.sales
                               .where(
                                 (s) =>
@@ -182,17 +186,41 @@ class CustomersReportTab extends StatelessWidget {
                               )
                               .toList();
 
-                          if (creditSalesForCustomer.isEmpty) continue;
+                          if (creditSalesForCustomer.isNotEmpty) {
+                            final saleIds = creditSalesForCustomer
+                                .map((s) => s.id)
+                                .whereType<String>()
+                                .toSet();
 
-                          final saleIds = creditSalesForCustomer
-                              .map((s) => s.id)
-                              .whereType<String>()
-                              .toSet();
+                            for (final item in salesProvider.saleItems) {
+                              if (saleIds.contains(item.saleId)) {
+                                qtyByProduct.update(
+                                  item.productId,
+                                  (v) => v + item.quantity,
+                                  ifAbsent: () => item.quantity,
+                                );
+                                amountByProduct.update(
+                                  item.productId,
+                                  (v) => v + item.totalPrice,
+                                  ifAbsent: () => item.totalPrice,
+                                );
+                              }
+                            }
+                          }
 
-                          final Map<String, int> qtyByProduct = {};
-                          final Map<String, double> amountByProduct = {};
-                          for (final item in salesProvider.saleItems) {
-                            if (saleIds.contains(item.saleId)) {
+                          // 2. Process credit transactions (from CreditTransaction with type 'purchase')
+                          final creditTransactionsForCustomer =
+                              creditTransactions
+                                  .where(
+                                    (t) =>
+                                        (t.customerId == customer.id) &&
+                                        t.type.toLowerCase() == 'purchase',
+                                  )
+                                  .toList();
+
+                          for (final transaction
+                              in creditTransactionsForCustomer) {
+                            for (final item in transaction.items) {
                               qtyByProduct.update(
                                 item.productId,
                                 (v) => v + item.quantity,
@@ -262,12 +290,14 @@ class CustomersReportTab extends StatelessWidget {
                           ),
                         );
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error generating PDF: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error generating PDF: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       }
                     },
                   ),

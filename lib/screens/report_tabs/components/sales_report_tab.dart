@@ -85,49 +85,78 @@ class SalesReportTab extends StatelessWidget {
                         };
 
                         List<PdfReportSection> buildBreakdownSections() {
-                          // Helper to group sale items by product for a set of saleIds
+                          // Helper to group sale items by product and unit price for a set of saleIds
                           List<List<String>> buildRowsForSaleIds(
                             Set<String> saleIds,
                           ) {
-                            final Map<String, int> qtyByProduct = {};
-                            final Map<String, double> amtByProduct = {};
+                            // Group by product and unit price to track price changes
+                            final Map<String, Map<double, double>>
+                            qtyByProductPrice = {};
+                            final Map<String, Map<double, double>>
+                            revenueByProductPrice = {};
+
                             for (final item in provider.saleItems) {
                               if (saleIds.contains(item.saleId)) {
-                                qtyByProduct.update(
-                                  item.productId,
-                                  (v) => v + item.quantity,
-                                  ifAbsent: () => item.quantity,
-                                );
-                                amtByProduct.update(
-                                  item.productId,
-                                  (v) => v + item.totalPrice,
-                                  ifAbsent: () => item.totalPrice,
-                                );
+                                // Round unit price to 2 decimals to avoid floating noise
+                                final roundedUnitPrice =
+                                    (item.unitPrice * 100).round() / 100.0;
+
+                                qtyByProductPrice[item.productId] ??= {};
+                                qtyByProductPrice[item
+                                        .productId]![roundedUnitPrice] =
+                                    (qtyByProductPrice[item
+                                            .productId]![roundedUnitPrice] ??
+                                        0) +
+                                    item.quantity;
+
+                                revenueByProductPrice[item.productId] ??= {};
+                                revenueByProductPrice[item
+                                        .productId]![roundedUnitPrice] =
+                                    (revenueByProductPrice[item
+                                            .productId]![roundedUnitPrice] ??
+                                        0) +
+                                    item.totalPrice;
                               }
                             }
 
                             final rows = <List<String>>[];
                             double totalQty = 0;
                             double totalAmt = 0;
+
+                            // Sort products by name
                             final productIds =
-                                qtyByProduct.keys.toList(growable: false)..sort(
-                                  (a, b) => (productById[b]?.name ?? b)
-                                      .compareTo(productById[a]?.name ?? a),
-                                );
-                            for (final pid in productIds) {
+                                qtyByProductPrice.keys.toList(growable: false)
+                                  ..sort(
+                                    (a, b) => (productById[a]?.name ?? a)
+                                        .compareTo(productById[b]?.name ?? b),
+                                  );
+
+                            for (final productId in productIds) {
                               final name =
-                                  productById[pid]?.name ?? 'Unknown Product';
-                              final qty = qtyByProduct[pid] ?? 0;
-                              final amt = amtByProduct[pid] ?? 0.0;
-                              final unitPrice = qty > 0 ? (amt / qty) : 0.0;
-                              rows.add([
-                                name,
-                                qty.toString(),
-                                CurrencyUtils.formatCurrency(unitPrice),
-                                CurrencyUtils.formatCurrency(amt),
-                              ]);
-                              totalQty += qty;
-                              totalAmt += amt;
+                                  productById[productId]?.name ??
+                                  'Unknown Product';
+                              final priceMap =
+                                  qtyByProductPrice[productId] ?? {};
+                              final pricesSorted = priceMap.keys.toList(
+                                growable: false,
+                              )..sort();
+
+                              for (final price in pricesSorted) {
+                                final qty = priceMap[price] ?? 0;
+                                final revenue =
+                                    (revenueByProductPrice[productId] ??
+                                        {})[price] ??
+                                    0.0;
+
+                                rows.add([
+                                  name,
+                                  qty.toStringAsFixed(0),
+                                  CurrencyUtils.formatCurrency(price),
+                                  CurrencyUtils.formatCurrency(revenue),
+                                ]);
+                                totalQty += qty;
+                                totalAmt += revenue;
+                              }
                             }
 
                             if (rows.isNotEmpty) {
@@ -293,12 +322,14 @@ class SalesReportTab extends StatelessWidget {
                           ),
                         );
                       } catch (e) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Error generating PDF: $e'),
-                            backgroundColor: Colors.red,
-                          ),
-                        );
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Error generating PDF: $e'),
+                              backgroundColor: Colors.red,
+                            ),
+                          );
+                        }
                       }
                     },
                   ),

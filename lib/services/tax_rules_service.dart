@@ -3,10 +3,11 @@ import 'dart:convert';
 import '../models/tax_rule.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firestore/pricing_service.dart';
+import 'tax_service.dart';
 
 class TaxRulesService {
   static const String _rulesKey = 'tax_rules';
-  static const int _maxRules = 100; // Limit to prevent storage bloat
+  // Limit to prevent storage bloat
 
   /// Get all tax rules
   static Future<List<TaxRule>> getAllRules() async {
@@ -119,14 +120,161 @@ class TaxRulesService {
   static Future<bool> addRule(TaxRule rule) async {
     try {
       final pricing = PricingService(FirebaseFirestore.instance);
+
+      // Check for conflicts and replace existing rules
+      await _replaceConflictingRules(rule, pricing);
+
       await pricing.upsertRule(rule.id, rule.toMap());
+      // Record price history for affected products (best-effort)
+      try {
+        await _recordPriceHistoryForRuleChange(
+          productId: rule.productId,
+          categoryName: rule.categoryName,
+          isGlobal: rule.isGlobal,
+        );
+      } catch (_) {}
       return true;
     } catch (_) {
       // Local fallback
       final existing = await getAllRules();
+
+      // Replace conflicting rules locally
+      if (rule.isGlobal) {
+        existing.removeWhere((r) => r.isGlobal);
+      }
+      if (rule.isCategory && (rule.categoryName != null)) {
+        existing.removeWhere(
+          (r) => r.isCategory && r.categoryName == rule.categoryName,
+        );
+      }
+      if (rule.isProduct && (rule.productId != null)) {
+        existing.removeWhere(
+          (r) => r.isProduct && r.productId == rule.productId,
+        );
+      }
+
       existing.add(rule);
       await _writeLocal(existing);
       return true;
+    }
+  }
+
+  /// Check if a rule would conflict with existing rules
+  static Future<TaxRule?> checkForConflicts(TaxRule rule) async {
+    final existingRules = await getAllRules();
+
+    if (rule.isGlobal) {
+      final existingGlobalRule = existingRules.firstWhere(
+        (r) => r.isGlobal,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      if (existingGlobalRule.id.isNotEmpty) {
+        return existingGlobalRule;
+      }
+    }
+
+    if (rule.isCategory && (rule.categoryName != null)) {
+      final existingCategoryRule = existingRules.firstWhere(
+        (r) => r.isCategory && r.categoryName == rule.categoryName,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (existingCategoryRule.id.isNotEmpty) {
+        return existingCategoryRule;
+      }
+    }
+
+    if (rule.isProduct && (rule.productId != null)) {
+      final existingProductRule = existingRules.firstWhere(
+        (r) => r.isProduct && r.productId == rule.productId,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (existingProductRule.id.isNotEmpty) {
+        return existingProductRule;
+      }
+    }
+
+    return null; // No conflicts found
+  }
+
+  /// Check for existing rules that would conflict with the new rule and replace them
+  static Future<void> _replaceConflictingRules(
+    TaxRule rule,
+    PricingService pricing,
+  ) async {
+    final existingRules = await getAllRules();
+
+    if (rule.isGlobal) {
+      final existingGlobalRule = existingRules.firstWhere(
+        (r) => r.isGlobal,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      if (existingGlobalRule.id.isNotEmpty) {
+        await pricing.deleteRule(existingGlobalRule.id);
+      }
+    }
+
+    if (rule.isCategory && (rule.categoryName != null)) {
+      final existingCategoryRule = existingRules.firstWhere(
+        (r) => r.isCategory && r.categoryName == rule.categoryName,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (existingCategoryRule.id.isNotEmpty) {
+        await pricing.deleteRule(existingCategoryRule.id);
+      }
+    }
+
+    if (rule.isProduct && (rule.productId != null)) {
+      final existingProductRule = existingRules.firstWhere(
+        (r) => r.isProduct && r.productId == rule.productId,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (existingProductRule.id.isNotEmpty) {
+        await pricing.deleteRule(existingProductRule.id);
+      }
     }
   }
 
@@ -134,6 +282,14 @@ class TaxRulesService {
     try {
       final pricing = PricingService(FirebaseFirestore.instance);
       await pricing.upsertRule(rule.id, rule.toMap());
+      // Record price history for affected products (best-effort)
+      try {
+        await _recordPriceHistoryForRuleChange(
+          productId: rule.productId,
+          categoryName: rule.categoryName,
+          isGlobal: rule.isGlobal,
+        );
+      } catch (_) {}
       return true;
     } catch (_) {
       final existing = await getAllRules();
@@ -147,7 +303,34 @@ class TaxRulesService {
   static Future<bool> deleteRule(String ruleId) async {
     try {
       final pricing = PricingService(FirebaseFirestore.instance);
+      // Try to capture the rule before deletion to know affected scope
+      TaxRule? toDelete;
+      try {
+        final rules = await getAllRules();
+        toDelete = rules.firstWhere(
+          (r) => r.id == ruleId,
+          orElse: () => TaxRule(
+            id: '',
+            tubo: 0.0,
+            isInclusive: true,
+            priority: -1,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+        if (toDelete.id.isEmpty) toDelete = null;
+      } catch (_) {}
       await pricing.deleteRule(ruleId);
+      // Record price history for affected products after deletion (best-effort)
+      if (toDelete != null) {
+        try {
+          await _recordPriceHistoryForRuleChange(
+            productId: toDelete.productId,
+            categoryName: toDelete.categoryName,
+            isGlobal: toDelete.isGlobal,
+          );
+        } catch (_) {}
+      }
       return true;
     } catch (_) {
       final existing = await getAllRules();
@@ -197,5 +380,87 @@ class TaxRulesService {
     } else {
       return 0; // Global has lowest priority
     }
+  }
+
+  /// When markup rules change, compute the new selling price for affected
+  /// products and write a `priceHistory` entry. This is best-effort and
+  /// intentionally ignores failures so rules UI remains responsive.
+  static Future<void> _recordPriceHistoryForRuleChange({
+    String? productId,
+    String? categoryName,
+    bool isGlobal = false,
+  }) async {
+    final firestore = FirebaseFirestore.instance;
+    final productsCol = firestore.collection('products');
+    final priceHistoryCol = firestore.collection('priceHistory');
+
+    // Collect affected product documents
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
+
+    if (productId != null && productId.isNotEmpty) {
+      final doc = await productsCol.doc(productId).get();
+      if (doc.exists) {
+        // Create a synthetic QueryDocument-like map for unified handling
+        final data = doc.data() as Map<String, dynamic>;
+        final fakeQuerySnap = await productsCol
+            .where(FieldPath.documentId, isEqualTo: productId)
+            .limit(1)
+            .get();
+        if (fakeQuerySnap.docs.isNotEmpty) {
+          docs = fakeQuerySnap.docs;
+        } else {
+          // Fallback: if query fails, process single doc directly
+          final batch = firestore.batch();
+          final double cost = (data['cost'] as num?)?.toDouble() ?? 0.0;
+          final String? cat = data['category'] as String?;
+          final price = await TaxService.calculateSellingPriceWithRule(
+            cost,
+            productId: productId,
+            categoryName: cat,
+          );
+          final ref = priceHistoryCol.doc();
+          batch.set(ref, {
+            'productId': productId,
+            'price': price,
+            'timestamp': FieldValue.serverTimestamp(),
+          });
+          await batch.commit();
+          return;
+        }
+      }
+    } else if (categoryName != null && categoryName.isNotEmpty) {
+      final snap = await productsCol
+          .where('category', isEqualTo: categoryName)
+          .get();
+      docs = snap.docs;
+    } else if (isGlobal) {
+      final snap = await productsCol.get();
+      docs = snap.docs;
+    }
+
+    if (docs.isEmpty) return;
+
+    final batch = firestore.batch();
+    for (final d in docs) {
+      final data = d.data();
+      final id = d.id;
+      final double cost = (data['cost'] as num?)?.toDouble() ?? 0.0;
+      final String? cat = data['category'] as String?;
+
+      final price = await TaxService.calculateSellingPriceWithRule(
+        cost,
+        productId: id,
+        categoryName: cat,
+      );
+
+      final ref = priceHistoryCol.doc();
+      batch.set(ref, {
+        'productId': id,
+        'price': price,
+        'timestamp': FieldValue.serverTimestamp(),
+      });
+    }
+
+    await batch.commit();
   }
 }

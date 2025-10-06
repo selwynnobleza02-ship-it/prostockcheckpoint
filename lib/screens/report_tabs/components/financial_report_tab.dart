@@ -18,6 +18,10 @@ import 'package:prostock/widgets/report_helpers.dart';
 import 'package:prostock/utils/error_logger.dart';
 import 'package:prostock/widgets/top_selling_products_list.dart';
 import 'package:prostock/services/pdf_report_service.dart';
+import 'package:prostock/services/historical_cost_service.dart';
+import 'package:prostock/services/cost_history_service.dart';
+import 'package:prostock/services/local_database_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class FinancialReportTab extends StatefulWidget {
   final List<Loss> losses;
@@ -303,22 +307,106 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               }
                             }
 
-                            // COGS rows based on product cost * qty
-                            for (final entry in qtyByProduct.entries) {
+                            // COGS rows based on historical cost * qty, grouped by product and cost
+                            final Map<String, Map<double, double>>
+                            qtyByProductCost = {};
+                            final Map<String, Map<double, double>>
+                            costByProductCost = {};
+
+                            // Initialize historical cost service
+                            final costHistoryService = CostHistoryService(
+                              FirebaseFirestore.instance,
+                            );
+                            final localDatabaseService =
+                                LocalDatabaseService.instance;
+                            final historicalCostService = HistoricalCostService(
+                              costHistoryService,
+                              localDatabaseService,
+                            );
+
+                            // Get sales provider before async operations
+                            final salesProvider = Provider.of<SalesProvider>(
+                              context,
+                              listen: false,
+                            );
+
+                            // Group sale items by product and get historical costs
+                            final Map<String, List<SaleItem>> itemsByProduct =
+                                {};
+                            for (final item in filteredSaleItems) {
+                              itemsByProduct[item.productId] ??= [];
+                              itemsByProduct[item.productId]!.add(item);
+                            }
+
+                            for (final entry in itemsByProduct.entries) {
                               final productId = entry.key;
-                              final qty = entry.value;
+                              final items = entry.value;
+
+                              // Group by historical cost for each sale item
+                              for (final item in items) {
+                                // Get historical cost at the time of sale
+                                final saleDate = salesProvider.sales
+                                    .firstWhere((s) => s.id == item.saleId)
+                                    .createdAt;
+
+                                // Get historical cost for this sale item
+                                final historicalCost =
+                                    await historicalCostService
+                                        .getHistoricalCostForSaleItem(
+                                          item,
+                                          saleDate,
+                                        );
+
+                                // Round cost to 2 decimals to avoid floating noise
+                                final roundedCost =
+                                    (historicalCost * 100).round() / 100.0;
+
+                                qtyByProductCost[productId] ??= {};
+                                qtyByProductCost[productId]![roundedCost] =
+                                    (qtyByProductCost[productId]![roundedCost] ??
+                                        0) +
+                                    item.quantity;
+
+                                costByProductCost[productId] ??= {};
+                                costByProductCost[productId]![roundedCost] =
+                                    (costByProductCost[productId]![roundedCost] ??
+                                        0) +
+                                    (roundedCost * item.quantity);
+                              }
+                            }
+
+                            // Build COGS rows per product per cost
+                            final cogsProductIdsSorted =
+                                qtyByProductCost.keys.toList(growable: false)
+                                  ..sort(
+                                    (a, b) => (productById[a]?.name ?? a)
+                                        .compareTo(productById[b]?.name ?? b),
+                                  );
+
+                            for (final productId in cogsProductIdsSorted) {
                               final product = productById[productId];
                               final name =
                                   product?.name ??
                                   'Unknown Product ($productId)';
-                              final costPerUnit = product?.cost ?? 0.0;
-                              final cost = costPerUnit * qty;
-                              totalCogsQty += qty;
-                              cogsRows.add([
-                                name,
-                                qty.toStringAsFixed(0),
-                                CurrencyUtils.formatCurrency(cost),
-                              ]);
+                              final costMap = qtyByProductCost[productId] ?? {};
+                              final costsSorted = costMap.keys.toList(
+                                growable: false,
+                              )..sort();
+
+                              for (final cost in costsSorted) {
+                                final qty = costMap[cost] ?? 0;
+                                final totalCost =
+                                    (costByProductCost[productId] ??
+                                        {})[cost] ??
+                                    0.0;
+                                totalCogsQty += qty;
+                                cogsRows.add([
+                                  name,
+                                  qty.toStringAsFixed(0),
+                                  CurrencyUtils.formatCurrency(cost),
+                                  CurrencyUtils.formatCurrency(totalCost),
+                                ]);
+                              }
                             }
 
                             // Totals
@@ -331,6 +419,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                             cogsRows.add([
                               'Total COGS',
                               totalCogsQty.toStringAsFixed(0),
+                              '-',
                               CurrencyUtils.formatCurrency(totalCost),
                             ]);
 
@@ -353,6 +442,8 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               PdfCalculationSection(
                                 title: '1. Total Revenue',
                                 formula: 'Sum of all sales transactions',
+                                calculation:
+                                    'Sum of ${filteredSaleItems.length} sale items = ${totalRevenue.toStringAsFixed(2)}',
                                 result: CurrencyUtils.formatCurrency(
                                   totalRevenue,
                                 ),
@@ -363,6 +454,8 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 title: '2. Cost of Goods Sold',
                                 formula:
                                     'Sum of product costs × quantities sold',
+                                calculation:
+                                    'Sum of (product cost × quantity sold) for each item = ${totalCost.toStringAsFixed(2)}',
                                 result: CurrencyUtils.formatCurrency(totalCost),
                               ),
 
@@ -370,6 +463,8 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               PdfCalculationSection(
                                 title: '3. Total Losses',
                                 formula: 'Sum of damaged/expired items',
+                                calculation:
+                                    'Sum of ${filteredLosses.length} loss items = ${totalLoss.toStringAsFixed(2)}',
                                 result: CurrencyUtils.formatCurrency(totalLoss),
                               ),
 
@@ -377,6 +472,8 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               PdfCalculationSection(
                                 title: '4. Gross Profit',
                                 formula:
+                                    'Total Revenue - Cost of Goods Sold - Total Losses',
+                                calculation:
                                     '${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${totalLoss.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
                                 result: CurrencyUtils.formatCurrency(
                                   totalProfit,
@@ -387,13 +484,17 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               PdfCalculationSection(
                                 title: '5. Profit Margin',
                                 formula: '(Gross Profit ÷ Total Revenue) × 100',
+                                calculation:
+                                    '(${totalProfit.toStringAsFixed(2)} ÷ ${totalRevenue.toStringAsFixed(2)}) × 100 = ${profitMargin.toStringAsFixed(1)}%',
                                 result: '${profitMargin.toStringAsFixed(1)}%',
                               ),
 
                               // 6. Markup Percentage
                               PdfCalculationSection(
                                 title: '6. Markup Percentage',
-                                formula: '((Revenue − Cost) ÷ Cost) × 100',
+                                formula: '((Revenue - Cost) ÷ Cost) × 100',
+                                calculation:
+                                    '((${totalRevenue.toStringAsFixed(2)} - ${totalCost.toStringAsFixed(2)}) ÷ ${totalCost.toStringAsFixed(2)}) × 100 = ${markupPercentage.toStringAsFixed(1)}%',
                                 result:
                                     '${markupPercentage.toStringAsFixed(1)}%',
                               ),
@@ -402,6 +503,8 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               PdfCalculationSection(
                                 title: '7. Return on Investment (ROI)',
                                 formula: '(Total Profit ÷ Total Cost) × 100',
+                                calculation:
+                                    '(${totalProfit.toStringAsFixed(2)} ÷ ${totalCost.toStringAsFixed(2)}) × 100 = ${roi.toStringAsFixed(1)}%',
                                 result: '${roi.toStringAsFixed(1)}%',
                               ),
 
@@ -409,18 +512,10 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               PdfCalculationSection(
                                 title: '8. Inventory Turnover',
                                 formula: 'COGS ÷ Average Inventory Value',
+                                calculation:
+                                    '${totalCost.toStringAsFixed(2)} ÷ ${averageInventoryValue.toStringAsFixed(2)} = ${inventoryTurnover.toStringAsFixed(1)}x',
                                 result:
                                     '${inventoryTurnover.toStringAsFixed(1)}x',
-                              ),
-
-                              // 9. Potential Profit
-                              PdfCalculationSection(
-                                title: '9. Potential Profit',
-                                formula:
-                                    'Estimated profit from current inventory at retail',
-                                result: CurrencyUtils.formatCurrency(
-                                  potentialProfit,
-                                ),
                               ),
                             ];
 

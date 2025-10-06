@@ -5,6 +5,7 @@ import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/transaction_history_dialog.dart';
 import 'package:prostock/screens/pos/pos_screen.dart';
+import 'package:prostock/widgets/add_customer_dialog.dart';
 
 class CustomerOptionsDialog extends StatelessWidget {
   final Customer customer;
@@ -67,28 +68,24 @@ class CustomerOptionsDialog extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           ElevatedButton(
-            onPressed: () async {
+            onPressed: () {
               Navigator.of(context).pop();
-              final customerProvider = Provider.of<CustomerProvider>(
-                context,
-                listen: false,
+              showDialog(
+                context: context,
+                builder: (context) => AddCustomerDialog(
+                  customer: customer,
+                  offlineManager: Provider.of<CustomerProvider>(
+                    context,
+                    listen: false,
+                  ).offlineManager,
+                ),
               );
-              final success = await customerProvider
-                  .deleteCustomerWithConfirmation(context, customer.id);
-              if (success && context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Customer deleted successfully'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red[600],
+              backgroundColor: Colors.blue[600],
               foregroundColor: Colors.white,
             ),
-            child: const Text('Delete Customer'),
+            child: const Text('Edit Customer'),
           ),
         ],
       ),

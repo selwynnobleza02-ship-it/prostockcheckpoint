@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/loss_reason.dart';
 import 'package:prostock/models/price_history.dart';
+import 'package:prostock/models/cost_history.dart';
 import 'package:prostock/services/firestore/inventory_service.dart';
 import 'package:prostock/services/firestore/product_service.dart';
 import 'package:prostock/services/offline_manager.dart';
@@ -407,6 +408,7 @@ class InventoryProvider with ChangeNotifier {
 
         if (originalProduct != null &&
             originalProduct.cost != updatedProduct.cost) {
+          // Track price history
           final sellingPrice = await TaxService.calculateSellingPrice(
             updatedProduct.cost,
           );
@@ -423,6 +425,24 @@ class InventoryProvider with ChangeNotifier {
               collectionName: 'priceHistory',
               documentId: priceHistory.id,
               data: priceHistory.toMap(),
+              timestamp: DateTime.now(),
+            ),
+          );
+
+          // Track cost history
+          final costHistory = CostHistory(
+            id: const Uuid().v4(),
+            productId: updatedProduct.id!,
+            cost: updatedProduct.cost,
+            timestamp: DateTime.now(),
+          );
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              id: costHistory.id,
+              type: OperationType.insertCostHistory,
+              collectionName: 'costHistory',
+              documentId: costHistory.id,
+              data: costHistory.toMap(),
               timestamp: DateTime.now(),
             ),
           );

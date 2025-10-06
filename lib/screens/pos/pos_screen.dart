@@ -7,6 +7,7 @@ import '../../models/customer.dart';
 import '../../widgets/barcode_scanner_widget.dart';
 import '../../widgets/receipt_dialog.dart';
 import '../../widgets/confirmation_dialog.dart';
+import '../../widgets/sync_status_indicator.dart';
 import 'dart:async';
 
 import 'components/cart_view.dart';
@@ -150,6 +151,7 @@ class _POSScreenState extends State<POSScreen> {
       appBar: AppBar(
         title: const Text('Point of Sale'),
         actions: [
+          const SyncStatusIndicator(),
           IconButton(
             icon: const Icon(Icons.qr_code_scanner),
             tooltip: 'Scan Product Barcode',

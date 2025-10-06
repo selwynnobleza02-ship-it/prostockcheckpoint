@@ -15,6 +15,7 @@ import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:prostock/widgets/analytics_report_widget.dart';
 import 'package:prostock/widgets/stock_movement_report_widget.dart';
+import 'package:prostock/widgets/sync_status_indicator.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/models/credit_transaction.dart';
@@ -136,6 +137,7 @@ class _ReportsScreenState extends State<ReportsScreen>
       appBar: AppBar(
         title: const Text('Reports'),
         actions: [
+          const SyncStatusIndicator(),
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: () => _loadData(refresh: true),

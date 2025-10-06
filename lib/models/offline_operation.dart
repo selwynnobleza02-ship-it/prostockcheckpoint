@@ -13,6 +13,7 @@ enum OperationType {
   updateCustomerBalance,
   insertLoss,
   insertPriceHistory,
+  insertCostHistory,
   insertStockMovement,
   logActivity, // Added for offline activity logging
 }

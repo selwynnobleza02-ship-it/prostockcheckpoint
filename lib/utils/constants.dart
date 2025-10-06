@@ -11,6 +11,7 @@ class AppConstants {
   static const String errorLogsCollection = 'error_logs';
   static const String lossesCollection = 'losses';
   static const String priceHistoryCollection = 'price_history';
+  static const String costHistoryCollection = 'cost_history';
 
   // Operation types
   static const String operationInsert = 'insert';

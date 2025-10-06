@@ -69,8 +69,10 @@ class InventoryReportTab extends StatelessWidget {
                             icon: const Icon(Icons.picture_as_pdf),
                             label: const Text('Export PDF'),
                             onPressed: () async {
-                              final scaffold = ScaffoldMessenger.of(context);
-                              scaffold.showSnackBar(
+                              // Capture context-dependent values before async gap
+                              final messenger = ScaffoldMessenger.of(context);
+
+                              messenger.showSnackBar(
                                 const SnackBar(
                                   content: Text('Generating PDF...'),
                                   duration: Duration(seconds: 2),
@@ -280,7 +282,7 @@ class InventoryReportTab extends StatelessWidget {
                                   sections: sections,
                                 );
 
-                                scaffold.showSnackBar(
+                                messenger.showSnackBar(
                                   SnackBar(
                                     content: Text('PDF saved: ${file.path}'),
                                     backgroundColor: Colors.green,
@@ -288,7 +290,7 @@ class InventoryReportTab extends StatelessWidget {
                                   ),
                                 );
                               } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(
+                                messenger.showSnackBar(
                                   SnackBar(
                                     content: Text('Error generating PDF: $e'),
                                     backgroundColor: Colors.red,

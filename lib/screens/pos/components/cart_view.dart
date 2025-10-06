@@ -159,7 +159,7 @@ class CartViewState extends State<CartView> {
                         ? Theme.of(context).colorScheme.onSurface
                         : Theme.of(
                             context,
-                          ).colorScheme.onSurface.withOpacity(0.5),
+                          ).colorScheme.onSurface.withValues(alpha: 0.5),
                   ),
                 ),
               ),

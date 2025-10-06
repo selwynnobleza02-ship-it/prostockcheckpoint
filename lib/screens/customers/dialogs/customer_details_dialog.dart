@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
@@ -18,7 +19,7 @@ class CustomerDetailsDialog extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (customer.imageUrl != null)
+          if (customer.localImagePath != null)
             Container(
               width: double.infinity,
               height: 200,
@@ -26,16 +27,38 @@ class CustomerDetailsDialog extends StatelessWidget {
                 border: Border.all(color: Colors.grey),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Image.network(
-                customer.imageUrl!,
-                fit: BoxFit.cover,
-                loadingBuilder: (context, child, loadingProgress) {
-                  if (loadingProgress == null) return child;
-                  return const Center(child: CircularProgressIndicator());
-                },
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.error, size: 50);
-                },
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.file(
+                  File(customer.localImagePath!),
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.error, size: 50);
+                  },
+                ),
+              ),
+            )
+          else if (customer.imageUrl != null)
+            Container(
+              width: double.infinity,
+              height: 200,
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(
+                  customer.imageUrl!,
+                  fit: BoxFit.cover,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return const Center(child: CircularProgressIndicator());
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(Icons.error, size: 50);
+                  },
+                ),
               ),
             )
           else
@@ -49,10 +72,8 @@ class CustomerDetailsDialog extends StatelessWidget {
               child: const Icon(Icons.person, size: 100, color: Colors.grey),
             ),
           const SizedBox(height: 16),
-          if (customer.phone != null)
-            _buildDetailRow('Phone', customer.phone!),
-          if (customer.email != null)
-            _buildDetailRow('Email', customer.email!),
+          if (customer.phone != null) _buildDetailRow('Phone', customer.phone!),
+          if (customer.email != null) _buildDetailRow('Email', customer.email!),
           if (customer.address != null)
             _buildDetailRow('Address', customer.address!),
           _buildDetailRow(
@@ -77,9 +98,10 @@ class CustomerDetailsDialog extends StatelessWidget {
               context: context,
               builder: (context) => AddCustomerDialog(
                 customer: customer,
-                offlineManager:
-                    Provider.of<CustomerProvider>(context, listen: false)
-                        .offlineManager,
+                offlineManager: Provider.of<CustomerProvider>(
+                  context,
+                  listen: false,
+                ).offlineManager,
               ),
             );
           },

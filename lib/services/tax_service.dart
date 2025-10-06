@@ -20,7 +20,6 @@ class TaxService extends ChangeNotifier {
   static bool? _cachedTuboInclusive;
   static bool _isInitialized = false;
   static final TaxService _instance = TaxService._internal();
-  static StreamSubscription? _settingsSubscription;
 
   factory TaxService() => _instance;
   TaxService._internal();
@@ -47,17 +46,6 @@ class TaxService extends ChangeNotifier {
               (remote['isInclusive'] ?? _defaultTuboInclusive) == true;
           await _writeLocal(remoteAmount, remoteInclusive);
         }
-
-        _settingsSubscription = pricing.watchGlobalSettings().listen((
-          data,
-        ) async {
-          if (data == null) return;
-          final amount = (data['tuboAmount'] ?? _defaultTuboAmount) * 1.0;
-          final inclusive =
-              (data['isInclusive'] ?? _defaultTuboInclusive) == true;
-          await _writeLocal(amount, inclusive);
-          _instance.notifyListeners();
-        });
       } catch (_) {}
     } catch (e) {
       _cachedTuboAmount = _defaultTuboAmount;
@@ -387,6 +375,11 @@ class TaxService extends ChangeNotifier {
   /// Delete a tax rule
   static Future<bool> deleteTaxRule(String ruleId) async {
     return await TaxRulesService.deleteRule(ruleId);
+  }
+
+  /// Check if a rule would conflict with existing rules
+  static Future<TaxRule?> checkForConflicts(TaxRule rule) async {
+    return await TaxRulesService.checkForConflicts(rule);
   }
 
   /// Get tubo information for display

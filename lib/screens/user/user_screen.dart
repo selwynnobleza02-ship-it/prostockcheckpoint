@@ -4,6 +4,7 @@ import 'package:prostock/screens/user/dashboard/user_dashboard.dart';
 import 'package:prostock/screens/user/stock/stock_management.dart';
 import 'package:prostock/screens/user/user_profile.dart';
 import '../../providers/auth_provider.dart';
+import '../../widgets/sync_status_indicator.dart';
 import '../pos/pos_screen.dart';
 
 class UserScreen extends StatefulWidget {
@@ -41,6 +42,7 @@ class _UserScreenState extends State<UserScreen> {
         foregroundColor: Colors.white,
         elevation: 0,
         actions: [
+          const SyncStatusIndicator(color: Colors.white),
           IconButton(
             icon: const Icon(Icons.logout),
             onPressed: () async {
