@@ -1,4 +1,5 @@
 import 'package:prostock/models/offline_operation.dart';
+import 'dart:async';
 import 'package:prostock/models/update_result.dart';
 import 'package:flutter/material.dart';
 import 'package:prostock/models/loss.dart';
@@ -32,12 +33,15 @@ class InventoryProvider with ChangeNotifier {
       LocalDatabaseService.instance;
   final OfflineManager _offlineManager;
   final AuthProvider _authProvider; // New field
+  StreamSubscription<QuerySnapshot>? _productsSubscription;
 
   InventoryProvider({
     required OfflineManager offlineManager,
     required AuthProvider authProvider,
   }) : _offlineManager = offlineManager,
-       _authProvider = authProvider; // Initialize new field
+       _authProvider = authProvider {
+    _startProductsListener();
+  } // Initialize new field
 
   List<Product> get products => _products;
   bool get isLoading => _isLoading;
@@ -1054,6 +1058,96 @@ class InventoryProvider with ChangeNotifier {
 
   Future<void> refreshProducts() async {
     await loadProducts(refresh: true);
+  }
+
+  void _startProductsListener() {
+    // Cancel previous listener if any
+    _productsSubscription?.cancel();
+
+    // Only listen when online
+    if (!_offlineManager.isOnline) {
+      return;
+    }
+
+    final productsCol = FirebaseFirestore.instance.collection(
+      AppConstants.productsCollection,
+    );
+
+    _productsSubscription = productsCol.snapshots().listen(
+      (snapshot) async {
+        try {
+          final db = await _localDatabaseService.database;
+          final batch = db.batch();
+
+          bool changed = false;
+
+          for (final change in snapshot.docChanges) {
+            final data = change.doc.data();
+            final String id = change.doc.id;
+
+            if (change.type == DocumentChangeType.removed) {
+              // Remove locally
+              batch.delete('products', where: 'id = ?', whereArgs: [id]);
+              _products.removeWhere((p) => p.id == id);
+              changed = true;
+              continue;
+            }
+
+            if (data == null) {
+              continue;
+            }
+
+            data['id'] = id;
+            final remoteProduct = Product.fromMap(data);
+
+            // Upsert into local DB
+            batch.insert(
+              'products',
+              remoteProduct.toMap(),
+              conflictAlgorithm: ConflictAlgorithm.replace,
+            );
+
+            // Merge into memory list
+            final idx = _products.indexWhere((p) => p.id == id);
+            if (idx == -1) {
+              _products.add(remoteProduct);
+            } else {
+              // Prefer highest version if available
+              final local = _products[idx];
+              if (remoteProduct.version >= local.version) {
+                _products[idx] = remoteProduct;
+              }
+            }
+            changed = true;
+          }
+
+          if (changed) {
+            await batch.commit(noResult: true);
+            initializeVisualStock();
+            notifyListeners();
+          }
+        } catch (e) {
+          ErrorLogger.logError(
+            'Error merging product snapshot changes',
+            error: e,
+            context: 'InventoryProvider._startProductsListener',
+          );
+        }
+      },
+      onError: (e) {
+        ErrorLogger.logError(
+          'Products listener error',
+          error: e,
+          context: 'InventoryProvider._startProductsListener',
+        );
+      },
+    );
+  }
+
+  @override
+  void dispose() {
+    _productsSubscription?.cancel();
+    super.dispose();
   }
 
   void _checkStockAlerts(Product product) {

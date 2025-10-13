@@ -134,6 +134,19 @@ CREATE TABLE IF NOT EXISTS offline_operations (
   version INTEGER
 )
 ''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS dead_letter_operations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  operation_id TEXT NOT NULL,
+  operation_type TEXT NOT NULL,
+  collection_name TEXT NOT NULL,
+  document_id TEXT,
+  data TEXT NOT NULL,
+  timestamp TEXT NOT NULL,
+  error TEXT NOT NULL
+)
+''');
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {

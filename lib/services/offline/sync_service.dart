@@ -64,7 +64,7 @@ class SyncService {
 
   Future<void> _processBatch(List<OfflineOperation> batch) async {
     final List<Map<String, dynamic>> batchOperations = [];
-    final List<int> successfulOperationIds = [];
+    final List<OfflineOperation> operationsInBatch = [];
     final List<OfflineOperation> failedOperations = [];
 
     for (final operation in batch) {
@@ -97,14 +97,14 @@ class SyncService {
 
         final newBatchOperations = _getBatchOperations(operation);
         batchOperations.addAll(newBatchOperations);
-        successfulOperationIds.add(operation.dbId!);
+        operationsInBatch.add(operation);
         ErrorLogger.logInfo(
-          'Synced operation: ${operation.type} - ${operation.id}',
+          'Prepared operation for batch: ${operation.type} - ${operation.id}',
           context: 'SyncService._processBatch',
         );
       } catch (e) {
         ErrorLogger.logError(
-          'Failed to sync operation ${operation.id}',
+          'Failed to prepare operation ${operation.id}',
           error: e,
           context: 'SyncService._processBatch',
         );
@@ -115,7 +115,6 @@ class SyncService {
           failedOperations.add(updatedOperation);
         } else {
           await _moveToDeadLetterQueue(operation, e.toString());
-          successfulOperationIds.add(operation.dbId!);
           ErrorLogger.logError(
             'Operation ${operation.id} failed after $maxRetries retries',
             error: e,
@@ -125,8 +124,10 @@ class SyncService {
       }
     }
 
+    // Commit batch with error handling
+    final List<int> successfulOperationIds = [];
     if (batchOperations.isNotEmpty) {
-      final batch = FirebaseFirestore.instance.batch();
+      final firestoreBatch = FirebaseFirestore.instance.batch();
 
       for (final operation in batchOperations) {
         final type = operation['type'];
@@ -138,30 +139,73 @@ class SyncService {
           final docRef = FirebaseFirestore.instance
               .collection(collection)
               .doc(docId);
-          batch.set(docRef, data);
+          firestoreBatch.set(docRef, data);
         } else if (type == AppConstants.operationUpdate) {
           final docRef = FirebaseFirestore.instance
               .collection(collection)
               .doc(docId);
-          batch.update(docRef, data);
+          // Use set with merge for updateProduct to handle missing documents
+          if (collection == AppConstants.productsCollection) {
+            firestoreBatch.set(docRef, data, SetOptions(merge: true));
+          } else {
+            firestoreBatch.update(docRef, data);
+          }
         } else if (type == AppConstants.operationDelete) {
           final docRef = FirebaseFirestore.instance
               .collection(collection)
               .doc(docId);
-          batch.delete(docRef);
+          firestoreBatch.delete(docRef);
         }
       }
 
-      await batch.commit();
+      try {
+        await firestoreBatch.commit();
+        // Only mark as successful if commit succeeds
+        successfulOperationIds.addAll(operationsInBatch.map((op) => op.dbId!));
+        ErrorLogger.logInfo(
+          'Successfully committed batch with ${operationsInBatch.length} operations',
+          context: 'SyncService._processBatch',
+        );
+      } catch (e) {
+        ErrorLogger.logError(
+          'Firebase batch commit failed, retrying operations',
+          error: e,
+          context: 'SyncService._processBatch',
+        );
+        // If commit fails, retry all operations
+        for (final op in operationsInBatch) {
+          if (op.retryCount < maxRetries) {
+            final updatedOperation = op.copyWith(retryCount: op.retryCount + 1);
+            failedOperations.add(updatedOperation);
+            ErrorLogger.logInfo(
+              'Retrying operation ${op.id} (attempt ${updatedOperation.retryCount})',
+              context: 'SyncService._processBatch',
+            );
+          } else {
+            await _moveToDeadLetterQueue(op, e.toString());
+            successfulOperationIds.add(op.dbId!);
+            ErrorLogger.logError(
+              'Operation ${op.id} failed after $maxRetries retries due to batch commit failure',
+              error: e,
+              context: 'SyncService._processBatch',
+            );
+          }
+        }
+      }
     }
 
     final db = await _localDatabaseService.database;
+    // Delete only successfully synced operations
     if (successfulOperationIds.isNotEmpty) {
       final placeholders = successfulOperationIds.map((_) => '?').join(',');
       await db.delete(
         'offline_operations',
         where: 'id IN ($placeholders)',
         whereArgs: successfulOperationIds,
+      );
+      ErrorLogger.logInfo(
+        'Removed ${successfulOperationIds.length} successfully synced operations from queue',
+        context: 'SyncService._processBatch',
       );
     }
 
@@ -176,6 +220,10 @@ class SyncService {
         );
       }
       await batchDb.commit(noResult: true);
+      ErrorLogger.logInfo(
+        'Updated retry count for ${failedOperations.length} failed operations',
+        context: 'SyncService._processBatch',
+      );
     }
   }
 
