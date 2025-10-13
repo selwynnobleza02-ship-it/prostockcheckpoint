@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/services/report_service.dart';
-import 'package:prostock/services/tax_service.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/inventory_chart.dart';
 import 'package:prostock/widgets/report_helpers.dart';
 import 'package:prostock/services/pdf_report_service.dart';
+import 'package:prostock/models/product.dart';
 
 class InventoryReportTab extends StatelessWidget {
   const InventoryReportTab({super.key});
@@ -23,480 +23,455 @@ class InventoryReportTab extends StatelessWidget {
         final totalValue = reportService.calculateTotalInventoryValue(
           provider.products,
         );
-        return FutureBuilder<double>(
-          future: reportService.calculateTotalInventoryRetailValue(
-            provider.products,
-          ),
-          builder: (context, retailSnapshot) {
-            return FutureBuilder<double>(
-              future: reportService.calculatePotentialInventoryProfit(
-                provider.products,
-              ),
-              builder: (context, profitSnapshot) {
-                final totalRetailValue = retailSnapshot.hasData
-                    ? retailSnapshot.data!
-                    : 0.0;
-                final potentialProfit = profitSnapshot.hasData
-                    ? profitSnapshot.data!
-                    : 0.0;
+        return FutureBuilder<Map<String, double>>(
+          future: _calculateAllMetrics(provider.products),
+          builder: (context, snapshot) {
+            if (!snapshot.hasData) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-                // Calculate additional metrics
-                final outOfStockCount = provider.products
-                    .where((p) => p.stock == 0)
-                    .length;
-                final averageStockValue = totalProducts > 0
-                    ? totalValue / totalProducts
-                    : 0.0;
+            final metrics = snapshot.data!;
+            final totalRetailValue = metrics['totalRetailValue']!;
+            final potentialProfit = metrics['potentialProfit']!;
 
-                // Calculate category distribution
-                final categoryCount = _getCategoryDistribution(
-                  provider.products,
-                );
+            // Calculate additional metrics
+            final outOfStockCount = provider.products
+                .where((p) => p.stock == 0)
+                .length;
+            final averageStockValue = totalProducts > 0
+                ? totalValue / totalProducts
+                : 0.0;
 
-                if (!retailSnapshot.hasData || !profitSnapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+            // Calculate category distribution
+            final categoryCount = _getCategoryDistribution(provider.products);
 
-                return SingleChildScrollView(
-                  padding: const EdgeInsets.all(16),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+            return SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
                     children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.end,
-                        children: [
-                          ElevatedButton.icon(
-                            icon: const Icon(Icons.picture_as_pdf),
-                            label: const Text('Export PDF'),
-                            onPressed: () async {
-                              // Capture context-dependent values before async gap
-                              final messenger = ScaffoldMessenger.of(context);
+                      ElevatedButton.icon(
+                        icon: const Icon(Icons.picture_as_pdf),
+                        label: const Text('Export PDF'),
+                        onPressed: () async {
+                          // Capture context-dependent values before async gap
+                          final messenger = ScaffoldMessenger.of(context);
 
-                              messenger.showSnackBar(
-                                const SnackBar(
-                                  content: Text('Generating PDF...'),
-                                  duration: Duration(seconds: 2),
-                                ),
-                              );
+                          messenger.showSnackBar(
+                            const SnackBar(
+                              content: Text('Generating PDF...'),
+                              duration: Duration(seconds: 2),
+                            ),
+                          );
 
-                              try {
-                                final pdf = PdfReportService();
-                                final sections = <PdfReportSection>[
-                                  PdfReportSection(
-                                    title: 'Inventory Summary',
-                                    rows: [
-                                      [
-                                        'Total Products',
-                                        totalProducts.toString(),
-                                      ],
-                                      [
-                                        'Low Stock Items',
-                                        lowStockCount.toString(),
-                                      ],
-                                      [
-                                        'Out of Stock',
-                                        outOfStockCount.toString(),
-                                      ],
-                                      ['Categories', categoryCount.toString()],
-                                      [
-                                        'Cost Value',
-                                        CurrencyUtils.formatCurrency(
-                                          totalValue,
-                                        ),
-                                      ],
-                                      [
-                                        'Retail Value',
-                                        CurrencyUtils.formatCurrency(
-                                          totalRetailValue,
-                                        ),
-                                      ],
-                                      [
-                                        'Potential Profit',
-                                        CurrencyUtils.formatCurrency(
-                                          potentialProfit,
-                                        ),
-                                      ],
-                                      [
-                                        'Average Stock Value',
-                                        CurrencyUtils.formatCurrency(
-                                          averageStockValue,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ];
-
-                                // Product Stock Breakdown (Product, Qty, Cost Value)
-                                final productRows = <List<String>>[];
-                                double productRowsTotalCost = 0.0;
-                                int productRowsTotalQty = 0;
-                                final sortedProducts = [...provider.products]
-                                  ..sort((a, b) => a.name.compareTo(b.name));
-                                for (final p in sortedProducts) {
-                                  final qty = p.stock;
-                                  final costValue = p.cost * qty;
-                                  productRows.add([
-                                    p.name,
-                                    qty.toString(),
-                                    CurrencyUtils.formatCurrency(costValue),
-                                  ]);
-                                  productRowsTotalQty += qty;
-                                  productRowsTotalCost += costValue;
-                                }
-                                if (productRows.isNotEmpty) {
-                                  productRows.add([
-                                    'Total',
-                                    productRowsTotalQty.toString(),
+                          try {
+                            final pdf = PdfReportService();
+                            final sections = <PdfReportSection>[
+                              PdfReportSection(
+                                title: 'Inventory Summary',
+                                rows: [
+                                  ['Total Products', totalProducts.toString()],
+                                  ['Low Stock Items', lowStockCount.toString()],
+                                  ['Out of Stock', outOfStockCount.toString()],
+                                  ['Categories', categoryCount.toString()],
+                                  [
+                                    'Cost Value',
+                                    CurrencyUtils.formatCurrency(totalValue),
+                                  ],
+                                  [
+                                    'Retail Value',
                                     CurrencyUtils.formatCurrency(
-                                      productRowsTotalCost,
+                                      totalRetailValue,
                                     ),
-                                  ]);
-                                  sections.add(
-                                    PdfReportSection(
-                                      title: 'Product Stock Breakdown',
-                                      rows: productRows,
+                                  ],
+                                  [
+                                    'Potential Profit',
+                                    CurrencyUtils.formatCurrency(
+                                      potentialProfit,
                                     ),
-                                  );
-                                }
-
-                                // Inventory Distribution by Category (Category, Distribution %, Quantity)
-                                final Map<String, int> qtyByCategory = {};
-                                for (final p in provider.products) {
-                                  final cat = (p.category?.isNotEmpty == true)
-                                      ? p.category!
-                                      : 'Uncategorized';
-                                  qtyByCategory.update(
-                                    cat,
-                                    (v) => v + p.stock,
-                                    ifAbsent: () => p.stock,
-                                  );
-                                }
-                                final distributionRows = <List<String>>[];
-                                int distTotalQty = 0;
-                                final cats = qtyByCategory.keys.toList(
-                                  growable: false,
-                                )..sort();
-                                for (final c in cats) {
-                                  final q = qtyByCategory[c] ?? 0;
-                                  distTotalQty += q;
-                                }
-                                for (final c in cats) {
-                                  final q = qtyByCategory[c] ?? 0;
-                                  final percentage = distTotalQty > 0
-                                      ? '${(q / distTotalQty * 100).toStringAsFixed(1)}%'
-                                      : '0.0%';
-                                  distributionRows.add([
-                                    c,
-                                    percentage,
-                                    q.toString(),
-                                  ]);
-                                }
-                                if (distributionRows.isNotEmpty) {
-                                  distributionRows.add([
-                                    'Total',
-                                    '100.0%',
-                                    distTotalQty.toString(),
-                                  ]);
-                                  sections.add(
-                                    PdfReportSection(
-                                      title:
-                                          'Inventory Distribution by Category',
-                                      rows: distributionRows,
-                                    ),
-                                  );
-                                }
-
-                                // Low Stock Products (Product, Qty, Cost Value)
-                                final lowRows = <List<String>>[];
-                                int lowTotalQty = 0;
-                                double lowTotalCost = 0.0;
-                                final lowProducts = [
-                                  ...provider.lowStockProducts,
-                                ]..sort((a, b) => a.name.compareTo(b.name));
-                                for (final p in lowProducts.where(
-                                  (p) => p.stock > 0,
-                                )) {
-                                  final qty = p.stock;
-                                  final costValue = p.cost * qty;
-                                  lowRows.add([
-                                    p.name,
-                                    qty.toString(),
-                                    CurrencyUtils.formatCurrency(costValue),
-                                  ]);
-                                  lowTotalQty += qty;
-                                  lowTotalCost += costValue;
-                                }
-                                if (lowRows.isNotEmpty) {
-                                  lowRows.add([
-                                    'Total',
-                                    lowTotalQty.toString(),
-                                    CurrencyUtils.formatCurrency(lowTotalCost),
-                                  ]);
-                                  sections.add(
-                                    PdfReportSection(
-                                      title: 'Low Stock Products',
-                                      rows: lowRows,
-                                    ),
-                                  );
-                                }
-
-                                // Out of Stock Products (Product, Qty, Cost Value)
-                                final outRows = <List<String>>[];
-                                int outTotalQty =
-                                    0; // will be zero but keep for consistency
-                                double outTotalCost =
-                                    0.0; // zero as qty is zero
-                                final outProducts =
-                                    provider.products
-                                        .where((p) => p.stock == 0)
-                                        .toList()
-                                      ..sort(
-                                        (a, b) => a.name.compareTo(b.name),
-                                      );
-                                for (final p in outProducts) {
-                                  outRows.add([
-                                    p.name,
-                                    '0',
-                                    CurrencyUtils.formatCurrency(0),
-                                  ]);
-                                }
-                                if (outRows.isNotEmpty) {
-                                  outRows.add([
-                                    'Total',
-                                    outTotalQty.toString(),
-                                    CurrencyUtils.formatCurrency(outTotalCost),
-                                  ]);
-                                  sections.add(
-                                    PdfReportSection(
-                                      title: 'Out of Stock Products',
-                                      rows: outRows,
-                                    ),
-                                  );
-                                }
-
-                                final file = await pdf.generateFinancialReport(
-                                  reportTitle:
-                                      'Inventory Report - Sari-Sari Store',
-                                  startDate: null,
-                                  endDate: null,
-                                  sections: sections,
-                                );
-
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text('PDF saved: ${file.path}'),
-                                    backgroundColor: Colors.green,
-                                    duration: const Duration(seconds: 4),
-                                  ),
-                                );
-                              } catch (e) {
-                                messenger.showSnackBar(
-                                  SnackBar(
-                                    content: Text('Error generating PDF: $e'),
-                                    backgroundColor: Colors.red,
-                                  ),
-                                );
-                              }
-                            },
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 12),
-                      // Enhanced summary cards grid
-                      GridView.count(
-                        crossAxisCount: 2,
-                        shrinkWrap: true,
-                        physics: const NeverScrollableScrollPhysics(),
-                        childAspectRatio: 1.5,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
-                        children: [
-                          buildSummaryCard(
-                            context,
-                            'Total Products',
-                            totalProducts.toString(),
-                            Icons.inventory_2,
-                            Colors.blue,
-                          ),
-                          buildSummaryCard(
-                            context,
-                            'Low Stock Items',
-                            lowStockCount.toString(),
-                            Icons.warning_amber,
-                            Colors.orange,
-                          ),
-                          buildSummaryCard(
-                            context,
-                            'Out of Stock',
-                            outOfStockCount.toString(),
-                            Icons.remove_shopping_cart,
-                            Colors.red,
-                          ),
-                          buildSummaryCard(
-                            context,
-                            'Categories',
-                            categoryCount.toString(),
-                            Icons.category,
-                            Colors.purple,
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      // Inventory value cards
-                      Row(
-                        children: [
-                          Expanded(
-                            child: buildSummaryCard(
-                              context,
-                              'Cost Value',
-                              CurrencyUtils.formatCurrency(totalValue),
-                              Icons.account_balance_wallet,
-                              Colors.green,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: buildSummaryCard(
-                              context,
-                              'Retail Value',
-                              CurrencyUtils.formatCurrency(totalRetailValue),
-                              Icons.storefront,
-                              Colors.teal,
-                            ),
-                          ),
-                        ],
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      buildSummaryCard(
-                        context,
-                        'Potential Profit',
-                        CurrencyUtils.formatCurrency(potentialProfit),
-                        Icons.trending_up,
-                        Colors.indigo,
-                      ),
-
-                      const SizedBox(height: 24),
-
-                      // Inventory Analysis
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surfaceContainer,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Inventory Analysis',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Flexible(
-                                  child: Text('Average Stock Value:'),
-                                ),
-                                Flexible(
-                                  child: Text(
+                                  ],
+                                  [
+                                    'Average Stock Value',
                                     CurrencyUtils.formatCurrency(
                                       averageStockValue,
                                     ),
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
+                                  ],
+                                ],
+                              ),
+                            ];
+
+                            // Product Stock Breakdown (Product, Qty, Cost Value)
+                            final productRows = <List<String>>[];
+                            double productRowsTotalCost = 0.0;
+                            int productRowsTotalQty = 0;
+                            final sortedProducts = [...provider.products]
+                              ..sort((a, b) => a.name.compareTo(b.name));
+                            for (final p in sortedProducts) {
+                              final qty = p.stock;
+                              final costValue = p.cost * qty;
+                              productRows.add([
+                                p.name,
+                                qty.toString(),
+                                CurrencyUtils.formatCurrency(costValue),
+                              ]);
+                              productRowsTotalQty += qty;
+                              productRowsTotalCost += costValue;
+                            }
+                            if (productRows.isNotEmpty) {
+                              productRows.add([
+                                'Total',
+                                productRowsTotalQty.toString(),
+                                CurrencyUtils.formatCurrency(
+                                  productRowsTotalCost,
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Flexible(child: Text('Stock Health:')),
-                                Flexible(
-                                  child: Text(
-                                    _getStockHealth(
-                                      totalProducts,
-                                      lowStockCount,
-                                      outOfStockCount,
-                                    ),
-                                    style: TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: _getStockHealthColor(
-                                        totalProducts,
-                                        lowStockCount,
-                                        outOfStockCount,
-                                      ),
-                                    ),
-                                  ),
+                              ]);
+                              sections.add(
+                                PdfReportSection(
+                                  title: 'Product Stock Breakdown',
+                                  rows: productRows,
                                 ),
-                              ],
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Flexible(
-                                  child: Text('Markup Potential:'),
+                              );
+                            }
+
+                            // Inventory Distribution by Category (Category, Distribution %, Quantity)
+                            final Map<String, int> qtyByCategory = {};
+                            for (final p in provider.products) {
+                              final cat = (p.category?.isNotEmpty == true)
+                                  ? p.category!
+                                  : 'Uncategorized';
+                              qtyByCategory.update(
+                                cat,
+                                (v) => v + p.stock,
+                                ifAbsent: () => p.stock,
+                              );
+                            }
+                            final distributionRows = <List<String>>[];
+                            int distTotalQty = 0;
+                            final cats = qtyByCategory.keys.toList(
+                              growable: false,
+                            )..sort();
+                            for (final c in cats) {
+                              final q = qtyByCategory[c] ?? 0;
+                              distTotalQty += q;
+                            }
+                            for (final c in cats) {
+                              final q = qtyByCategory[c] ?? 0;
+                              final percentage = distTotalQty > 0
+                                  ? '${(q / distTotalQty * 100).toStringAsFixed(1)}%'
+                                  : '0.0%';
+                              distributionRows.add([
+                                c,
+                                percentage,
+                                q.toString(),
+                              ]);
+                            }
+                            if (distributionRows.isNotEmpty) {
+                              distributionRows.add([
+                                'Total',
+                                '100.0%',
+                                distTotalQty.toString(),
+                              ]);
+                              sections.add(
+                                PdfReportSection(
+                                  title: 'Inventory Distribution by Category',
+                                  rows: distributionRows,
                                 ),
-                                Flexible(
-                                  child: Text(
-                                    '${totalValue > 0 ? ((potentialProfit / totalValue) * 100).toStringAsFixed(1) : 0.0}%',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      color: Colors.green,
-                                    ),
-                                  ),
+                              );
+                            }
+
+                            // Low Stock Products (Product, Qty, Cost Value)
+                            final lowRows = <List<String>>[];
+                            int lowTotalQty = 0;
+                            double lowTotalCost = 0.0;
+                            final lowProducts = [...provider.lowStockProducts]
+                              ..sort((a, b) => a.name.compareTo(b.name));
+                            for (final p in lowProducts.where(
+                              (p) => p.stock > 0,
+                            )) {
+                              final qty = p.stock;
+                              final costValue = p.cost * qty;
+                              lowRows.add([
+                                p.name,
+                                qty.toString(),
+                                CurrencyUtils.formatCurrency(costValue),
+                              ]);
+                              lowTotalQty += qty;
+                              lowTotalCost += costValue;
+                            }
+                            if (lowRows.isNotEmpty) {
+                              lowRows.add([
+                                'Total',
+                                lowTotalQty.toString(),
+                                CurrencyUtils.formatCurrency(lowTotalCost),
+                              ]);
+                              sections.add(
+                                PdfReportSection(
+                                  title: 'Low Stock Products',
+                                  rows: lowRows,
                                 ),
-                              ],
-                            ),
-                          ],
+                              );
+                            }
+
+                            // Out of Stock Products (Product, Qty, Cost Value)
+                            final outRows = <List<String>>[];
+                            int outTotalQty =
+                                0; // will be zero but keep for consistency
+                            double outTotalCost = 0.0; // zero as qty is zero
+                            final outProducts =
+                                provider.products
+                                    .where((p) => p.stock == 0)
+                                    .toList()
+                                  ..sort((a, b) => a.name.compareTo(b.name));
+                            for (final p in outProducts) {
+                              outRows.add([
+                                p.name,
+                                '0',
+                                CurrencyUtils.formatCurrency(0),
+                              ]);
+                            }
+                            if (outRows.isNotEmpty) {
+                              outRows.add([
+                                'Total',
+                                outTotalQty.toString(),
+                                CurrencyUtils.formatCurrency(outTotalCost),
+                              ]);
+                              sections.add(
+                                PdfReportSection(
+                                  title: 'Out of Stock Products',
+                                  rows: outRows,
+                                ),
+                              );
+                            }
+
+                            final file = await pdf.generateFinancialReport(
+                              reportTitle: 'Inventory Report - Sari-Sari Store',
+                              startDate: null,
+                              endDate: null,
+                              sections: sections,
+                            );
+
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text('PDF saved: ${file.path}'),
+                                backgroundColor: Colors.green,
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                          } catch (e) {
+                            messenger.showSnackBar(
+                              SnackBar(
+                                content: Text('Error generating PDF: $e'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Enhanced summary cards grid
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    childAspectRatio: 1.5,
+                    crossAxisSpacing: 16,
+                    mainAxisSpacing: 16,
+                    children: [
+                      buildSummaryCard(
+                        context,
+                        'Total Products',
+                        totalProducts.toString(),
+                        Icons.inventory_2,
+                        Colors.blue,
+                      ),
+                      buildSummaryCard(
+                        context,
+                        'Low Stock Items',
+                        lowStockCount.toString(),
+                        Icons.warning_amber,
+                        Colors.orange,
+                      ),
+                      buildSummaryCard(
+                        context,
+                        'Out of Stock',
+                        outOfStockCount.toString(),
+                        Icons.remove_shopping_cart,
+                        Colors.red,
+                      ),
+                      buildSummaryCard(
+                        context,
+                        'Categories',
+                        categoryCount.toString(),
+                        Icons.category,
+                        Colors.purple,
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Inventory value cards
+                  Row(
+                    children: [
+                      Expanded(
+                        child: buildSummaryCard(
+                          context,
+                          'Cost Value',
+                          CurrencyUtils.formatCurrency(totalValue),
+                          Icons.account_balance_wallet,
+                          Colors.green,
                         ),
                       ),
-
-                      const SizedBox(height: 24),
-                      const Text(
-                        'Inventory Distribution',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: buildSummaryCard(
+                          context,
+                          'Retail Value',
+                          CurrencyUtils.formatCurrency(totalRetailValue),
+                          Icons.storefront,
+                          Colors.teal,
                         ),
                       ),
-                      const SizedBox(height: 16),
-                      const InventoryChart(),
+                    ],
+                  ),
 
-                      const SizedBox(height: 24),
+                  const SizedBox(height: 16),
 
-                      if (provider.lowStockProducts.isNotEmpty) ...[
+                  buildSummaryCard(
+                    context,
+                    'Potential Profit',
+                    CurrencyUtils.formatCurrency(potentialProfit),
+                    Icons.trending_up,
+                    Colors.indigo,
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Inventory Analysis
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).colorScheme.surfaceContainer,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Inventory Analysis',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
                         Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Icon(
-                              Icons.warning_amber,
-                              color: Colors.orange.shade600,
-                              size: 24,
-                            ),
-                            const SizedBox(width: 8),
-                            const Text(
-                              'Low Stock Alert',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
+                            const Flexible(child: Text('Average Stock Value:')),
+                            Flexible(
+                              child: Text(
+                                CurrencyUtils.formatCurrency(averageStockValue),
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 16),
-                        ListView.builder(
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Flexible(child: Text('Stock Health:')),
+                            Flexible(
+                              child: Text(
+                                _getStockHealth(
+                                  totalProducts,
+                                  lowStockCount,
+                                  outOfStockCount,
+                                ),
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: _getStockHealthColor(
+                                    totalProducts,
+                                    lowStockCount,
+                                    outOfStockCount,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            const Flexible(child: Text('Markup Potential:')),
+                            Flexible(
+                              child: Text(
+                                '${totalValue > 0 ? ((potentialProfit / totalValue) * 100).toStringAsFixed(1) : 0.0}%',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Inventory Distribution',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 16),
+                  const InventoryChart(),
+
+                  const SizedBox(height: 24),
+
+                  if (provider.lowStockProducts.isNotEmpty) ...[
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.warning_amber,
+                          color: Colors.orange.shade600,
+                          size: 24,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Low Stock Alert',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    FutureBuilder<Map<String, double>>(
+                      future: reportService.calculateBatchSellingPrices(
+                        provider.lowStockProducts,
+                      ),
+                      builder: (context, priceSnapshot) {
+                        if (!priceSnapshot.hasData) {
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
+                        }
+
+                        final lowStockPrices = priceSnapshot.data!;
+
+                        return ListView.builder(
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           itemCount: provider.lowStockProducts.length,
@@ -594,79 +569,84 @@ class InventoryReportTab extends StatelessWidget {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    FutureBuilder<double>(
-                                      future:
-                                          TaxService.calculateSellingPriceWithRule(
-                                            product.cost,
-                                            productId: product.id,
-                                            categoryName: product.category,
-                                          ),
-                                      builder: (context, snapshot) {
-                                        if (snapshot.hasData) {
-                                          return Text(
-                                            CurrencyUtils.formatCurrency(
-                                              snapshot.data!,
-                                            ),
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: Colors.grey.shade600,
-                                            ),
-                                          );
-                                        }
-                                        return Text(
-                                          'Calculating...',
-                                          style: TextStyle(
-                                            fontSize: 12,
-                                            color: Colors.grey.shade600,
-                                          ),
-                                        );
-                                      },
+                                    Text(
+                                      CurrencyUtils.formatCurrency(
+                                        lowStockPrices[product.id] ?? 0.0,
+                                      ),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.grey.shade600,
+                                      ),
                                     ),
                                   ],
                                 ),
                               ),
                             );
                           },
-                        ),
-                      ] else ...[
-                        Center(
-                          child: Column(
-                            children: [
-                              Icon(
-                                Icons.check_circle_outline,
-                                size: 64,
-                                color: Colors.green.shade400,
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'All Stock Levels Good',
-                                style: TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.green.shade700,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                'No low stock alerts at this time',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
+                        );
+                      },
+                    ),
+                  ] else ...[
+                    Center(
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.check_circle_outline,
+                            size: 64,
+                            color: Colors.green.shade400,
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                );
-              },
+                          const SizedBox(height: 16),
+                          Text(
+                            'All Stock Levels Good',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.green.shade700,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No low stock alerts at this time',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
             );
           },
         );
       },
     );
+  }
+
+  /// Calculate all metrics in a single batch operation
+  Future<Map<String, double>> _calculateAllMetrics(
+    List<Product> products,
+  ) async {
+    final reportService = ReportService();
+    final prices = await reportService.calculateBatchSellingPrices(products);
+
+    double totalRetailValue = 0.0;
+    double potentialProfit = 0.0;
+
+    for (final product in products) {
+      if (product.id != null) {
+        final price = prices[product.id!] ?? 0.0;
+        totalRetailValue += price * product.stock;
+        potentialProfit += (price - product.cost) * product.stock;
+      }
+    }
+
+    return {
+      'totalRetailValue': totalRetailValue,
+      'potentialProfit': potentialProfit,
+    };
   }
 
   int _getCategoryDistribution(List<dynamic> products) {

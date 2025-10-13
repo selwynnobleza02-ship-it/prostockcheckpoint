@@ -5,7 +5,9 @@ import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
 import 'package:prostock/models/credit_transaction.dart';
 import 'package:prostock/models/stock_movement.dart';
+import 'package:prostock/models/tax_rule.dart';
 import 'package:prostock/services/tax_service.dart';
+import 'package:prostock/services/tax_rules_service.dart';
 
 class ReportService {
   // Sales calculations
@@ -250,6 +252,87 @@ class ReportService {
       total += (price - product.cost) * product.stock;
     }
     return total;
+  }
+
+  /// Batch calculate selling prices for multiple products efficiently
+  /// This reduces Firestore calls by fetching all rules once
+  Future<Map<String, double>> calculateBatchSellingPrices(
+    List<Product> products,
+  ) async {
+    final rules = await TaxRulesService.getAllRules(); // Single call
+    final result = <String, double>{};
+
+    for (final product in products) {
+      if (product.id == null) continue;
+
+      final rule = _findBestRuleSync(rules, product.id, product.category);
+      final price = _calculatePriceWithRule(product.cost, rule);
+      result[product.id!] = price;
+    }
+    return result;
+  }
+
+  /// Find the best matching rule synchronously from cached rules
+  TaxRule? _findBestRuleSync(
+    List<TaxRule> rules,
+    String? productId,
+    String? categoryName,
+  ) {
+    // Find product-specific rule first
+    if (productId != null) {
+      final productRule = rules.firstWhere(
+        (rule) => rule.productId == productId,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (productRule.id.isNotEmpty) return productRule;
+    }
+
+    // Find category-specific rule
+    if (categoryName != null) {
+      final categoryRule = rules.firstWhere(
+        (rule) => rule.categoryName == categoryName,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (categoryRule.id.isNotEmpty) return categoryRule;
+    }
+
+    // Return global rule
+    return rules.firstWhere(
+      (rule) => rule.isGlobal,
+      orElse: () => TaxRule(
+        id: '',
+        tubo: 0.0,
+        isInclusive: true,
+        priority: -1,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  /// Calculate price with a specific rule
+  double _calculatePriceWithRule(double cost, TaxRule? rule) {
+    if (rule != null && rule.id.isNotEmpty) {
+      // Use rule: always add-on-top
+      final rawPrice = cost + rule.tubo;
+      return rawPrice.round().toDouble();
+    }
+    // Fallback to global settings
+    return TaxService.calculateSellingPriceSync(cost);
   }
 
   /// Get top selling products by quantity sold
