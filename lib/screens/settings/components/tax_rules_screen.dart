@@ -24,10 +24,38 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
     _loadRules();
   }
 
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reload when dependencies change to ensure we have latest product data
+    _loadRules();
+  }
+
+  // Map to cache product names by ID
+  final Map<String, String> _productNames = {};
+
   Future<void> _loadRules() async {
     setState(() => _isLoading = true);
     try {
       final rules = await TaxService.getAllTaxRules();
+
+      // Load product names for product-specific rules
+      final productIds = rules
+          .where((rule) => rule.isProduct && rule.productId != null)
+          .map((rule) => rule.productId!)
+          .toSet()
+          .toList();
+
+      if (productIds.isNotEmpty) {
+        final inventoryProvider = context.read<InventoryProvider>();
+        for (final productId in productIds) {
+          final product = inventoryProvider.getProductById(productId);
+          if (product != null) {
+            _productNames[productId] = product.name;
+          }
+        }
+      }
+
       if (mounted) {
         setState(() {
           _rules = rules;
@@ -304,7 +332,7 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
                       ),
                     ),
                     title: Text(
-                      rule.description,
+                      _getRuleDisplayName(rule),
                       style: const TextStyle(fontWeight: FontWeight.w500),
                     ),
                     subtitle: Column(
@@ -367,6 +395,20 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
       return Colors.blue;
     } else {
       return Colors.grey;
+    }
+  }
+
+  // Get a user-friendly display name for the rule
+  String _getRuleDisplayName(TaxRule rule) {
+    if (rule.isProduct && rule.productId != null) {
+      // Return product name if available, fallback to generic description with ID
+      return _productNames.containsKey(rule.productId)
+          ? 'Product: ${_productNames[rule.productId]}'
+          : 'Product: (Unknown - ID: ${rule.productId})';
+    } else if (rule.isCategory && rule.categoryName != null) {
+      return 'Category: ${rule.categoryName}';
+    } else {
+      return 'Global rule';
     }
   }
 
@@ -521,41 +563,36 @@ class _AddTaxRuleDialogState extends State<AddTaxRuleDialog> {
       // Ignore any stored inclusive flag; not used anymore.
       _selectedCategory = widget.rule!.categoryName;
       _categoryController.text = widget.rule!.categoryName ?? '';
-      _productController.text = widget.rule!.productId ?? '';
+
+      // For product rules, look up the product name from the ID
+      if (widget.rule!.productId != null) {
+        final inventoryProvider = context.read<InventoryProvider>();
+        final product = inventoryProvider.getProductById(
+          widget.rule!.productId!,
+        );
+        _productController.text = product?.name ?? 'Unknown Product';
+      }
     }
   }
 
   Future<void> _loadCategories() async {
     try {
-      // Use predefined categories from AppConstants
+      // Only use predefined categories from AppConstants
       final predefinedCategories = AppConstants.productCategories;
 
-      // Also get categories from existing products to include any custom categories
-      final inventoryProvider = context.read<InventoryProvider>();
-      final products = inventoryProvider.products;
-      final productCategories = products
-          .map((product) => product.category)
-          .where((category) => category != null && category.isNotEmpty)
-          .cast<String>()
-          .toSet()
-          .toList();
-
-      // Combine predefined and product categories, remove duplicates, and sort
-      final allCategories = <String>{
-        ...predefinedCategories,
-        ...productCategories,
-      }.toList()..sort();
+      // Sort categories alphabetically
+      final sortedCategories = List<String>.from(predefinedCategories)..sort();
 
       if (mounted) {
         setState(() {
-          _availableCategories = allCategories;
+          _availableCategories = sortedCategories;
         });
       }
     } catch (e) {
-      // Fallback to predefined categories only
+      // Fallback to empty list if there's an error
       if (mounted) {
         setState(() {
-          _availableCategories = AppConstants.productCategories;
+          _availableCategories = [];
         });
       }
     }

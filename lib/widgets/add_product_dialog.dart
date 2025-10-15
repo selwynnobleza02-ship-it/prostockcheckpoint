@@ -127,13 +127,13 @@ class _AddProductDialogState extends State<AddProductDialog> {
                       child: Text(category, overflow: TextOverflow.ellipsis),
                     );
                   }).toList(),
-                  onChanged: _isEditing
-                      ? null
-                      : (value) {
-                          setState(() {
-                            _selectedCategory = value!;
-                          });
-                        },
+                  onChanged: (value) {
+                    if (value != null) {
+                      setState(() {
+                        _selectedCategory = value;
+                      });
+                    }
+                  },
                 ),
                 const SizedBox(height: 16),
 

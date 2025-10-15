@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/providers/auth_provider.dart';
 import 'package:prostock/models/user_role.dart';
+import 'package:prostock/providers/theme_provider.dart';
 import 'package:prostock/screens/settings/components/change_password_screen.dart';
 import 'package:prostock/screens/user/profile/components/profile_action.dart';
 
@@ -34,11 +35,16 @@ class UserProfile extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 40,
-                      backgroundColor: Colors.teal[100],
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                          ? Colors.teal.withOpacity(0.3)
+                          : Colors.teal[100],
                       child: Icon(
                         Icons.person,
                         size: 40,
-                        color: Colors.teal[600],
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.teal[200]
+                            : Colors.teal[600],
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -59,8 +65,12 @@ class UserProfile extends StatelessWidget {
                         color:
                             (authProvider.userRole ?? UserRole.user) ==
                                 UserRole.admin
-                            ? Colors.blue.withValues(alpha: 0.1)
-                            : Colors.grey.withValues(alpha: 0.1),
+                            ? Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.blue.withOpacity(0.2)
+                                  : Colors.blue.withOpacity(0.1)
+                            : Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey.withOpacity(0.2)
+                            : Colors.grey.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -69,7 +79,11 @@ class UserProfile extends StatelessWidget {
                           color:
                               (authProvider.userRole ?? UserRole.user) ==
                                   UserRole.admin
-                              ? Colors.blue
+                              ? Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.blue[300]
+                                    : Colors.blue
+                              : Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[400]
                               : Colors.grey[600],
                           fontWeight: FontWeight.w500,
                         ),
@@ -84,6 +98,13 @@ class UserProfile extends StatelessWidget {
                 subtitle: 'Update your account password',
                 icon: Icons.lock,
                 onTap: () => _showChangePasswordDialog(context),
+              ),
+              const SizedBox(height: 12),
+              ProfileAction(
+                title: 'Appearance',
+                subtitle: 'Customize app theme',
+                icon: Icons.palette_outlined,
+                onTap: () => _showAppearanceDialog(context),
               ),
               const SizedBox(height: 12),
               ProfileAction(
@@ -138,6 +159,113 @@ class UserProfile extends StatelessWidget {
             child: const Text('OK'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showAppearanceDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final themeProvider = Provider.of<ThemeProvider>(
+          context,
+          listen: false,
+        );
+        return AlertDialog(
+          title: const Text('Appearance'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildThemeOption(
+                context: context,
+                title: 'Light Mode',
+                icon: Icons.light_mode,
+                isSelected: themeProvider.themeMode == ThemeMode.light,
+                onTap: () {
+                  themeProvider.setThemeMode(ThemeMode.light);
+                  Navigator.of(context).pop();
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildThemeOption(
+                context: context,
+                title: 'Dark Mode',
+                icon: Icons.dark_mode,
+                isSelected: themeProvider.themeMode == ThemeMode.dark,
+                onTap: () {
+                  themeProvider.setThemeMode(ThemeMode.dark);
+                  Navigator.of(context).pop();
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildThemeOption(
+                context: context,
+                title: 'System Default',
+                icon: Icons.brightness_auto,
+                isSelected: themeProvider.themeMode == ThemeMode.system,
+                onTap: () {
+                  themeProvider.setThemeMode(ThemeMode.system);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildThemeOption({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).primaryColor;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: isSelected
+              ? primaryColor.withOpacity(isDarkMode ? 0.2 : 0.1)
+              : isDarkMode
+              ? Colors.grey[800]
+              : null,
+          border: isSelected
+              ? Border.all(color: primaryColor)
+              : Border.all(
+                  color: isDarkMode
+                      ? Colors.grey[700]!.withOpacity(0.5)
+                      : Colors.grey.withOpacity(0.2),
+                ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: isSelected ? primaryColor : null),
+            const SizedBox(width: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? primaryColor : null,
+              ),
+            ),
+            const Spacer(),
+            if (isSelected) Icon(Icons.check_circle, color: primaryColor),
+          ],
+        ),
       ),
     );
   }

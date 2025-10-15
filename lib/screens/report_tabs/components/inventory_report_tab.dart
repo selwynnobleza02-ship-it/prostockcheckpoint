@@ -42,8 +42,11 @@ class InventoryReportTab extends StatelessWidget {
                 ? totalValue / totalProducts
                 : 0.0;
 
-            // Calculate category distribution
-            final categoryCount = _getCategoryDistribution(provider.products);
+            // Calculate total stock quantity
+            final totalStockQuantity = provider.products.fold(
+              0,
+              (sum, product) => sum + product.stock,
+            );
 
             return SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -76,7 +79,10 @@ class InventoryReportTab extends StatelessWidget {
                                   ['Total Products', totalProducts.toString()],
                                   ['Low Stock Items', lowStockCount.toString()],
                                   ['Out of Stock', outOfStockCount.toString()],
-                                  ['Categories', categoryCount.toString()],
+                                  [
+                                    'Total Stock',
+                                    totalStockQuantity.toString(),
+                                  ],
                                   [
                                     'Cost Value',
                                     CurrencyUtils.formatCurrency(totalValue),
@@ -305,9 +311,9 @@ class InventoryReportTab extends StatelessWidget {
                       ),
                       buildSummaryCard(
                         context,
-                        'Categories',
-                        categoryCount.toString(),
-                        Icons.category,
+                        'Total Stock',
+                        totalStockQuantity.toString(),
+                        Icons.warehouse,
                         Colors.purple,
                       ),
                     ],
@@ -647,16 +653,6 @@ class InventoryReportTab extends StatelessWidget {
       'totalRetailValue': totalRetailValue,
       'potentialProfit': potentialProfit,
     };
-  }
-
-  int _getCategoryDistribution(List<dynamic> products) {
-    final categories = <String>{};
-    for (final product in products) {
-      if (product.category?.isNotEmpty == true) {
-        categories.add(product.category);
-      }
-    }
-    return categories.length;
   }
 
   String _getStockHealth(int total, int lowStock, int outOfStock) {

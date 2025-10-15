@@ -16,6 +16,8 @@ class ProfileAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -23,17 +25,24 @@ class ProfileAction extends StatelessWidget {
         decoration: BoxDecoration(
           color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey[200]!),
+          border: Border.all(
+            color: isDarkMode ? Colors.grey[700]! : Colors.grey[200]!,
+          ),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
-                color: Colors.teal[50],
+                color: isDarkMode
+                    ? Colors.teal.withOpacity(0.2)
+                    : Colors.teal[50],
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(icon, color: Colors.teal[600]),
+              child: Icon(
+                icon,
+                color: isDarkMode ? Colors.teal[200] : Colors.teal[600],
+              ),
             ),
             const SizedBox(width: 16),
             Expanded(
@@ -49,12 +58,18 @@ class ProfileAction extends StatelessWidget {
                   ),
                   Text(
                     subtitle,
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    style: TextStyle(
+                      color: isDarkMode ? Colors.grey[400] : Colors.grey[600],
+                      fontSize: 12,
+                    ),
                   ),
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: Colors.grey[400]),
+            Icon(
+              Icons.chevron_right,
+              color: isDarkMode ? Colors.grey[500] : Colors.grey[400],
+            ),
           ],
         ),
       ),

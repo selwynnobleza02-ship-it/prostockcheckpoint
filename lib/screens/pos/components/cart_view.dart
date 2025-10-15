@@ -207,18 +207,16 @@ class CartViewState extends State<CartView> {
             itemExtent: itemHeight,
             itemBuilder: (context, index) {
               final item = salesProvider.currentSaleItems[index];
-              final product = context
-                  .watch<InventoryProvider>()
-                  .products
-                  .firstWhere(
-                    (p) => p.id == item.productId,
-                    orElse: () => Product(
-                      name: 'Unknown Product',
-                      cost: 0,
-                      stock: 0,
-                      createdAt: DateTime.now(),
-                      updatedAt: DateTime.now(),
-                    ),
+              // Get product from inventory provider regardless of current search filter
+              final inventoryProvider = context.watch<InventoryProvider>();
+              final product =
+                  inventoryProvider.getProductById(item.productId) ??
+                  Product(
+                    name: 'Unknown Product',
+                    cost: 0,
+                    stock: 0,
+                    createdAt: DateTime.now(),
+                    updatedAt: DateTime.now(),
                   );
 
               return Card(

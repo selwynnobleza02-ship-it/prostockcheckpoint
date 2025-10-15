@@ -25,14 +25,14 @@ class AppConstants {
 
   // Product Categories
   static const List<String> productCategories = [
-    'Snacks (Chichirya)',
-    'Drinks (Inumin)',
-    'Canned Goods (De Lata)',
+    'Snacks',
+    'Drinks',
+    'Canned Goods',
     'Noodles & Pasta',
-    'Condiments (Pampalasa)',
-    'Cleaning Supplies (Panlinis)',
+    'Condiments',
+    'Cleaning Supplies',
     'Personal Care',
-    'Medicine (Gamot)',
+    'Medicine',
     'Cigarettes & Lighters',
     'Others (Iba pa)',
   ];

@@ -22,6 +22,8 @@ import 'package:prostock/utils/constants.dart';
 
 class InventoryProvider with ChangeNotifier {
   List<Product> _products = [];
+  // Keep a cache of all products for lookup by ID, regardless of current filter
+  final Map<String, Product> _productCache = {};
   bool _isLoading = false;
   String? _error;
   final Map<String, int> _reservedStock = {};
@@ -115,6 +117,9 @@ class InventoryProvider with ChangeNotifier {
         'products',
       )).map((json) => Product.fromMap(json)).toList();
 
+      // Always update the product cache with all products
+      _updateProductCache(localProducts);
+
       // Apply local search filtering if searchQuery is provided
       if (searchQuery != null && searchQuery.isNotEmpty) {
         _products = _filterProductsLocally(localProducts, searchQuery);
@@ -148,6 +153,9 @@ class InventoryProvider with ChangeNotifier {
         }
 
         _products = mergedProductsMap.values.toList();
+
+        // Update product cache with merged products
+        _updateProductCache(_products);
         await _saveProductsToLocalDB(_products);
         initializeVisualStock();
       } else if (searchQuery != null &&
@@ -164,6 +172,8 @@ class InventoryProvider with ChangeNotifier {
 
           if (result.items.isNotEmpty) {
             _products = result.items;
+            // Update product cache with fetched products
+            _updateProductCache(result.items);
             initializeVisualStock();
           }
         } catch (e) {
@@ -231,6 +241,8 @@ class InventoryProvider with ChangeNotifier {
       );
 
       _products.add(newProduct);
+      // Add to product cache as well
+      _productCache[newProduct.id!] = newProduct;
       _reorderPoints[newProduct.id!] = (newProduct.stock * 0.1).ceil().clamp(
         5,
         50,
@@ -323,6 +335,8 @@ class InventoryProvider with ChangeNotifier {
         await db.delete('products', where: 'id = ?', whereArgs: [product.id]);
       } catch (_) {}
       _products.removeWhere((p) => p.id == product.id);
+      // Also remove from product cache
+      _productCache.remove(product.id);
       initializeVisualStock();
       _error = 'Failed to add product: ${e.toString()}';
       _isLoading = false;
@@ -387,6 +401,8 @@ class InventoryProvider with ChangeNotifier {
         final index = _products.indexWhere((p) => p.id == productToUpdate.id);
         if (index != -1) {
           _products[index] = productToUpdate;
+          // Update product cache as well
+          _productCache[productToUpdate.id!] = productToUpdate;
           initializeVisualStock();
           notifyListeners();
         }
@@ -398,6 +414,16 @@ class InventoryProvider with ChangeNotifier {
           where: 'id = ?',
           whereArgs: [updatedProduct.id],
         );
+
+        // Update product in products list and cache
+        final indexInList = _products.indexWhere(
+          (p) => p.id == updatedProduct.id,
+        );
+        if (indexInList != -1) {
+          _products[indexInList] = updatedProduct;
+        }
+        // Always update cache
+        _productCache[updatedProduct.id!] = updatedProduct;
         await _offlineManager.queueOperation(
           OfflineOperation(
             id: updatedProduct.id!,
@@ -1048,11 +1074,22 @@ class InventoryProvider with ChangeNotifier {
     }).toList();
   }
 
+  // Helper method to update product cache
+  void _updateProductCache(List<Product> products) {
+    for (var product in products) {
+      if (product.id != null) {
+        _productCache[product.id!] = product;
+      }
+    }
+  }
+
   Product? getProductById(String id) {
     try {
+      // First try to find it in the current filtered products list
       return _products.firstWhere((product) => product.id == id);
     } catch (e) {
-      return null;
+      // If not found in filtered list, try to get it from the product cache
+      return _productCache[id];
     }
   }
 

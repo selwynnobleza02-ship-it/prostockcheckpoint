@@ -53,6 +53,30 @@ class InventoryChart extends StatelessWidget {
 
             final categoryData = snapshot.data!;
 
+            // Fixed number of distinct colors for better visual separation
+            final colors = [
+              Colors.red,
+              Colors.blue,
+              Colors.green,
+              Colors.purple,
+              Colors.orange,
+              Colors.teal,
+              Colors.pink,
+              Colors.indigo,
+              Colors.amber,
+              Colors.cyan,
+              Colors.deepOrange,
+              Colors.lime,
+            ];
+
+            // Assign a distinct color to each category
+            final categoryColors = <String, Color>{};
+            int colorIndex = 0;
+            for (final category in categoryData.keys) {
+              categoryColors[category] = colors[colorIndex % colors.length];
+              colorIndex++;
+            }
+
             final sections = categoryData.entries.map((entry) {
               final total = categoryData.values.fold(
                 0.0,
@@ -61,10 +85,10 @@ class InventoryChart extends StatelessWidget {
               final percentage = total > 0 ? (entry.value / total * 100) : 0;
 
               return PieChartSectionData(
-                color: _getCategoryColor(entry.key),
+                color: categoryColors[entry.key]!,
                 value: entry.value,
                 title: '${percentage.toStringAsFixed(1)}%',
-                radius: 60,
+                radius: 55, // Reduced radius to avoid overflow
                 titleStyle: const TextStyle(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
@@ -86,69 +110,76 @@ class InventoryChart extends StatelessWidget {
                         fontWeight: FontWeight.bold,
                       ),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 8), // Reduced spacing
+                    // Container with fixed height to prevent overflow
                     SizedBox(
-                      height: 200,
+                      height: 250, // Adjusted height
                       child: Row(
                         children: [
                           Expanded(
-                            flex: 2,
+                            flex: 3,
                             child: PieChart(
                               PieChartData(
                                 sections: sections,
-                                centerSpaceRadius: 40,
-                                sectionsSpace: 2,
+                                centerSpaceRadius: 35, // Reduced center space
+                                sectionsSpace:
+                                    1, // Smaller space between sections
                               ),
                             ),
                           ),
                           Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: categoryData.entries.map((entry) {
-                                return Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 2,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 12,
-                                        height: 12,
-                                        decoration: BoxDecoration(
-                                          color: _getCategoryColor(entry.key),
-                                          shape: BoxShape.circle,
+                            flex: 2,
+                            child: SizedBox(
+                              height: 250, // Match container height
+                              child: ListView(
+                                shrinkWrap: true,
+                                children: categoryData.entries.map((entry) {
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 2,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Container(
+                                          width: 12,
+                                          height: 12,
+                                          decoration: BoxDecoration(
+                                            color: categoryColors[entry.key],
+                                            shape: BoxShape.circle,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              entry.key,
-                                              style: const TextStyle(
-                                                fontSize: 12,
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                entry.key,
+                                                style: const TextStyle(
+                                                  fontSize:
+                                                      10, // Reduced font size
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
                                               ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                            Text(
-                                              CurrencyUtils.formatCurrency(
-                                                entry.value,
+                                              Text(
+                                                CurrencyUtils.formatCurrency(
+                                                  entry.value,
+                                                ),
+                                                style: const TextStyle(
+                                                  fontSize:
+                                                      9, // Reduced font size
+                                                  color: Colors.grey,
+                                                ),
                                               ),
-                                              style: const TextStyle(
-                                                fontSize: 10,
-                                                color: Colors.grey,
-                                              ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }).toList(),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
                             ),
                           ),
                         ],
@@ -162,20 +193,5 @@ class InventoryChart extends StatelessWidget {
         );
       },
     );
-  }
-
-  Color _getCategoryColor(String category) {
-    final colors = [
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.red,
-      Colors.teal,
-      Colors.indigo,
-      Colors.pink,
-    ];
-
-    return colors[category.hashCode % colors.length];
   }
 }
