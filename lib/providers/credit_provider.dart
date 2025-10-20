@@ -288,6 +288,107 @@ class CreditProvider with ChangeNotifier {
     }
   }
 
+  Future<bool> recordCashLoan({
+    required BuildContext context,
+    required String customerId,
+    required double amount,
+    required String notes,
+  }) async {
+    try {
+      ErrorLogger.logInfo(
+        'Starting cash loan recording',
+        context: 'CreditProvider.recordCashLoan',
+        metadata: {'customerId': customerId, 'amount': amount},
+      );
+
+      // Get customer to validate credit limit
+      final customer = await _customerProvider.getCustomerById(customerId);
+      if (customer == null) {
+        _error = 'Customer not found';
+        notifyListeners();
+        return false;
+      }
+
+      // Basic validations
+      if (amount <= 0) {
+        _error = 'Loan amount must be greater than zero';
+        notifyListeners();
+        return false;
+      }
+
+      // Credit limit validation
+      if (customer.balance + amount > customer.creditLimit &&
+          customer.creditLimit > 0) {
+        _error = 'Cash loan would exceed credit limit';
+        notifyListeners();
+        return false;
+      }
+
+      // Create transaction record
+      final transaction = CreditTransaction(
+        customerId: customerId,
+        amount: amount,
+        date: DateTime.now(),
+        type: 'cash_loan', // New transaction type
+        notes: notes,
+        // No items list for cash loans
+      );
+
+      // Generate a local ID for mirroring in SQLite (Firestore add() doesn't return ID here)
+      final localId = const Uuid().v4();
+
+      // Local-first approach: write locally, queue for sync, update balance
+      try {
+        final localMap = transaction.toLocalMap();
+        localMap['id'] = localId;
+        await LocalDatabaseService.instance.insertCreditTransaction(localMap);
+      } catch (e) {
+        ErrorLogger.logError(
+          'Error inserting cash loan transaction locally',
+          error: e,
+          context: 'CreditProvider.recordCashLoan',
+        );
+      }
+
+      // Update customer balance
+      final balanceUpdated = await _customerProvider.updateCustomerBalance(
+        customerId,
+        amount, // Add to balance (positive)
+      );
+
+      if (!balanceUpdated) {
+        _error = _customerProvider.error ?? 'Failed to update customer balance';
+        notifyListeners();
+        return false;
+      }
+
+      // Queue remote insert of the transaction
+      final opTx = OfflineOperation(
+        type: OperationType.insertCreditTransaction,
+        collectionName: 'credit_transactions',
+        documentId: localId,
+        data: {...transaction.toLocalMap(), 'id': localId},
+        timestamp: DateTime.now(),
+      );
+      await _inventoryProvider.queueOperation(opTx);
+
+      ErrorLogger.logInfo(
+        'Cash loan recording completed successfully',
+        context: 'CreditProvider.recordCashLoan',
+      );
+      return true;
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error recording cash loan',
+        error: e,
+        context: 'CreditProvider.recordCashLoan',
+      );
+      _error = 'Failed to record cash loan: $e';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> getTransactionsByCustomer(String customerId) async {
     _isLoading = true;
     _error = null;

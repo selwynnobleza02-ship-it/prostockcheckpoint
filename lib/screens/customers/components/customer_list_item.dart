@@ -3,6 +3,7 @@ import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/screens/customers/dialogs/balance_management_dialog.dart';
+import 'package:prostock/screens/customers/dialogs/cash_utang_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/transaction_history_dialog.dart';
 import 'package:prostock/utils/currency_utils.dart';
@@ -108,8 +109,12 @@ class CustomerListItem extends StatelessWidget {
               value: 'history',
               child: Text('Transaction History'),
             ),
-            // Replaced Delete with Utang (POS Credit)
-            const PopupMenuItem(value: 'utang_pos', child: Text('Utang')),
+            // Credit options
+            const PopupMenuItem(
+              value: 'utang_pos',
+              child: Text('Product Utang'),
+            ),
+            const PopupMenuItem(value: 'cash_utang', child: Text('Cash Utang')),
           ],
           onSelected: (value) async {
             // Check context.mounted before any async operations that use context
@@ -156,6 +161,12 @@ class CustomerListItem extends StatelessWidget {
                     builder: (context) =>
                         POSScreen(customer: customer, paymentMethod: 'credit'),
                   ),
+                );
+                break;
+              case 'cash_utang':
+                showDialog(
+                  context: context,
+                  builder: (context) => CashUtangDialog(customer: customer),
                 );
                 break;
             }

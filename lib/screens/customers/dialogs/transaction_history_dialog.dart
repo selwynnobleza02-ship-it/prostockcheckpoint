@@ -164,18 +164,36 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
               itemCount: transactions.length,
               itemBuilder: (context, index) {
                 final transaction = transactions[index];
-                final isPayment = transaction.type == 'payment';
+                final type = transaction.type.toLowerCase();
+                final isPayment = type == 'payment';
+                final isCashLoan = type == 'cash_loan';
+
+                // Define styling based on transaction type
+                Color bgColor;
+                IconData iconData;
+                String title;
+
+                if (isPayment) {
+                  bgColor = Colors.green;
+                  iconData = Icons.payment;
+                  title = 'Payment';
+                } else if (isCashLoan) {
+                  bgColor = Colors.deepPurple;
+                  iconData = Icons.attach_money;
+                  title = 'Cash Loan';
+                } else {
+                  bgColor = Colors.orange;
+                  iconData = Icons.shopping_cart;
+                  title = 'Product Credit';
+                }
 
                 return ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: isPayment ? Colors.green : Colors.orange,
-                    child: Icon(
-                      isPayment ? Icons.payment : Icons.credit_card,
-                      color: Colors.white,
-                    ),
+                    backgroundColor: bgColor,
+                    child: Icon(iconData, color: Colors.white),
                   ),
                   title: Text(
-                    isPayment ? 'Payment' : 'Credit Sale',
+                    title,
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                   subtitle: Column(
@@ -217,7 +235,9 @@ class _TransactionHistoryDialogState extends State<TransactionHistoryDialog> {
                     '${isPayment ? '-' : '+'}${CurrencyUtils.formatCurrency(transaction.amount)}',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
-                      color: isPayment ? Colors.green : Colors.orange,
+                      color: isPayment
+                          ? Colors.green
+                          : (isCashLoan ? Colors.deepPurple : Colors.orange),
                     ),
                   ),
                 );

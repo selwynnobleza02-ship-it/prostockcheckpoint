@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:prostock/models/customer.dart';
 import 'package:prostock/providers/customer_provider.dart';
+import 'package:prostock/screens/customers/dialogs/cash_utang_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/customer_details_dialog.dart';
 import 'package:prostock/screens/customers/dialogs/transaction_history_dialog.dart';
 import 'package:prostock/screens/pos/pos_screen.dart';
@@ -64,7 +65,18 @@ class CustomerOptionsDialog extends StatelessWidget {
                 ),
               );
             },
-            child: const Text('Utang'),
+            child: const Text('Product Utang'),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              showDialog(
+                context: context,
+                builder: (context) => CashUtangDialog(customer: customer),
+              );
+            },
+            child: const Text('Cash Utang'),
           ),
           const SizedBox(height: 8),
           ElevatedButton(
