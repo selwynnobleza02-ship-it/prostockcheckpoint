@@ -1,5 +1,6 @@
+import 'dart:async';
 import 'dart:io';
-
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:path/path.dart' as p;
@@ -13,6 +14,34 @@ class PdfReportSection {
   final List<List<String>> rows; // [ [label, value], ... ]
 
   PdfReportSection({required this.title, required this.rows});
+
+  // Create a copy with limited rows
+  PdfReportSection copyWithLimitedRows(int maxRows) {
+    if (rows.length <= maxRows) {
+      return this;
+    }
+
+    // Take some rows from the beginning and end
+    final firstHalfCount = maxRows ~/ 2;
+    final secondHalfCount = maxRows - firstHalfCount;
+
+    final firstHalf = rows.take(firstHalfCount).toList();
+    final secondHalf = rows.skip(rows.length - secondHalfCount).toList();
+
+    // Add a summary row in the middle with the same number of columns as the other rows
+    List<String> summaryRow = [];
+    if (rows.isNotEmpty) {
+      int columnCount = rows.first.length;
+      summaryRow = List.filled(columnCount, '');
+      summaryRow[0] =
+          '... (${rows.length - maxRows} more entries not shown) ...';
+    }
+
+    return PdfReportSection(
+      title: title,
+      rows: [...firstHalf, summaryRow, ...secondHalf],
+    );
+  }
 }
 
 class PdfCalculationSection {
@@ -36,7 +65,553 @@ class PdfSummarySection {
   PdfSummarySection({required this.title, required this.value});
 }
 
+// Data structure for passing PDF generation parameters to isolate
+class PdfGenerationParams {
+  final String reportTitle;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final List<PdfReportSection> sections;
+  final List<PdfCalculationSection>? calculations;
+  final List<PdfSummarySection>? summaries;
+
+  PdfGenerationParams({
+    required this.reportTitle,
+    this.startDate,
+    this.endDate,
+    required this.sections,
+    this.calculations,
+    this.summaries,
+  });
+}
+
+// Simple semaphore implementation to limit concurrent operations
+class _PdfSemaphore {
+  final int maxConcurrent;
+  int _currentCount = 0;
+  final List<Completer<void>> _waiters = [];
+
+  _PdfSemaphore({required this.maxConcurrent});
+
+  Future<void> acquire() async {
+    if (_currentCount < maxConcurrent) {
+      _currentCount++;
+      return Future.value();
+    }
+
+    final completer = Completer<void>();
+    _waiters.add(completer);
+    return completer.future;
+  }
+
+  void release() {
+    if (_waiters.isNotEmpty) {
+      final completer = _waiters.removeAt(0);
+      completer.complete();
+    } else {
+      _currentCount = math.max(0, _currentCount - 1);
+    }
+  }
+}
+
 class PdfReportService {
+  // Singleton instance to manage concurrent PDF generations
+  static final PdfReportService _instance = PdfReportService._internal();
+  factory PdfReportService() => _instance;
+  PdfReportService._internal();
+
+  // Semaphore to limit concurrent PDF operations
+  static final _semaphore = _PdfSemaphore(maxConcurrent: 2);
+
+  /// Tests if we can write to storage by creating a small test file
+  /// Returns the directory that works, or throws an exception if no writable directory is found
+  Future<Directory> _testStorage() async {
+    try {
+      debugPrint('[PDF] Testing storage write access');
+
+      List<Directory> dirsToTry = [];
+
+      // First try: User's requested path for downloads
+      if (Platform.isAndroid) {
+        // Try the requested path first (most visible to users)
+        dirsToTry.add(Directory('/My Phone/Internal Storage/Download'));
+        dirsToTry.add(Directory('/storage/emulated/0/Download'));
+        dirsToTry.add(Directory('/sdcard/Download'));
+      }
+
+      try {
+        // Next try: Application documents directory
+        final docsDir = await getApplicationDocumentsDirectory();
+        dirsToTry.add(docsDir);
+
+        // Then: Application support directory
+        final supportDir = await getApplicationSupportDirectory();
+        dirsToTry.add(supportDir);
+
+        // Last: Temporary directory
+        final tempDir = await getTemporaryDirectory();
+        dirsToTry.add(tempDir);
+      } catch (e) {
+        debugPrint('[PDF] Error getting standard directories: $e');
+        // If all else fails, try hard-coded paths
+        if (Platform.isAndroid) {
+          dirsToTry.add(
+            Directory('/data/user/0/com.example.prostock/app_flutter'),
+          );
+          dirsToTry.add(Directory('/data/user/0/com.example.prostock/files'));
+          dirsToTry.add(Directory('/data/user/0/com.example.prostock/cache'));
+        }
+      }
+
+      // Try each directory until one works
+      for (var dir in dirsToTry) {
+        try {
+          debugPrint('[PDF] Trying directory: ${dir.path}');
+
+          if (!await dir.exists()) {
+            await dir.create(recursive: true);
+          }
+
+          final testFile = File('${dir.path}/test_write_access.txt');
+          await testFile.writeAsString('Test write access: ${DateTime.now()}');
+
+          if (await testFile.exists()) {
+            // Clean up
+            await testFile.delete();
+
+            debugPrint('[PDF] Found writable directory: ${dir.path}');
+            return dir;
+          }
+        } catch (e) {
+          debugPrint('[PDF] Directory not writable: ${dir.path}, error: $e');
+          // Continue to next directory
+        }
+      }
+
+      throw Exception('No writable storage directory found');
+    } catch (e) {
+      debugPrint('[PDF] Failed to find writable storage: $e');
+      rethrow;
+    }
+  }
+
+  /// Generate PDF in the background using Flutter's compute function
+  Future<File> generatePdfInBackground({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+  }) async {
+    // Acquire semaphore to limit concurrent PDF operations
+    await _semaphore.acquire();
+
+    try {
+      ErrorLogger.logInfo(
+        'Starting PDF generation in background',
+        context: 'PdfReportService.generatePdfInBackground',
+        metadata: {
+          'reportTitle': reportTitle,
+          'sectionsCount': sections.length,
+          'startDate': startDate?.toIso8601String() ?? 'null',
+          'endDate': endDate?.toIso8601String() ?? 'null',
+        },
+      );
+
+      // Apply stricter limits to avoid TooManyPagesException
+      // For large reports, automatically use paginated PDFs
+      if (sections.length > 5 ||
+          sections.any((s) => s.rows.length > 50) ||
+          (calculations?.length ?? 0) > 5) {
+        try {
+          final files = await generatePaginatedPDFsInBackground(
+            reportTitle: reportTitle,
+            startDate: startDate,
+            endDate: endDate,
+            sections: applyDataLimits(
+              sections,
+              maxRowsPerSection: 50,
+            ), // Stricter limit
+            calculations: calculations,
+            summaries: summaries,
+            sectionsPerPdf: 3, // Fewer sections per PDF
+          );
+          return files.first; // Return the first file as a fallback
+        } catch (e, stack) {
+          ErrorLogger.logError(
+            'Paginated PDF generation fallback failed',
+            error: e,
+            stackTrace: stack,
+            context: 'PdfReportService.generatePdfInBackground',
+          );
+          rethrow;
+        }
+      }
+
+      // For smaller reports, try the normal approach
+      final params = PdfGenerationParams(
+        reportTitle: reportTitle,
+        startDate: startDate,
+        endDate: endDate,
+        sections: applyDataLimits(
+          sections,
+          maxRowsPerSection: 50,
+        ), // Apply stricter limit
+        calculations: calculations,
+        summaries: summaries,
+      );
+
+      try {
+        return await compute(_generatePdfInIsolate, params);
+      } catch (e, stack) {
+        ErrorLogger.logError(
+          'PDF generation in background failed',
+          error: e,
+          stackTrace: stack,
+          context: 'PdfReportService.generatePdfInBackground',
+          metadata: {
+            'reportTitle': reportTitle,
+            'sectionsCount': sections.length,
+          },
+        );
+
+        // If we get a TooManyPagesException, try with even stricter limits
+        if (e.toString().contains('TooManyPagesException')) {
+          ErrorLogger.logInfo(
+            'Retrying with stricter data limits',
+            context: 'PdfReportService.generatePdfInBackground',
+          );
+
+          try {
+            final files = await generatePaginatedPDFsInBackground(
+              reportTitle: reportTitle,
+              startDate: startDate,
+              endDate: endDate,
+              sections: applyDataLimits(
+                sections,
+                maxRowsPerSection: 20,
+              ), // Much stricter limit
+              calculations: calculations
+                  ?.take(3)
+                  .toList(), // Limit calculations too
+              summaries: summaries,
+              sectionsPerPdf: 2, // Even fewer sections per PDF
+            );
+            return files.first; // Return the first file
+          } catch (e2, stack2) {
+            ErrorLogger.logError(
+              'Final PDF generation attempt failed',
+              error: e2,
+              stackTrace: stack2,
+              context: 'PdfReportService.generatePdfInBackground',
+            );
+            rethrow;
+          }
+        }
+
+        rethrow;
+      }
+    } finally {
+      // Always release the semaphore when done
+      _semaphore.release();
+    }
+  }
+
+  /// Generate paginated PDFs in background using Flutter's compute function
+  Future<List<File>> generatePaginatedPDFsInBackground({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+    int sectionsPerPdf = 5,
+    int maxRowsPerSection = 50, // New parameter to control rows per section
+  }) async {
+    // Acquire semaphore to limit concurrent operations
+    await _semaphore.acquire();
+
+    try {
+      ErrorLogger.logInfo(
+        'Starting paginated PDF generation in background',
+        context: 'PdfReportService.generatePaginatedPDFsInBackground',
+        metadata: {
+          'reportTitle': reportTitle,
+          'sectionsCount': sections.length,
+          'sectionsPerPdf': sectionsPerPdf,
+          'maxRowsPerSection': maxRowsPerSection,
+        },
+      );
+
+      // Apply row limits to all sections first to avoid TooManyPagesException
+      final limitedSections = applyDataLimits(
+        sections,
+        maxRowsPerSection: maxRowsPerSection,
+      );
+
+      // For very large reports, split large sections into multiple sections
+      if (limitedSections.any((section) => section.rows.length > 100)) {
+        List<PdfReportSection> splitSections = [];
+
+        for (var section in limitedSections) {
+          if (section.rows.length > 100) {
+            // Split this section into multiple smaller sections
+            final totalSplits = (section.rows.length / 50).ceil();
+
+            for (int i = 0; i < totalSplits; i++) {
+              final start = i * 50;
+              final end = (start + 50 < section.rows.length)
+                  ? start + 50
+                  : section.rows.length;
+
+              splitSections.add(
+                PdfReportSection(
+                  title: '${section.title} (Part ${i + 1} of $totalSplits)',
+                  rows: section.rows.sublist(start, end),
+                ),
+              );
+            }
+          } else {
+            // Keep section as is
+            splitSections.add(section);
+          }
+        }
+
+        // Replace with the split sections
+        limitedSections.clear();
+        limitedSections.addAll(splitSections);
+      }
+
+      // Calculate how many PDFs we'll need
+      int totalPdfs = (limitedSections.length / sectionsPerPdf).ceil();
+      List<File> pdfFiles = [];
+
+      // Generate PDFs sequentially instead of in parallel to avoid resource contention
+      for (int i = 0; i < limitedSections.length; i += sectionsPerPdf) {
+        int end = (i + sectionsPerPdf < limitedSections.length)
+            ? i + sectionsPerPdf
+            : limitedSections.length;
+        List<PdfReportSection> sectionChunk = limitedSections.sublist(i, end);
+
+        int pageNumber = (i ~/ sectionsPerPdf) + 1;
+
+        // Log progress
+        ErrorLogger.logInfo(
+          'Generating PDF $pageNumber of $totalPdfs',
+          context: 'PdfReportService.generatePaginatedPDFsInBackground',
+        );
+
+        // For calculations, distribute them across PDFs if there are many
+        List<PdfCalculationSection>? pdfCalculations;
+        if (calculations != null && calculations.isNotEmpty) {
+          if (pageNumber == 1 || calculations.length <= 3) {
+            // For short calculation lists or first PDF, include all or the first few
+            pdfCalculations = pageNumber == 1
+                ? (calculations.length > 4
+                      ? calculations.sublist(0, 4)
+                      : calculations)
+                : null;
+          } else if (totalPdfs > 1 && calculations.length > 4) {
+            // Distribute remaining calculations across PDFs
+            final calcPerPdf = (calculations.length - 4) ~/ (totalPdfs - 1);
+            final startIdx = 4 + (pageNumber - 2) * calcPerPdf;
+            final endIdx = pageNumber == totalPdfs
+                ? calculations.length
+                : math.min(startIdx + calcPerPdf, calculations.length);
+
+            if (startIdx < endIdx) {
+              pdfCalculations = calculations.sublist(startIdx, endIdx);
+            }
+          }
+        }
+
+        final params = PdfGenerationParams(
+          reportTitle: '$reportTitle - Part $pageNumber of $totalPdfs',
+          startDate: startDate,
+          endDate: endDate,
+          sections: sectionChunk,
+          calculations: pdfCalculations,
+          summaries: pageNumber == totalPdfs
+              ? summaries
+              : null, // Only include in last PDF
+        );
+
+        // Insert a delay between PDF generations to avoid resource contention
+        if (i > 0) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+
+        try {
+          File pdfFile = await compute(_generatePdfInIsolate, params);
+          pdfFiles.add(pdfFile);
+
+          // Log success
+          ErrorLogger.logInfo(
+            'PDF $pageNumber of $totalPdfs generated successfully',
+            context: 'PdfReportService.generatePaginatedPDFsInBackground',
+          );
+        } catch (e, stack) {
+          ErrorLogger.logError(
+            'Failed to generate PDF $pageNumber of $totalPdfs',
+            error: e,
+            stackTrace: stack,
+            context: 'PdfReportService.generatePaginatedPDFsInBackground',
+          );
+
+          // Continue with other PDFs instead of failing completely
+          continue;
+        }
+      }
+
+      return pdfFiles;
+    } finally {
+      // Always release the semaphore when done
+      _semaphore.release();
+    }
+  }
+
+  /// Static method to be executed in isolate
+  /// Method to be executed in isolate
+  static Future<File> _generatePdfInIsolate(PdfGenerationParams params) async {
+    try {
+      // We'll skip Firebase initialization in the isolate and avoid using
+      // Firebase-dependent code in the PDF generation
+
+      debugPrint(
+        '[PDF ISOLATE] Starting PDF generation: ${params.reportTitle}',
+      );
+
+      final service = PdfReportService();
+      final file = await service.generateFinancialReport(
+        reportTitle: params.reportTitle,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        sections: params.sections,
+        calculations: params.calculations,
+        summaries: params.summaries,
+      );
+
+      debugPrint(
+        '[PDF ISOLATE] PDF generation completed: ${params.reportTitle}',
+      );
+
+      return file;
+    } catch (e, stack) {
+      debugPrint('[CRITICAL ERROR] PDF generation in isolate failed: $e');
+      debugPrint('[CRITICAL ERROR] Stack trace: $stack');
+      rethrow;
+    } finally {
+      // Clean up resources after PDF generation
+      debugPrint(
+        '[PDF ISOLATE] Cleaning up resources for: ${params.reportTitle}',
+      );
+    }
+  }
+
+  /// Apply data limits to all sections to prevent TooManyPagesException
+  List<PdfReportSection> applyDataLimits(
+    List<PdfReportSection> sections, {
+    int maxRowsPerSection = 100,
+    bool summaryOnly = false,
+  }) {
+    // Calculate total rows to gauge complexity
+    int totalRows = sections.fold(
+      0,
+      (sum, section) => sum + section.rows.length,
+    );
+
+    // For extremely large data sets (>1000 rows), automatically apply summary mode
+    if (totalRows > 1000 && !summaryOnly) {
+      ErrorLogger.logInfo(
+        'Applying summary-only mode due to large dataset ($totalRows rows)',
+        context: 'PdfReportService.applyDataLimits',
+      );
+      summaryOnly = true;
+      // Also reduce max rows per section for very large datasets
+      if (maxRowsPerSection > 50) {
+        maxRowsPerSection = 50;
+      }
+    }
+    // For large data sets (>500 rows), further reduce rows per section
+    else if (totalRows > 500 && maxRowsPerSection > 75) {
+      maxRowsPerSection = 75;
+      ErrorLogger.logInfo(
+        'Reducing max rows per section to $maxRowsPerSection due to large dataset',
+        context: 'PdfReportService.applyDataLimits',
+      );
+    }
+
+    // If summary only is enabled, only include sections with "Summary" in the title
+    if (summaryOnly) {
+      sections = sections
+          .where(
+            (s) =>
+                s.title.toLowerCase().contains('summary') ||
+                s.title.toLowerCase().contains('total') ||
+                s.rows.length <= 10, // Keep small sections
+          )
+          .toList();
+    }
+
+    // For large sections, apply stricter limits
+    List<PdfReportSection> limitedSections = [];
+    for (var section in sections) {
+      // Apply different limits based on section size
+      int sectionLimit = maxRowsPerSection;
+
+      // For very large sections, apply even stricter limits
+      if (section.rows.length > 200) {
+        sectionLimit = math.min(maxRowsPerSection, 40); // Stricter limit
+      }
+
+      limitedSections.add(section.copyWithLimitedRows(sectionLimit));
+    }
+
+    return limitedSections;
+  }
+
+  /// Split sections into multiple PDFs to prevent TooManyPagesException
+  Future<List<File>> generatePaginatedPDFs({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+    int sectionsPerPdf = 5,
+  }) async {
+    List<File> pdfFiles = [];
+
+    // Calculate how many PDFs we'll need
+    int totalPdfs = (sections.length / sectionsPerPdf).ceil();
+
+    // Generate one PDF for each batch of sections
+    for (int i = 0; i < sections.length; i += sectionsPerPdf) {
+      int end = (i + sectionsPerPdf < sections.length)
+          ? i + sectionsPerPdf
+          : sections.length;
+      List<PdfReportSection> sectionChunk = sections.sublist(i, end);
+
+      int pageNumber = (i ~/ sectionsPerPdf) + 1;
+      final file = await generateFinancialReport(
+        reportTitle: '$reportTitle - Part $pageNumber of $totalPdfs',
+        startDate: startDate,
+        endDate: endDate,
+        sections: sectionChunk,
+        calculations: pageNumber == 1
+            ? calculations
+            : null, // Only include in first PDF
+        summaries: pageNumber == totalPdfs
+            ? summaries
+            : null, // Only include in last PDF
+      );
+
+      pdfFiles.add(file);
+    }
+
+    return pdfFiles;
+  }
+
   Future<File> generateFinancialReport({
     required String reportTitle,
     required DateTime? startDate,
@@ -46,15 +621,9 @@ class PdfReportService {
     List<PdfSummarySection>? summaries,
   }) async {
     try {
-      ErrorLogger.logInfo(
-        'Starting PDF generation',
-        context: 'PdfReportService.generateFinancialReport',
-        metadata: {
-          'reportTitle': reportTitle,
-          'sections': sections.length,
-          'calculations': calculations?.length ?? 0,
-          'summaries': summaries?.length ?? 0,
-        },
+      debugPrint('[PDF] Starting PDF generation for: $reportTitle');
+      debugPrint(
+        '[PDF] Sections: ${sections.length}, Calculations: ${calculations?.length ?? 0}, Summaries: ${summaries?.length ?? 0}',
       );
 
       final doc = pw.Document();
@@ -63,23 +632,35 @@ class PdfReportService {
       doc.addPage(
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
+          // Set maxPages high enough to handle reasonable content
+          maxPages: 100,
+          footer: (context) => pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Page ${context.pageNumber} of ${context.pagesCount}',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+            ),
+          ),
           build: (context) => [
             pw.Header(
               level: 0,
               child: pw.Row(
                 mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
                 children: [
-                  pw.Text(
-                    reportTitle,
-                    style: pw.TextStyle(
-                      fontSize: 20,
-                      fontWeight: pw.FontWeight.bold,
+                  pw.Expanded(
+                    child: pw.Text(
+                      reportTitle,
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
                     ),
                   ),
                   pw.Text(
                     startDate != null && endDate != null
                         ? '${df.format(startDate)} - ${df.format(endDate)}'
                         : 'All Time',
+                    style: const pw.TextStyle(fontSize: 10),
                   ),
                 ],
               ),
@@ -94,7 +675,7 @@ class PdfReportService {
               child: pw.Text(
                 'Generated on ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
                 style: const pw.TextStyle(
-                  fontSize: 10,
+                  fontSize: 9,
                   color: PdfColors.grey700,
                 ),
               ),
@@ -103,66 +684,81 @@ class PdfReportService {
         ),
       );
 
-      ErrorLogger.logInfo(
-        'Building document structure',
-        context: 'PdfReportService.generateFinancialReport',
-      );
+      debugPrint('[PDF] Building document structure');
 
-      // Try to get Downloads directory, fallback to external storage if not available
-      Directory? dir;
+      // Try to find a writable directory by testing
+      Directory? directoryToUse;
       try {
-        ErrorLogger.logInfo(
-          'Getting storage directory',
-          context: 'PdfReportService.generateFinancialReport',
-        );
-        if (!kIsWeb && Platform.isAndroid) {
-          // For Android, try to get the Downloads directory
-          dir = Directory('/storage/emulated/0/Download');
-          if (!await dir.exists()) {
-            ErrorLogger.logInfo(
-              'Downloads directory not found, trying external storage',
-              context: 'PdfReportService.generateFinancialReport',
-            );
-            // Fallback to external storage directory
-            dir = await getExternalStorageDirectory();
-            if (dir != null) {
-              dir = Directory('${dir.path}/Download');
-              if (!await dir.exists()) {
-                ErrorLogger.logInfo(
-                  'Creating Download directory',
-                  context: 'PdfReportService.generateFinancialReport',
+        debugPrint('[PDF] Finding writable storage directory');
+
+        // Try to use the Download directory directly first
+        if (Platform.isAndroid) {
+          // Try the requested path first
+          final downloadDir = Directory('/My Phone/Internal Storage/Download');
+          bool canCreateDir = false;
+
+          try {
+            if (await downloadDir.exists()) {
+              canCreateDir = true;
+            } else {
+              await downloadDir.create(recursive: true);
+              canCreateDir = await downloadDir.exists();
+            }
+          } catch (e) {
+            debugPrint('[PDF] Error creating directory: $e');
+            canCreateDir = false;
+          }
+
+          if (canCreateDir) {
+            // Test if we can write to this directory
+            try {
+              final testFile = File(
+                '${downloadDir.path}/test_write_access.txt',
+              );
+              await testFile.writeAsString(
+                'Test write access: ${DateTime.now()}',
+              );
+              if (await testFile.exists()) {
+                await testFile.delete();
+                debugPrint(
+                  '[PDF] Using requested Download directory: ${downloadDir.path}',
                 );
-                await dir.create(recursive: true);
+                directoryToUse = downloadDir;
+                // If this succeeds, don't try other directories
               }
+            } catch (e) {
+              debugPrint(
+                '[PDF] Cannot write to Download directory, will try alternatives: $e',
+              );
             }
           }
-        } else {
-          // For iOS, web, and other platforms, use application documents directory
-          ErrorLogger.logInfo(
-            'Using application documents directory',
-            context: 'PdfReportService.generateFinancialReport',
+        }
+
+        // If we couldn't use the Download directory, find another writable directory
+        if (directoryToUse == null) {
+          // Use the test function to find a directory we can actually write to
+          directoryToUse = await _testStorage();
+          debugPrint(
+            '[PDF] Selected storage directory: ${directoryToUse.path}',
           );
-          dir = await getApplicationDocumentsDirectory();
         }
       } catch (e) {
-        ErrorLogger.logError(
-          'Error getting storage directory',
-          error: e,
-          context: 'PdfReportService.generateFinancialReport',
-        );
-        // Fallback to application documents directory if all else fails
-        dir = await getApplicationDocumentsDirectory();
+        debugPrint('[PDF] Failed to find writable storage directory: $e');
+
+        // Last resort - use temporary directory which should work in isolates
+        debugPrint('[PDF] Using temporary directory as last resort');
+        directoryToUse = await getTemporaryDirectory();
       }
 
-      if (dir == null) {
-        throw Exception('Could not access storage directory');
+      Directory dir = directoryToUse;
+
+      // Check that directory is valid and exists
+      if (!(await dir.exists())) {
+        debugPrint('[PDF] Directory does not exist: ${dir.path}, creating it');
+        await dir.create(recursive: true);
       }
 
-      ErrorLogger.logInfo(
-        'Resolved storage directory',
-        context: 'PdfReportService.generateFinancialReport',
-        metadata: {'path': dir.path},
-      );
+      debugPrint('[PDF] Using directory: ${dir.path}');
 
       // Generate filename based on report title
       String baseFileName = 'financial_report';
@@ -180,34 +776,84 @@ class PdfReportService {
 
       final fileName =
           '${baseFileName}_${DateTime.now().millisecondsSinceEpoch}.pdf';
-      final file = File(p.join(dir.path, fileName));
+      var file = File(p.join(dir.path, fileName));
 
-      ErrorLogger.logInfo(
-        'Saving PDF',
-        context: 'PdfReportService.generateFinancialReport',
-        metadata: {'path': file.path},
-      );
+      debugPrint('[PDF] Saving PDF to: ${file.path}');
 
-      final pdfBytes = await doc.save();
-      ErrorLogger.logInfo(
-        'PDF generated',
-        context: 'PdfReportService.generateFinancialReport',
-        metadata: {'sizeBytes': pdfBytes.length},
-      );
+      try {
+        debugPrint('[PDF] About to generate PDF bytes...');
+        final pdfBytes = await doc.save();
+        debugPrint('[PDF] PDF generated, size: ${pdfBytes.length} bytes');
 
-      await file.writeAsBytes(pdfBytes);
-      ErrorLogger.logInfo(
-        'PDF saved successfully',
-        context: 'PdfReportService.generateFinancialReport',
-      );
+        // Check if directory exists and is writable
+        final parentDir = file.parent;
+        if (!await parentDir.exists()) {
+          debugPrint('[PDF] Creating parent directory: ${parentDir.path}');
+          try {
+            await parentDir.create(recursive: true);
+            debugPrint('[PDF] Parent directory created successfully');
+          } catch (e) {
+            debugPrint('[PDF] Error creating parent directory: $e');
+            // Try a fallback location if we can't create the directory
+            dir = await getTemporaryDirectory();
+            debugPrint(
+              '[PDF] Falling back to temporary directory: ${dir.path}',
+            );
+            final fileName =
+                '${baseFileName}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+            file = File(p.join(dir.path, fileName));
+          }
+        }
+
+        // Write file
+        debugPrint('[PDF] Writing file to: ${file.path}');
+        try {
+          await file.writeAsBytes(pdfBytes);
+          debugPrint('[PDF] File written successfully');
+        } catch (e) {
+          debugPrint('[PDF] Error writing file: $e');
+          // Try one more fallback to the cache directory
+          dir = await getTemporaryDirectory();
+          final fileName =
+              '${baseFileName}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+          file = File(p.join(dir.path, fileName));
+          debugPrint('[PDF] Final fallback attempt to: ${file.path}');
+          await file.writeAsBytes(pdfBytes);
+        }
+
+        // Verify file was created
+        final exists = await file.exists();
+        final fileSize = exists ? await file.length() : 0;
+
+        debugPrint(
+          '[PDF] PDF saved successfully: ${file.path}, exists: $exists, size: $fileSize bytes',
+        );
+
+        // Log additional information about the file path for debugging
+        if (exists) {
+          debugPrint('[PDF] Full absolute path: ${file.absolute.path}');
+          debugPrint('[PDF] Parent directory: ${file.parent.path}');
+
+          // On Android, also try to make sure the file is accessible in the media store
+          if (Platform.isAndroid && dir.path.contains('/Download')) {
+            try {
+              // Log that the file should be visible in Downloads
+              debugPrint('[PDF] PDF should be visible in Downloads folder');
+            } catch (e) {
+              debugPrint('[PDF] Note: Media scanning not available: $e');
+            }
+          }
+        }
+      } catch (e, stack) {
+        debugPrint('[PDF] Failed to write PDF file: $e');
+        debugPrint('[PDF] Stack trace: $stack');
+        rethrow;
+      }
 
       return file;
-    } catch (e) {
-      ErrorLogger.logError(
-        'Error generating PDF',
-        error: e,
-        context: 'PdfReportService.generateFinancialReport',
-      );
+    } catch (e, stack) {
+      debugPrint('[PDF] Error generating PDF: $e');
+      debugPrint('[PDF] Stack trace: $stack');
       rethrow;
     }
   }

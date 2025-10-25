@@ -19,6 +19,10 @@ import 'package:prostock/utils/error_logger.dart';
 import 'package:prostock/widgets/top_selling_products_list.dart';
 import 'package:prostock/services/pdf_report_service.dart';
 import 'package:prostock/services/historical_cost_service.dart';
+import 'dart:math';
+import 'package:flutter/foundation.dart';
+import 'package:prostock/widgets/export_filter_dialog.dart';
+import 'dart:io';
 import 'package:prostock/services/cost_history_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -213,6 +217,31 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                         label: const Text('Export PDF'),
                         onPressed: () async {
                           try {
+                            // Show filter options
+                            final exportOptions = ExportFilterOptions(
+                              useDataRangeFilter:
+                                  _startDate != null && _endDate != null,
+                              startDate: _startDate,
+                              endDate: _endDate,
+                            );
+
+                            // Show the filter dialog
+                            if (!context.mounted) return;
+                            final result =
+                                await showDialog<ExportFilterOptions>(
+                                  context: context,
+                                  builder: (context) => ExportFilterDialog(
+                                    initialOptions: exportOptions,
+                                    onApply: (options) async {
+                                      Navigator.of(context).pop(options);
+                                    },
+                                  ),
+                                );
+
+                            // If user cancelled the dialog
+                            if (result == null || !context.mounted) return;
+
+                            final options = result;
                             final scaffold = ScaffoldMessenger.of(context);
 
                             // Show loading indicator
@@ -520,26 +549,250 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                             ];
 
                             final summaries = <PdfSummarySection>[];
-                            final file = await pdf.generateFinancialReport(
-                              reportTitle: 'Financial Report - Sari-Sari Store',
-                              startDate: _startDate,
-                              endDate: _endDate,
-                              sections: sections,
-                              calculations: calculations,
-                              summaries: summaries,
-                            );
 
-                            if (!context.mounted) return;
+                            // Apply filter options to limit data
+                            List<PdfReportSection> filteredSections = sections;
+                            if (options.useDataRangeFilter) {
+                              // Date filtering is already applied via _startDate and _endDate
+                            }
 
-                            scaffold.showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  'PDF saved successfully: ${file.path}',
+                            // Apply item count limit and summary-only filter
+                            if (options.limitItemCount || options.summaryOnly) {
+                              filteredSections = pdf.applyDataLimits(
+                                sections,
+                                maxRowsPerSection: options.maxItemCount,
+                                summaryOnly: options.summaryOnly,
+                              );
+                            }
+
+                            try {
+                              // Show progress dialog
+                              showDialog(
+                                context: context,
+                                barrierDismissible: false,
+                                builder: (context) => const AlertDialog(
+                                  content: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CircularProgressIndicator(),
+                                      SizedBox(height: 16),
+                                      Text('Generating PDF...\nPlease wait.'),
+                                    ],
+                                  ),
                                 ),
-                                backgroundColor: Colors.green,
-                                duration: const Duration(seconds: 4),
-                              ),
-                            );
+                              );
+
+                              ErrorLogger.logInfo(
+                                'Starting financial report PDF generation',
+                                context: 'FinancialReportTab',
+                                metadata: {
+                                  'filteredSections': filteredSections.length,
+                                  'calculations': calculations.length,
+                                  'summaries': summaries.length,
+                                },
+                              );
+
+                              // Generate the PDF with filtered sections in background
+                              final file = await pdf.generatePdfInBackground(
+                                reportTitle:
+                                    'Financial Report - Sari-Sari Store',
+                                startDate: options.useDataRangeFilter
+                                    ? options.startDate
+                                    : _startDate,
+                                endDate: options.useDataRangeFilter
+                                    ? options.endDate
+                                    : _endDate,
+                                sections: filteredSections,
+                                calculations: calculations,
+                                summaries: summaries,
+                              );
+
+                              // Close progress dialog
+                              if (!context.mounted) return;
+                              Navigator.of(context).pop();
+
+                              // Make sure the file exists and has content
+                              final fileExists = await file.exists();
+                              final fileSize = fileExists
+                                  ? await file.length()
+                                  : 0;
+
+                              ErrorLogger.logInfo(
+                                'PDF file generation successful',
+                                context: 'FinancialReportTab',
+                                metadata: {
+                                  'filePath': file.path,
+                                  'fileExists': fileExists,
+                                  'fileSize': fileSize,
+                                },
+                              );
+
+                              if (!context.mounted) return;
+
+                              if (fileExists && fileSize > 0) {
+                                // Extract user-friendly location from the path
+                                String userFriendlyPath = file.path;
+                                if (file.path.contains(
+                                  '/My Phone/Internal Storage/Download',
+                                )) {
+                                  userFriendlyPath = 'Downloads folder';
+                                } else if (file.path.contains(
+                                  '/storage/emulated/0/Download',
+                                )) {
+                                  userFriendlyPath = 'Downloads folder';
+                                } else if (file.path.contains(
+                                  '/sdcard/Download',
+                                )) {
+                                  userFriendlyPath = 'Downloads folder';
+                                } else {
+                                  // Try to make the path more readable
+                                  final pathParts = file.path.split('/');
+                                  if (pathParts.length >= 3) {
+                                    userFriendlyPath =
+                                        '${pathParts[pathParts.length - 3]}/${pathParts[pathParts.length - 2]}/${pathParts[pathParts.length - 1]}';
+                                  }
+                                }
+
+                                scaffold.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'PDF saved successfully in: $userFriendlyPath',
+                                    ),
+                                    backgroundColor: Colors.green,
+                                    duration: const Duration(seconds: 8),
+                                  ),
+                                );
+                              } else {
+                                scaffold.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Error: PDF file was not created properly. Please check storage permissions.',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                    duration: const Duration(seconds: 6),
+                                  ),
+                                );
+                              }
+                            } catch (e, stack) {
+                              // Log detailed error
+                              ErrorLogger.logError(
+                                'PDF generation failed',
+                                error: e,
+                                stackTrace: stack,
+                                context: 'FinancialReportTab',
+                                metadata: {
+                                  'filteredSections': filteredSections.length,
+                                  'calculations': calculations.length,
+                                  'summaries': summaries.length,
+                                },
+                              );
+
+                              // Close progress dialog if still showing
+                              if (!context.mounted) return;
+                              if (Navigator.canPop(context)) {
+                                Navigator.of(context).pop();
+                              }
+
+                              // Show technical details to help debugging
+                              if (kDebugMode) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'DEBUG: PDF Error: ${e.toString().substring(0, min(100, e.toString().length))}',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                    duration: const Duration(seconds: 10),
+                                  ),
+                                );
+                              }
+
+                              // If we get TooManyPagesException, try paginated approach
+                              if (e.toString().contains(
+                                'TooManyPagesException',
+                              )) {
+                                scaffold.showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Document too large, splitting into multiple PDFs...',
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                    duration: Duration(seconds: 3),
+                                  ),
+                                );
+
+                                // Show progress dialog for paginated generation
+                                showDialog(
+                                  context: context,
+                                  barrierDismissible: false,
+                                  builder: (context) => const AlertDialog(
+                                    content: Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        CircularProgressIndicator(),
+                                        SizedBox(height: 16),
+                                        Text(
+                                          'Creating multiple PDF files...\nPlease wait.',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+
+                                // Generate paginated PDFs in background
+                                final files = await pdf
+                                    .generatePaginatedPDFsInBackground(
+                                      reportTitle:
+                                          'Financial Report - Sari-Sari Store',
+                                      startDate: options.useDataRangeFilter
+                                          ? options.startDate
+                                          : _startDate,
+                                      endDate: options.useDataRangeFilter
+                                          ? options.endDate
+                                          : _endDate,
+                                      sections: filteredSections,
+                                      calculations: calculations,
+                                      summaries: summaries,
+                                      sectionsPerPdf:
+                                          3, // Fewer sections per PDF
+                                    );
+
+                                // Close progress dialog
+                                if (!context.mounted) return;
+                                Navigator.of(context).pop();
+
+                                if (!context.mounted) return;
+
+                                // Extract user-friendly location from the path
+                                String userFriendlyPath = Directory(
+                                  files.first.parent.path,
+                                ).path;
+                                if (userFriendlyPath.contains(
+                                  '/My Phone/Internal Storage/Download',
+                                )) {
+                                  userFriendlyPath = 'Downloads folder';
+                                } else if (userFriendlyPath.contains(
+                                  '/storage/emulated/0/Download',
+                                )) {
+                                  userFriendlyPath = 'Downloads folder';
+                                } else if (userFriendlyPath.contains(
+                                  '/sdcard/Download',
+                                )) {
+                                  userFriendlyPath = 'Downloads folder';
+                                }
+
+                                scaffold.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Generated ${files.length} PDF files in $userFriendlyPath',
+                                    ),
+                                    backgroundColor: Colors.green,
+                                    duration: const Duration(seconds: 6),
+                                  ),
+                                );
+                              } else {
+                                rethrow; // Re-throw to be caught by outer catch
+                              }
+                            }
                           } catch (e) {
                             ErrorLogger.logError(
                               'PDF Export Error',

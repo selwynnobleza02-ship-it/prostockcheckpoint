@@ -6,6 +6,8 @@ import 'package:prostock/providers/inventory_provider.dart';
 import 'package:prostock/utils/currency_utils.dart';
 import 'package:prostock/widgets/report_helpers.dart';
 import 'package:prostock/services/pdf_report_service.dart';
+import 'package:prostock/widgets/export_filter_dialog.dart';
+import 'dart:io';
 
 class SalesReportTab extends StatelessWidget {
   const SalesReportTab({super.key});
@@ -67,15 +69,39 @@ class SalesReportTab extends StatelessWidget {
                     icon: const Icon(Icons.picture_as_pdf),
                     label: const Text('Export PDF'),
                     onPressed: () async {
-                      final scaffold = ScaffoldMessenger.of(context);
-                      scaffold.showSnackBar(
-                        const SnackBar(
-                          content: Text('Generating PDF...'),
-                          duration: Duration(seconds: 2),
-                        ),
-                      );
-
                       try {
+                        // Show filter options
+                        final exportOptions = ExportFilterOptions(
+                          useDataRangeFilter: false,
+                          startDate: null,
+                          endDate: null,
+                        );
+
+                        // Show the filter dialog
+                        final result = await showDialog<ExportFilterOptions>(
+                          context: context,
+                          builder: (context) => ExportFilterDialog(
+                            initialOptions: exportOptions,
+                            onApply: (options) {
+                              Navigator.of(context).pop(options);
+                            },
+                          ),
+                        );
+
+                        // If user cancelled the dialog
+                        if (result == null || !context.mounted) return;
+
+                        final options = result;
+                        final scaffold = ScaffoldMessenger.of(context);
+
+                        // Show loading indicator
+                        scaffold.showSnackBar(
+                          const SnackBar(
+                            content: Text('Generating PDF...'),
+                            duration: Duration(seconds: 2),
+                          ),
+                        );
+
                         final pdf = PdfReportService();
 
                         // Build breakdowns per period with product name and quantity
@@ -307,26 +333,134 @@ class SalesReportTab extends StatelessWidget {
 
                         final sections = buildBreakdownSections();
 
-                        final file = await pdf.generateFinancialReport(
-                          reportTitle: 'Sales Report - Sari-Sari Store',
-                          startDate: null,
-                          endDate: null,
-                          sections: sections,
-                        );
+                        // Apply filter options to limit data
+                        List<PdfReportSection> filteredSections = sections;
+                        if (options.limitItemCount || options.summaryOnly) {
+                          filteredSections = pdf.applyDataLimits(
+                            sections,
+                            maxRowsPerSection: options.maxItemCount,
+                            summaryOnly: options.summaryOnly,
+                          );
+                        }
 
-                        scaffold.showSnackBar(
-                          SnackBar(
-                            content: Text('PDF saved: ${file.path}'),
-                            backgroundColor: Colors.green,
-                            duration: const Duration(seconds: 4),
-                          ),
-                        );
+                        try {
+                          // Show progress dialog
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (context) => const AlertDialog(
+                              content: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 16),
+                                  Text('Generating PDF...\nPlease wait.'),
+                                ],
+                              ),
+                            ),
+                          );
+
+                          // Generate the PDF with filtered sections in background
+                          final file = await pdf.generatePdfInBackground(
+                            reportTitle: 'Sales Report - Sari-Sari Store',
+                            startDate: options.useDataRangeFilter
+                                ? options.startDate
+                                : null,
+                            endDate: options.useDataRangeFilter
+                                ? options.endDate
+                                : null,
+                            sections: filteredSections,
+                          );
+
+                          // Close progress dialog
+                          if (!context.mounted) return;
+                          Navigator.of(context).pop();
+
+                          if (!context.mounted) return;
+                          scaffold.showSnackBar(
+                            SnackBar(
+                              content: Text('PDF saved: ${file.path}'),
+                              backgroundColor: Colors.green,
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                        } catch (e) {
+                          // Close progress dialog if still showing
+                          if (!context.mounted) return;
+                          if (Navigator.canPop(context)) {
+                            Navigator.of(context).pop();
+                          }
+
+                          // If we get TooManyPagesException, try paginated approach
+                          if (e.toString().contains('TooManyPagesException')) {
+                            scaffold.showSnackBar(
+                              const SnackBar(
+                                content: Text(
+                                  'Document too large, splitting into multiple PDFs...',
+                                ),
+                                backgroundColor: Colors.orange,
+                                duration: Duration(seconds: 3),
+                              ),
+                            );
+
+                            // Show progress dialog for paginated generation
+                            showDialog(
+                              context: context,
+                              barrierDismissible: false,
+                              builder: (context) => const AlertDialog(
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    CircularProgressIndicator(),
+                                    SizedBox(height: 16),
+                                    Text(
+                                      'Creating multiple PDF files...\nPlease wait.',
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+
+                            // Generate paginated PDFs in background
+                            final files = await pdf
+                                .generatePaginatedPDFsInBackground(
+                                  reportTitle: 'Sales Report - Sari-Sari Store',
+                                  startDate: options.useDataRangeFilter
+                                      ? options.startDate
+                                      : null,
+                                  endDate: options.useDataRangeFilter
+                                      ? options.endDate
+                                      : null,
+                                  sections: filteredSections,
+                                  sectionsPerPdf: 3, // Fewer sections per PDF
+                                );
+
+                            // Close progress dialog
+                            if (!context.mounted) return;
+                            Navigator.of(context).pop();
+
+                            if (!context.mounted) return;
+
+                            scaffold.showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  'Generated ${files.length} PDF files in ${Directory(files.first.parent.path).path}',
+                                ),
+                                backgroundColor: Colors.green,
+                                duration: const Duration(seconds: 4),
+                              ),
+                            );
+                          } else {
+                            rethrow; // Re-throw to be caught by outer catch
+                          }
+                        }
                       } catch (e) {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Error generating PDF: $e'),
                               backgroundColor: Colors.red,
+                              duration: const Duration(seconds: 5),
                             ),
                           );
                         }
