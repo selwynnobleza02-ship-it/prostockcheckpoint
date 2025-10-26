@@ -5,6 +5,8 @@ class Product {
   final String name;
   final String? barcode;
   final double cost;
+  final double?
+  sellingPrice; // Fixed selling price (overrides calculated price)
   final int stock;
   final int minStock;
   final String? category;
@@ -17,6 +19,7 @@ class Product {
     required this.name,
     this.barcode,
     required this.cost,
+    this.sellingPrice,
     required this.stock,
     this.minStock = 5,
     this.category,
@@ -39,6 +42,9 @@ class Product {
     }
     if (cost < 0) {
       throw ArgumentError('Product cost cannot be negative');
+    }
+    if (sellingPrice != null && sellingPrice! < 0) {
+      throw ArgumentError('Selling price cannot be negative');
     }
     if (stock < 0) {
       throw ArgumentError('Product stock cannot be negative');
@@ -66,12 +72,18 @@ class Product {
   // Price-dependent methods moved to UI level using TaxService
   // This allows dynamic tax rate configuration
 
+  /// Get the actual selling price to use (manual override or calculated)
+  double getPriceForSale(double calculatedPrice) {
+    return sellingPrice ?? calculatedPrice;
+  }
+
   Map<String, dynamic> toMap() {
     return {
       'id': id,
       'name': name,
       'barcode': barcode,
       'cost': cost,
+      'selling_price': sellingPrice,
       'stock': stock,
       'min_stock': minStock,
       'category': category,
@@ -87,6 +99,9 @@ class Product {
       name: map['name'],
       barcode: map['barcode'],
       cost: map['cost'].toDouble(),
+      sellingPrice: map['selling_price'] != null
+          ? (map['selling_price'] as num).toDouble()
+          : null,
       stock: map['stock'],
       minStock: map['min_stock'] ?? 5,
       category: map['category'],
@@ -101,6 +116,7 @@ class Product {
     String? name,
     String? barcode,
     double? cost,
+    double? sellingPrice,
     int? stock,
     int? minStock,
     String? category,
@@ -113,6 +129,7 @@ class Product {
       name: name ?? this.name,
       barcode: barcode ?? this.barcode,
       cost: cost ?? this.cost,
+      sellingPrice: sellingPrice ?? this.sellingPrice,
       stock: stock ?? this.stock,
       minStock: minStock ?? this.minStock,
       category: category ?? this.category,

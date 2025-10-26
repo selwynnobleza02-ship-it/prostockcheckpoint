@@ -75,34 +75,27 @@ class ReportService {
   }
 
   /// Calculate Cost of Goods Sold (COGS) based on actual items sold
-  /// This should use the cost price of products, not selling price
+  /// This uses the unitCost captured at the time of sale for exact COGS
   double calculateTotalCost(List<SaleItem> saleItems, List<Product> products) {
-    final productMap = {for (var p in products) p.id: p};
     return saleItems.fold(0.0, (sum, item) {
-      final product = productMap[item.productId];
-      if (product != null) {
-        // Using product.cost (wholesale/purchase price) not product.price (selling price)
-        return sum + (item.quantity * product.cost);
-      }
-      return sum;
+      // Use unitCost from sale item (captured at time of sale)
+      // This provides exact COGS regardless of subsequent cost changes
+      return sum + (item.quantity * item.unitCost);
     });
   }
 
-  // New: Calculate COGS for credit purchases from transaction items (uses product cost)
+  // Calculate COGS for credit purchases from transaction items (uses unitCost from items)
   double calculateTotalCostFromCreditTransactions(
     List<CreditTransaction> transactions,
     List<Product> products,
   ) {
-    final productMap = {for (var p in products) p.id: p};
     double total = 0.0;
     for (final tx in transactions.where(
       (t) => t.type.toLowerCase() == 'purchase',
     )) {
       for (final item in tx.items) {
-        final product = productMap[item.productId];
-        if (product != null) {
-          total += product.cost * item.quantity;
-        }
+        // Use unitCost from credit sale item (captured at time of sale)
+        total += item.unitCost * item.quantity;
       }
     }
     return total;

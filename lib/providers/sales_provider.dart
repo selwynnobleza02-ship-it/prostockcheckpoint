@@ -3,7 +3,9 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/models/offline_operation.dart';
+import 'package:prostock/models/batch_allocation.dart';
 import 'package:prostock/providers/auth_provider.dart';
+import 'package:prostock/services/batch_service.dart';
 import 'package:prostock/services/firestore/sale_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/offline_manager.dart';
@@ -33,6 +35,7 @@ class SalesProvider with ChangeNotifier {
   final OfflineManager _offlineManager;
   final AuthProvider _authProvider;
   final CreditProvider _creditProvider;
+  final BatchService _batchService = BatchService();
   late final DemandAnalysisService _demandAnalysisService;
 
   final Map<String, List<Sale>> _cache = {};
@@ -238,40 +241,69 @@ class SalesProvider with ChangeNotifier {
       return;
     }
 
-    final price = await TaxService.calculateSellingPriceWithRule(
-      product.cost,
-      productId: product.id,
-      categoryName: product.category,
-    );
-    final existingIndex = _currentSaleItems.indexWhere(
-      (item) => item.productId == product.id,
-    );
-
-    if (existingIndex != -1) {
-      final existingItem = _currentSaleItems[existingIndex];
-      final newQuantity = existingItem.quantity + quantity;
-      _currentSaleItems[existingIndex] = SaleItem(
-        id: existingItem.id,
-        saleId: existingItem.saleId,
-        productId: product.id!,
-        quantity: newQuantity,
-        unitPrice: price,
-        totalPrice: price * newQuantity,
+    try {
+      // Use fixed selling price if set, otherwise calculate
+      final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
+        product.cost,
+        productId: product.id,
+        categoryName: product.category,
       );
-    } else {
-      _currentSaleItems.add(
-        SaleItem(
-          saleId: '',
-          productId: product.id!,
-          quantity: quantity,
-          unitPrice: price,
-          totalPrice: price * quantity,
-        ),
+      final price = product.getPriceForSale(calculatedPrice);
+
+      // Check if this product already exists in cart
+      final existingItems = _currentSaleItems
+          .where((item) => item.productId == product.id)
+          .toList();
+
+      int totalQuantityInCart = existingItems.fold(
+        0,
+        (sum, item) => sum + item.quantity,
+      );
+      int totalQuantityNeeded = totalQuantityInCart + quantity;
+
+      // Allocate stock using FIFO
+      final allocations = await _batchService.allocateStockFIFO(
+        product.id!,
+        totalQuantityNeeded,
+      );
+
+      // Remove existing items for this product
+      _currentSaleItems.removeWhere((item) => item.productId == product.id);
+
+      // Add new items based on FIFO allocations
+      for (final allocation in allocations) {
+        _currentSaleItems.add(
+          SaleItem(
+            saleId: '',
+            productId: product.id!,
+            batchId: allocation.batchId,
+            quantity: allocation.quantity,
+            unitPrice: price,
+            unitCost: allocation.unitCost,
+            batchCost: allocation.unitCost,
+            totalPrice: price * allocation.quantity,
+          ),
+        );
+      }
+
+      // Update visual stock
+      _inventoryProvider.decreaseVisualStock(product.id!, quantity);
+      _error = null;
+      notifyListeners();
+    } catch (e) {
+      if (e is InsufficientStockException) {
+        _error =
+            'Insufficient stock. Available: ${e.available}, Requested: ${e.requested}';
+      } else {
+        _error = 'Error adding item to sale: ${e.toString()}';
+      }
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error adding item to current sale',
+        error: e,
+        context: 'SalesProvider.addItemToCurrentSale',
       );
     }
-    _inventoryProvider.decreaseVisualStock(product.id!, quantity);
-    _error = null;
-    notifyListeners();
   }
 
   void removeItemFromCurrentSale(int index) {
@@ -305,39 +337,84 @@ class SalesProvider with ChangeNotifier {
       return;
     }
 
-    final quantityDifference = newQuantity - currentItem.quantity;
+    // Get all items for this product in cart
+    final productItems = _currentSaleItems
+        .where((item) => item.productId == product.id)
+        .toList();
+    final currentTotalQty = productItems.fold(
+      0,
+      (sum, item) => sum + item.quantity,
+    );
 
     if (newQuantity == 0) {
+      // Remove this specific item
       _inventoryProvider.increaseVisualStock(product.id!, currentItem.quantity);
       _currentSaleItems.removeAt(index);
     } else {
-      final availableStock = _inventoryProvider.getVisualStock(product.id!);
-      if (quantityDifference > availableStock) {
-        _error =
-            'Insufficient stock for ${product.name}. Available: $availableStock';
-        notifyListeners();
-        return;
-      }
+      // Calculate the difference
+      final quantityDifference = newQuantity - currentItem.quantity;
 
       if (quantityDifference > 0) {
+        // Increasing quantity - need more stock
+        final availableStock = _inventoryProvider.getVisualStock(product.id!);
+        if (quantityDifference > availableStock) {
+          _error =
+              'Insufficient stock for ${product.name}. Available: $availableStock';
+          notifyListeners();
+          return;
+        }
         _inventoryProvider.decreaseVisualStock(product.id!, quantityDifference);
-      } else {
+      } else if (quantityDifference < 0) {
+        // Decreasing quantity - free up stock
         _inventoryProvider.increaseVisualStock(
           product.id!,
           -quantityDifference,
         );
       }
 
-      final price = await TaxService.calculateSellingPriceWithRule(
-        product.cost,
-        productId: product.id,
-        categoryName: product.category,
-      );
-      _currentSaleItems[index] = currentItem.copyWith(
-        quantity: newQuantity,
-        totalPrice: price * newQuantity,
-      );
+      // Recalculate total needed quantity
+      final newTotalQty = currentTotalQty + quantityDifference;
+
+      try {
+        // Re-allocate using FIFO
+        final allocations = await _batchService.allocateStockFIFO(
+          product.id!,
+          newTotalQty,
+        );
+
+        // Use fixed price if set
+        final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
+          product.cost,
+          productId: product.id,
+          categoryName: product.category,
+        );
+        final price = product.getPriceForSale(calculatedPrice);
+
+        // Remove all items for this product
+        _currentSaleItems.removeWhere((item) => item.productId == product.id);
+
+        // Add re-allocated items
+        for (final allocation in allocations) {
+          _currentSaleItems.add(
+            SaleItem(
+              saleId: '',
+              productId: product.id!,
+              batchId: allocation.batchId,
+              quantity: allocation.quantity,
+              unitPrice: price,
+              unitCost: allocation.unitCost,
+              batchCost: allocation.unitCost,
+              totalPrice: price * allocation.quantity,
+            ),
+          );
+        }
+      } catch (e) {
+        _error = 'Error updating quantity: ${e.toString()}';
+        notifyListeners();
+        return;
+      }
     }
+
     _error = null;
     notifyListeners();
   }
@@ -429,7 +506,16 @@ class SalesProvider with ChangeNotifier {
           ),
         );
 
+        // Reduce batch quantities for each sale item
         for (final item in _currentSaleItems) {
+          if (item.batchId != null) {
+            // Reduce from specific batch
+            await _batchService.reduceBatchQuantity(
+              item.batchId!,
+              item.quantity,
+            );
+          }
+          // Also reduce product stock total
           await _inventoryProvider.reduceStock(
             item.productId,
             item.quantity,

@@ -23,7 +23,7 @@ class LocalDatabaseService {
 
     return await openDatabase(
       path,
-      version: 7,
+      version: 9, // Increment version for FIFO batch tracking
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS products (
   name TEXT NOT NULL,
   barcode TEXT,
   cost REAL NOT NULL,
+  selling_price REAL,
   stock INTEGER NOT NULL,
   min_stock INTEGER NOT NULL,
   category TEXT,
@@ -89,8 +90,11 @@ CREATE TABLE IF NOT EXISTS sale_items (
   id $textType,
   saleId $textType,
   productId $textType,
+  batchId TEXT,
   quantity $integerType,
   unitPrice $doubleType,
+  unitCost $doubleType,
+  batchCost $doubleType,
   totalPrice $doubleType
 )
 ''');
@@ -107,6 +111,40 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
   notes TEXT,
   items TEXT
 )
+''');
+
+    // Inventory batches for FIFO tracking
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS inventory_batches (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  batch_number TEXT NOT NULL,
+  quantity_received INTEGER NOT NULL,
+  quantity_remaining INTEGER NOT NULL,
+  unit_cost REAL NOT NULL,
+  date_received TEXT NOT NULL,
+  supplier_id TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+)
+''');
+
+    // Indexes for batch queries
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_batches_product 
+ON inventory_batches(product_id)
+''');
+
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_batches_date 
+ON inventory_batches(date_received)
+''');
+
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_batches_remaining 
+ON inventory_batches(quantity_remaining)
 ''');
 
     await db.execute('''
@@ -219,6 +257,96 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
   items TEXT
 )
 ''');
+    }
+    // Add unitCost column to sale_items for accurate COGS tracking
+    if (oldVersion < 8) {
+      try {
+        await db.execute(
+          "ALTER TABLE sale_items ADD COLUMN unitCost REAL NOT NULL DEFAULT 0.0",
+        );
+      } catch (e) {
+        // Column might already exist, ignore
+      }
+    }
+
+    // Add FIFO batch tracking system
+    if (oldVersion < 9) {
+      // Add selling_price to products
+      try {
+        await db.execute("ALTER TABLE products ADD COLUMN selling_price REAL");
+      } catch (e) {
+        // Column might already exist, ignore
+      }
+
+      // Add batch tracking fields to sale_items
+      try {
+        await db.execute("ALTER TABLE sale_items ADD COLUMN batchId TEXT");
+      } catch (e) {
+        // Column might already exist, ignore
+      }
+
+      try {
+        await db.execute(
+          "ALTER TABLE sale_items ADD COLUMN batchCost REAL NOT NULL DEFAULT 0.0",
+        );
+      } catch (e) {
+        // Column might already exist, ignore
+      }
+
+      // Create inventory_batches table
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS inventory_batches (
+  id TEXT PRIMARY KEY,
+  product_id TEXT NOT NULL,
+  batch_number TEXT NOT NULL,
+  quantity_received INTEGER NOT NULL,
+  quantity_remaining INTEGER NOT NULL,
+  unit_cost REAL NOT NULL,
+  date_received TEXT NOT NULL,
+  supplier_id TEXT,
+  notes TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (product_id) REFERENCES products (id) ON DELETE CASCADE
+)
+''');
+
+      // Create indexes
+      await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_batches_product 
+ON inventory_batches(product_id)
+''');
+
+      await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_batches_date 
+ON inventory_batches(date_received)
+''');
+
+      await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_batches_remaining 
+ON inventory_batches(quantity_remaining)
+''');
+
+      // Migrate existing stock to initial batches
+      final products = await db.query('products');
+      for (final product in products) {
+        final stock = product['stock'] as int;
+        if (stock > 0) {
+          final now = DateTime.now().toIso8601String();
+          await db.insert('inventory_batches', {
+            'id': '${product['id']}-INITIAL',
+            'product_id': product['id'],
+            'batch_number': 'INITIAL-${product['id']}',
+            'quantity_received': stock,
+            'quantity_remaining': stock,
+            'unit_cost': product['cost'],
+            'date_received': now,
+            'notes': 'Initial stock migration to FIFO system',
+            'created_at': now,
+            'updated_at': now,
+          });
+        }
+      }
     }
   }
 

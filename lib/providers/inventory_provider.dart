@@ -6,8 +6,11 @@ import 'package:prostock/models/loss.dart';
 import 'package:prostock/models/loss_reason.dart';
 import 'package:prostock/models/price_history.dart';
 import 'package:prostock/models/cost_history.dart';
+import 'package:prostock/models/inventory_batch.dart';
+import 'package:prostock/services/batch_service.dart';
 import 'package:prostock/services/firestore/inventory_service.dart';
 import 'package:prostock/services/firestore/product_service.dart';
+import 'package:prostock/services/cost_history_service.dart';
 import 'package:prostock/services/offline_manager.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
@@ -33,6 +36,7 @@ class InventoryProvider with ChangeNotifier {
 
   final LocalDatabaseService _localDatabaseService =
       LocalDatabaseService.instance;
+  final BatchService _batchService = BatchService();
   final OfflineManager _offlineManager;
   final AuthProvider _authProvider; // New field
   StreamSubscription<QuerySnapshot>? _productsSubscription;
@@ -252,6 +256,10 @@ class InventoryProvider with ChangeNotifier {
         try {
           final productService = ProductService(FirebaseFirestore.instance);
           final inventoryService = InventoryService(FirebaseFirestore.instance);
+          final costHistoryService = CostHistoryService(
+            FirebaseFirestore.instance,
+          );
+
           await productService.addProductWithPriceHistory(newProduct);
           await inventoryService.insertStockMovement(
             newProduct.id!,
@@ -259,6 +267,12 @@ class InventoryProvider with ChangeNotifier {
             'stock_in',
             newProduct.stock,
             'Initial stock',
+          );
+
+          // Record initial cost history
+          await costHistoryService.insertCostHistory(
+            newProduct.id!,
+            newProduct.cost,
           );
         } catch (e) {
           // Fallback to offline queue if online write fails
@@ -291,6 +305,24 @@ class InventoryProvider with ChangeNotifier {
               timestamp: DateTime.now(),
             ),
           );
+
+          // Queue initial cost history
+          final costHistory = CostHistory(
+            id: const Uuid().v4(),
+            productId: newProduct.id!,
+            cost: newProduct.cost,
+            timestamp: DateTime.now(),
+          );
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              id: costHistory.id,
+              type: OperationType.insertCostHistory,
+              collectionName: 'costHistory',
+              documentId: costHistory.id,
+              data: costHistory.toMap(),
+              timestamp: DateTime.now(),
+            ),
+          );
         }
       } else {
         await _offlineManager.queueOperation(
@@ -319,6 +351,24 @@ class InventoryProvider with ChangeNotifier {
             collectionName: 'priceHistory',
             documentId: priceHistory.id,
             data: priceHistory.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+
+        // Queue initial cost history
+        final costHistory = CostHistory(
+          id: const Uuid().v4(),
+          productId: newProduct.id!,
+          cost: newProduct.cost,
+          timestamp: DateTime.now(),
+        );
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: costHistory.id,
+            type: OperationType.insertCostHistory,
+            collectionName: 'costHistory',
+            documentId: costHistory.id,
+            data: costHistory.toMap(),
             timestamp: DateTime.now(),
           ),
         );
@@ -362,6 +412,9 @@ class InventoryProvider with ChangeNotifier {
 
       if (_offlineManager.isOnline) {
         final productService = ProductService(FirebaseFirestore.instance);
+        final costHistoryService = CostHistoryService(
+          FirebaseFirestore.instance,
+        );
         final existingProduct = await productService.getProductById(
           product.id!,
         );
@@ -383,14 +436,22 @@ class InventoryProvider with ChangeNotifier {
 
         final productToUpdate = product.copyWith(version: product.version + 1);
 
-        final bool priceChanged =
+        final bool costChanged =
             originalProduct != null &&
             originalProduct.cost != productToUpdate.cost;
 
         await productService.updateProductWithPriceHistory(
           productToUpdate,
-          priceChanged,
+          costChanged,
         );
+
+        // Record cost history when cost changes in online mode
+        if (costChanged) {
+          await costHistoryService.insertCostHistory(
+            productToUpdate.id!,
+            productToUpdate.cost,
+          );
+        }
 
         await db.update(
           'products',
@@ -712,6 +773,228 @@ class InventoryProvider with ChangeNotifier {
         context: 'InventoryProvider.receiveStock',
       );
       return false;
+    }
+  }
+
+  /// Receive stock with FIFO batch tracking
+  /// This creates a new batch and updates product stock
+  Future<bool> receiveStockWithCost(
+    String productId,
+    int quantity,
+    double newCost, {
+    String? supplierId,
+    String? notes,
+  }) async {
+    try {
+      final index = _products.indexWhere((p) => p.id == productId);
+      if (index == -1) {
+        _error = 'Product not found';
+        notifyListeners();
+        return false;
+      }
+
+      if (quantity <= 0) {
+        _error = 'Quantity must be greater than zero';
+        notifyListeners();
+        return false;
+      }
+
+      if (newCost < 0) {
+        _error = 'Cost cannot be negative';
+        notifyListeners();
+        return false;
+      }
+
+      final product = _products[index];
+
+      // Create new batch
+      final batch = await _batchService.createBatch(
+        productId: productId,
+        quantity: quantity,
+        unitCost: newCost,
+        supplierId: supplierId,
+        notes: notes,
+      );
+
+      // Calculate new totals from all batches
+      final totalStock = await _batchService.getTotalAvailableStock(productId);
+      final averageCost = await _batchService.calculateAverageCost(productId);
+
+      // Update product with new stock and average cost (for reference)
+      final updatedProduct = product.copyWith(
+        stock: totalStock,
+        cost: averageCost,
+        updatedAt: DateTime.now(),
+        version: product.version + 1,
+      );
+
+      // Update in local database
+      final db = await _localDatabaseService.database;
+      await db.update(
+        'products',
+        updatedProduct.toMap(),
+        where: 'id = ?',
+        whereArgs: [productId],
+      );
+
+      // Update in memory
+      _products[index] = updatedProduct;
+      _productCache[productId] = updatedProduct;
+
+      // Sync to Firestore or queue for offline
+      if (_offlineManager.isOnline) {
+        try {
+          final productService = ProductService(FirebaseFirestore.instance);
+          final inventoryService = InventoryService(FirebaseFirestore.instance);
+          final costHistoryService = CostHistoryService(
+            FirebaseFirestore.instance,
+          );
+
+          // Update product
+          await productService.updateProduct(updatedProduct);
+
+          // Record stock movement
+          await inventoryService.insertStockMovement(
+            productId,
+            product.name,
+            'stock_in',
+            quantity,
+            'Batch ${batch.batchNumber}: $quantity units @ ₱${newCost.toStringAsFixed(2)}',
+          );
+
+          // Record cost history with the batch cost
+          await costHistoryService.insertCostHistory(productId, newCost);
+
+          // Record price history if needed
+          if (product.sellingPrice == null) {
+            final sellingPrice = await TaxService.calculateSellingPriceWithRule(
+              averageCost,
+              productId: productId,
+              categoryName: product.category,
+            );
+            final priceHistory = PriceHistory(
+              id: const Uuid().v4(),
+              productId: productId,
+              price: sellingPrice,
+              timestamp: DateTime.now(),
+            );
+            await FirebaseFirestore.instance
+                .collection(AppConstants.priceHistoryCollection)
+                .doc(priceHistory.id)
+                .set(priceHistory.toMap());
+          }
+        } catch (e) {
+          // Fallback to offline queue
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              id: updatedProduct.id!,
+              type: OperationType.updateProduct,
+              collectionName: 'products',
+              documentId: updatedProduct.id,
+              data: updatedProduct.toMap(),
+              timestamp: DateTime.now(),
+              version: updatedProduct.version,
+            ),
+          );
+
+          // Queue cost history
+          final costHistory = CostHistory(
+            id: const Uuid().v4(),
+            productId: productId,
+            cost: newCost,
+            timestamp: DateTime.now(),
+          );
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              id: costHistory.id,
+              type: OperationType.insertCostHistory,
+              collectionName: 'costHistory',
+              documentId: costHistory.id,
+              data: costHistory.toMap(),
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
+      } else {
+        // Offline mode - queue all operations
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: updatedProduct.id!,
+            type: OperationType.updateProduct,
+            collectionName: 'products',
+            documentId: updatedProduct.id,
+            data: updatedProduct.toMap(),
+            timestamp: DateTime.now(),
+            version: updatedProduct.version,
+          ),
+        );
+
+        // Queue cost history
+        final costHistory = CostHistory(
+          id: const Uuid().v4(),
+          productId: productId,
+          cost: newCost,
+          timestamp: DateTime.now(),
+        );
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: costHistory.id,
+            type: OperationType.insertCostHistory,
+            collectionName: 'costHistory',
+            documentId: costHistory.id,
+            data: costHistory.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+
+      initializeVisualStock();
+      _checkStockAlerts(updatedProduct);
+      notifyListeners();
+
+      ErrorLogger.logInfo(
+        'Batch created: ${batch.batchNumber} for ${product.name}, Qty: $quantity @ ₱${newCost.toStringAsFixed(2)}, Avg Cost: ₱${averageCost.toStringAsFixed(2)}',
+        context: 'InventoryProvider.receiveStockWithCost',
+      );
+
+      return true;
+    } catch (e) {
+      _error = 'Error receiving stock with cost: ${e.toString()}';
+      notifyListeners();
+      ErrorLogger.logError(
+        'Error receiving stock with cost',
+        error: e,
+        context: 'InventoryProvider.receiveStockWithCost',
+      );
+      return false;
+    }
+  }
+
+  /// Get all batches for a product (ordered by FIFO)
+  Future<List<InventoryBatch>> getBatchesForProduct(String productId) async {
+    try {
+      return await _batchService.getBatchesByFIFO(productId);
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error getting batches for product',
+        error: e,
+        context: 'InventoryProvider.getBatchesForProduct',
+      );
+      return [];
+    }
+  }
+
+  /// Get all batches including depleted ones
+  Future<List<InventoryBatch>> getAllBatchesForProduct(String productId) async {
+    try {
+      return await _batchService.getAllBatches(productId);
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error getting all batches for product',
+        error: e,
+        context: 'InventoryProvider.getAllBatchesForProduct',
+      );
+      return [];
     }
   }
 
