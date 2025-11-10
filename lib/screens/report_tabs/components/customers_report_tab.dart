@@ -436,9 +436,9 @@ class CustomersReportTab extends StatelessWidget {
                 crossAxisCount: 2,
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                childAspectRatio: 1.5,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
+                childAspectRatio: 1.3,
+                crossAxisSpacing: 12,
+                mainAxisSpacing: 12,
                 children: [
                   buildSummaryCard(
                     context,
@@ -621,14 +621,13 @@ class CustomersReportTab extends StatelessWidget {
                   children: [
                     Icon(
                       Icons.account_balance_wallet,
-                      color: Colors.orange.shade600,
+                      color: Theme.of(context).colorScheme.secondary,
                       size: 24,
                     ),
                     const SizedBox(width: 8),
-                    const Text(
+                    Text(
                       'Outstanding Balances',
-                      style: TextStyle(
-                        fontSize: 20,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -650,101 +649,16 @@ class CustomersReportTab extends StatelessWidget {
                     final customerData = customer[index];
                     final isHighPriority =
                         customerData.balance > (averageBalance * 1.5);
+                    final colorScheme = Theme.of(context).colorScheme;
+                    final textTheme = Theme.of(context).textTheme;
 
                     return Card(
-                      elevation: 2,
+                      elevation: 1,
                       margin: const EdgeInsets.only(bottom: 8),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                        leading: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: isHighPriority
-                                ? Colors.red.shade100
-                                : Colors.orange.shade100,
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                          child: Icon(
-                            isHighPriority ? Icons.priority_high : Icons.person,
-                            color: isHighPriority
-                                ? Colors.red.shade700
-                                : Colors.orange.shade700,
-                            size: 24,
-                          ),
-                        ),
-                        title: Text(
-                          customerData.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                          ),
-                        ),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const SizedBox(height: 4),
-                            Text(
-                              'Phone: ${customerData.phone ?? 'Not provided'}',
-                              style: TextStyle(color: Colors.grey.shade600),
-                            ),
-                            if (customerData.phone?.isEmpty != false)
-                              Text(
-                                'No contact info',
-                                style: TextStyle(
-                                  color: Colors.red.shade600,
-                                  fontSize: 12,
-                                  fontStyle: FontStyle.italic,
-                                ),
-                              ),
-                          ],
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              CurrencyUtils.formatCurrency(
-                                customerData.balance,
-                              ),
-                              style: TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                                color: isHighPriority
-                                    ? Colors.red
-                                    : Colors.orange,
-                              ),
-                            ),
-                            if (isHighPriority)
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 6,
-                                  vertical: 2,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: Colors.red.shade50,
-                                  borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(
-                                    color: Colors.red.shade200,
-                                  ),
-                                ),
-                                child: Text(
-                                  'HIGH',
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    color: Colors.red.shade700,
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
+                      child: InkWell(
                         onTap: () {
                           showDialog(
                             context: context,
@@ -752,6 +666,104 @@ class CustomersReportTab extends StatelessWidget {
                                 CustomerDetailsDialog(customer: customerData),
                           );
                         },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            children: [
+                              // Icon
+                              Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  color: isHighPriority
+                                      ? colorScheme.errorContainer
+                                      : colorScheme.secondaryContainer,
+                                  borderRadius: BorderRadius.circular(24),
+                                ),
+                                child: Icon(
+                                  isHighPriority
+                                      ? Icons.priority_high
+                                      : Icons.person,
+                                  color: isHighPriority
+                                      ? colorScheme.onErrorContainer
+                                      : colorScheme.onSecondaryContainer,
+                                  size: 24,
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+
+                              // Content
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      customerData.name,
+                                      style: textTheme.titleMedium?.copyWith(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'Phone: ${customerData.phone ?? 'Not provided'}',
+                                      style: textTheme.bodySmall?.copyWith(
+                                        color: colorScheme.onSurfaceVariant,
+                                      ),
+                                    ),
+                                    if (customerData.phone?.isEmpty != false)
+                                      Text(
+                                        'No contact info',
+                                        style: textTheme.bodySmall?.copyWith(
+                                          color: colorScheme.error,
+                                          fontStyle: FontStyle.italic,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+
+                              // Amount & Badge
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    CurrencyUtils.formatCurrency(
+                                      customerData.balance,
+                                    ),
+                                    style: textTheme.titleMedium?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: isHighPriority
+                                          ? colorScheme.error
+                                          : colorScheme.secondary,
+                                    ),
+                                  ),
+                                  if (isHighPriority) ...[
+                                    const SizedBox(height: 4),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 6,
+                                        vertical: 2,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.errorContainer,
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        'HIGH',
+                                        style: textTheme.labelSmall?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                          color: colorScheme.onErrorContainer,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
                       ),
                     );
                   },
@@ -763,23 +775,20 @@ class CustomersReportTab extends StatelessWidget {
                       Icon(
                         Icons.check_circle_outline,
                         size: 64,
-                        color: Colors.green.shade400,
+                        color: Theme.of(context).colorScheme.primary,
                       ),
                       const SizedBox(height: 16),
                       Text(
                         'No Outstanding Balances',
-                        style: TextStyle(
-                          fontSize: 18,
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: Colors.green.shade700,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         'All customers have cleared their balances',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey.shade600,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ],

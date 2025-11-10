@@ -567,6 +567,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
                             try {
                               // Show progress dialog
+                              if (!context.mounted) return;
                               showDialog(
                                 context: context,
                                 barrierDismissible: false,
@@ -835,9 +836,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                     crossAxisCount: 2,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 1.5,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
+                    childAspectRatio: 1.3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
                     children: [
                       // Existing cards
                       buildSummaryCard(
@@ -928,38 +929,42 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(8),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Profit Analysis',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Flexible(
+                            Flexible(
                               child: Text(
                                 'Profit Margin:',
+                                style: Theme.of(context).textTheme.bodyMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Flexible(
                               child: Text(
                                 '${profitMargin.toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: totalProfit >= 0
-                                      ? Colors.green
-                                      : Colors.red,
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: totalProfit >= 0
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : Theme.of(context).colorScheme.error,
+                                    ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -970,21 +975,25 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Flexible(
+                            Flexible(
                               child: Text(
                                 'Markup Percentage:',
+                                style: Theme.of(context).textTheme.bodyMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Flexible(
                               child: Text(
                                 '${markupPercentage.toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: totalProfit >= 0
-                                      ? Colors.green
-                                      : Colors.red,
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: totalProfit >= 0
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : Theme.of(context).colorScheme.error,
+                                    ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -994,21 +1003,25 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Flexible(
+                            Flexible(
                               child: Text(
                                 'Return on Investment:',
+                                style: Theme.of(context).textTheme.bodyMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Flexible(
                               child: Text(
                                 '${roi.toStringAsFixed(1)}%',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: totalProfit >= 0
-                                      ? Colors.green
-                                      : Colors.red,
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: totalProfit >= 0
+                                          ? Theme.of(
+                                              context,
+                                            ).colorScheme.primary
+                                          : Theme.of(context).colorScheme.error,
+                                    ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
@@ -1019,18 +1032,18 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Flexible(
+                            Flexible(
                               child: Text(
                                 'Stock Turns/Year:',
+                                style: Theme.of(context).textTheme.bodyMedium,
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             Flexible(
                               child: Text(
                                 '${_calculateAnnualizedTurnover(inventoryTurnover).toStringAsFixed(1)}x',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),

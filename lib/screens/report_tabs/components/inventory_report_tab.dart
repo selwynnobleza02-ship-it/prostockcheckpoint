@@ -417,9 +417,9 @@ class InventoryReportTab extends StatelessWidget {
                     crossAxisCount: 2,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
-                    childAspectRatio: 1.5,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
+                    childAspectRatio: 1.3,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
                     children: [
                       buildSummaryCard(
                         context,
@@ -496,30 +496,34 @@ class InventoryReportTab extends StatelessWidget {
                     width: double.infinity,
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Theme.of(context).colorScheme.surfaceContainer,
-                      borderRadius: BorderRadius.circular(8),
+                      color: Theme.of(
+                        context,
+                      ).colorScheme.surfaceContainerHighest,
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Inventory Analysis',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 12),
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Flexible(child: Text('Average Stock Value:')),
+                            Flexible(
+                              child: Text(
+                                'Average Stock Value:',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
                             Flexible(
                               child: Text(
                                 CurrencyUtils.formatCurrency(averageStockValue),
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(fontWeight: FontWeight.bold),
                               ),
                             ),
                           ],
@@ -528,7 +532,12 @@ class InventoryReportTab extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Flexible(child: Text('Stock Health:')),
+                            Flexible(
+                              child: Text(
+                                'Stock Health:',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
                             Flexible(
                               child: Text(
                                 _getStockHealth(
@@ -536,14 +545,16 @@ class InventoryReportTab extends StatelessWidget {
                                   lowStockCount,
                                   outOfStockCount,
                                 ),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: _getStockHealthColor(
-                                    totalProducts,
-                                    lowStockCount,
-                                    outOfStockCount,
-                                  ),
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: _getStockHealthColor(
+                                        totalProducts,
+                                        lowStockCount,
+                                        outOfStockCount,
+                                        context,
+                                      ),
+                                    ),
                               ),
                             ),
                           ],
@@ -552,14 +563,22 @@ class InventoryReportTab extends StatelessWidget {
                         Row(
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            const Flexible(child: Text('Markup Potential:')),
+                            Flexible(
+                              child: Text(
+                                'Markup Potential:',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
                             Flexible(
                               child: Text(
                                 '${totalValue > 0 ? ((potentialProfit / totalValue) * 100).toStringAsFixed(1) : 0.0}%',
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.green,
-                                ),
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      fontWeight: FontWeight.bold,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
                               ),
                             ),
                           ],
@@ -583,16 +602,14 @@ class InventoryReportTab extends StatelessWidget {
                       children: [
                         Icon(
                           Icons.warning_amber,
-                          color: Colors.orange.shade600,
+                          color: Theme.of(context).colorScheme.tertiary,
                           size: 24,
                         ),
                         const SizedBox(width: 8),
-                        const Text(
+                        Text(
                           'Low Stock Alert',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
@@ -617,105 +634,125 @@ class InventoryReportTab extends StatelessWidget {
                           itemBuilder: (context, index) {
                             final product = provider.lowStockProducts[index];
                             final isOutOfStock = product.stock == 0;
+                            final colorScheme = Theme.of(context).colorScheme;
+                            final textTheme = Theme.of(context).textTheme;
 
                             return Card(
-                              elevation: 2,
+                              elevation: 1,
                               margin: const EdgeInsets.only(bottom: 8),
                               shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(8),
+                                borderRadius: BorderRadius.circular(12),
                               ),
-                              child: ListTile(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 16,
-                                  vertical: 8,
-                                ),
-                                leading: Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: isOutOfStock
-                                        ? Colors.red.shade100
-                                        : Colors.orange.shade100,
-                                    borderRadius: BorderRadius.circular(24),
-                                  ),
-                                  child: Icon(
-                                    isOutOfStock
-                                        ? Icons.remove_shopping_cart
-                                        : Icons.warning_amber,
-                                    color: isOutOfStock
-                                        ? Colors.red.shade700
-                                        : Colors.orange.shade700,
-                                    size: 24,
-                                  ),
-                                ),
-                                title: Text(
-                                  product.name,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                                subtitle: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                              child: Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(
                                   children: [
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'Current Stock: ${product.stock}',
-                                      style: TextStyle(
-                                        color: isOutOfStock
-                                            ? Colors.red.shade600
-                                            : Colors.orange.shade600,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    Text(
-                                      'Min Required: ${product.minStock}',
-                                      style: TextStyle(
-                                        color: Colors.grey.shade600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                trailing: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
+                                    // Icon
                                     Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 8,
-                                        vertical: 4,
-                                      ),
+                                      width: 48,
+                                      height: 48,
                                       decoration: BoxDecoration(
                                         color: isOutOfStock
-                                            ? Colors.red.shade50
-                                            : Colors.orange.shade50,
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: isOutOfStock
-                                              ? Colors.red.shade200
-                                              : Colors.orange.shade200,
-                                        ),
+                                            ? colorScheme.errorContainer
+                                            : colorScheme.tertiaryContainer,
+                                        borderRadius: BorderRadius.circular(24),
                                       ),
-                                      child: Text(
-                                        isOutOfStock ? 'OUT' : 'LOW',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.bold,
-                                          color: isOutOfStock
-                                              ? Colors.red.shade700
-                                              : Colors.orange.shade700,
-                                        ),
+                                      child: Icon(
+                                        isOutOfStock
+                                            ? Icons.remove_shopping_cart
+                                            : Icons.warning_amber,
+                                        color: isOutOfStock
+                                            ? colorScheme.onErrorContainer
+                                            : colorScheme.onTertiaryContainer,
+                                        size: 24,
                                       ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      CurrencyUtils.formatCurrency(
-                                        lowStockPrices[product.id] ?? 0.0,
+                                    const SizedBox(width: 12),
+
+                                    // Content
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            product.name,
+                                            style: textTheme.titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            'Current Stock: ${product.stock}',
+                                            style: textTheme.bodySmall
+                                                ?.copyWith(
+                                                  color: isOutOfStock
+                                                      ? colorScheme.error
+                                                      : colorScheme.tertiary,
+                                                  fontWeight: FontWeight.w500,
+                                                ),
+                                          ),
+                                          Text(
+                                            'Min Required: ${product.minStock}',
+                                            style: textTheme.bodySmall
+                                                ?.copyWith(
+                                                  color: colorScheme
+                                                      .onSurfaceVariant,
+                                                ),
+                                          ),
+                                        ],
                                       ),
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: Colors.grey.shade600,
-                                      ),
+                                    ),
+
+                                    // Badge and price
+                                    Column(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 4,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: isOutOfStock
+                                                ? colorScheme.errorContainer
+                                                : colorScheme.tertiaryContainer,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            border: Border.all(
+                                              color: isOutOfStock
+                                                  ? colorScheme.error
+                                                  : colorScheme.tertiary,
+                                            ),
+                                          ),
+                                          child: Text(
+                                            isOutOfStock ? 'OUT' : 'LOW',
+                                            style: textTheme.labelSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.bold,
+                                                  color: isOutOfStock
+                                                      ? colorScheme
+                                                            .onErrorContainer
+                                                      : colorScheme
+                                                            .onTertiaryContainer,
+                                                ),
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          CurrencyUtils.formatCurrency(
+                                            lowStockPrices[product.id] ?? 0.0,
+                                          ),
+                                          style: textTheme.labelSmall?.copyWith(
+                                            color: colorScheme.outline,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -732,24 +769,26 @@ class InventoryReportTab extends StatelessWidget {
                           Icon(
                             Icons.check_circle_outline,
                             size: 64,
-                            color: Colors.green.shade400,
+                            color: Theme.of(context).colorScheme.primary,
                           ),
                           const SizedBox(height: 16),
                           Text(
                             'All Stock Levels Good',
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.green.shade700,
-                            ),
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             'No low stock alerts at this time',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.grey.shade600,
-                            ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: Theme.of(
+                                    context,
+                                  ).colorScheme.onSurfaceVariant,
+                                ),
                           ),
                         ],
                       ),
@@ -799,14 +838,21 @@ class InventoryReportTab extends StatelessWidget {
     return 'Needs Attention';
   }
 
-  Color _getStockHealthColor(int total, int lowStock, int outOfStock) {
-    if (total == 0) return Colors.grey;
+  Color _getStockHealthColor(
+    int total,
+    int lowStock,
+    int outOfStock,
+    BuildContext context,
+  ) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    if (total == 0) return colorScheme.outline;
 
     final healthyPercentage = ((total - lowStock - outOfStock) / total) * 100;
 
-    if (healthyPercentage >= 80) return Colors.green;
-    if (healthyPercentage >= 60) return Colors.blue;
-    if (healthyPercentage >= 40) return Colors.orange;
-    return Colors.red;
+    if (healthyPercentage >= 80) return colorScheme.primary;
+    if (healthyPercentage >= 60) return colorScheme.secondary;
+    if (healthyPercentage >= 40) return colorScheme.tertiary;
+    return colorScheme.error;
   }
 }

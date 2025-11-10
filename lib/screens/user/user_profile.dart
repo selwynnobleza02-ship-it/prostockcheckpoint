@@ -37,7 +37,7 @@ class UserProfile extends StatelessWidget {
                       radius: 40,
                       backgroundColor:
                           Theme.of(context).brightness == Brightness.dark
-                          ? Colors.teal.withOpacity(0.3)
+                          ? Colors.teal.withValues(alpha: 0.3)
                           : Colors.teal[100],
                       child: Icon(
                         Icons.person,
@@ -66,11 +66,11 @@ class UserProfile extends StatelessWidget {
                             (authProvider.userRole ?? UserRole.user) ==
                                 UserRole.admin
                             ? Theme.of(context).brightness == Brightness.dark
-                                  ? Colors.blue.withOpacity(0.2)
-                                  : Colors.blue.withOpacity(0.1)
+                                  ? Colors.blue.withValues(alpha: 0.2)
+                                  : Colors.blue.withValues(alpha: 0.1)
                             : Theme.of(context).brightness == Brightness.dark
-                            ? Colors.grey.withOpacity(0.2)
-                            : Colors.grey.withOpacity(0.1),
+                            ? Colors.grey.withValues(alpha: 0.2)
+                            : Colors.grey.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
@@ -239,7 +239,7 @@ class UserProfile extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(8),
           color: isSelected
-              ? primaryColor.withOpacity(isDarkMode ? 0.2 : 0.1)
+              ? primaryColor.withValues(alpha: isDarkMode ? 0.2 : 0.1)
               : isDarkMode
               ? Colors.grey[800]
               : null,
@@ -247,8 +247,8 @@ class UserProfile extends StatelessWidget {
               ? Border.all(color: primaryColor)
               : Border.all(
                   color: isDarkMode
-                      ? Colors.grey[700]!.withOpacity(0.5)
-                      : Colors.grey.withOpacity(0.2),
+                      ? Colors.grey[700]!.withValues(alpha: 0.5)
+                      : Colors.grey.withValues(alpha: 0.2),
                 ),
         ),
         child: Row(

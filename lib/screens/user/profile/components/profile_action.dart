@@ -35,7 +35,7 @@ class ProfileAction extends StatelessWidget {
               padding: const EdgeInsets.all(8),
               decoration: BoxDecoration(
                 color: isDarkMode
-                    ? Colors.teal.withOpacity(0.2)
+                    ? Colors.teal.withValues(alpha: 0.2)
                     : Colors.teal[50],
                 borderRadius: BorderRadius.circular(8),
               ),

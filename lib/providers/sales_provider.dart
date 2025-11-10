@@ -257,7 +257,7 @@ class SalesProvider with ChangeNotifier {
 
       int totalQuantityInCart = existingItems.fold(
         0,
-        (sum, item) => sum + item.quantity,
+        (total, item) => total + item.quantity,
       );
       int totalQuantityNeeded = totalQuantityInCart + quantity;
 
@@ -343,7 +343,7 @@ class SalesProvider with ChangeNotifier {
         .toList();
     final currentTotalQty = productItems.fold(
       0,
-      (sum, item) => sum + item.quantity,
+      (total, item) => total + item.quantity,
     );
 
     if (newQuantity == 0) {

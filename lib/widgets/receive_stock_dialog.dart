@@ -111,6 +111,7 @@ class ReceiveStockDialogState extends State<ReceiveStockDialog> {
           : newCost;
 
       // Confirm action with the user before applying changes
+      if (!mounted) return;
       final bool? confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(

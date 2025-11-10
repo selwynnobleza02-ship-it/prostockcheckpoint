@@ -16,111 +16,118 @@ Widget buildSummaryCard(
   IconData icon,
   Color color,
 ) {
+  final colorScheme = Theme.of(context).colorScheme;
+  final textTheme = Theme.of(context).textTheme;
+
+  // Determine which theme color container to use based on the input color
+  Color containerColor;
+  Color onContainerColor;
+
+  // Map common colors to theme equivalents
+  if (color == Colors.green) {
+    containerColor = colorScheme.primaryContainer;
+    onContainerColor = colorScheme.onPrimaryContainer;
+  } else if (color == Colors.red) {
+    containerColor = colorScheme.errorContainer;
+    onContainerColor = colorScheme.onErrorContainer;
+  } else if (color == Colors.orange) {
+    containerColor = colorScheme.tertiaryContainer;
+    onContainerColor = colorScheme.onTertiaryContainer;
+  } else if (color == Colors.blue) {
+    containerColor = colorScheme.secondaryContainer;
+    onContainerColor = colorScheme.onSecondaryContainer;
+  } else {
+    // Default to primary for other colors
+    containerColor = colorScheme.primaryContainer;
+    onContainerColor = colorScheme.onPrimaryContainer;
+  }
+
   return Card(
-    child: IntrinsicHeight(
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              crossAxisAlignment: CrossAxisAlignment.start,
+    elevation: 1,
+    clipBehavior: Clip.antiAlias,
+    child: InkWell(
+      onTap: () {
+        final messenger = ScaffoldMessenger.of(context);
+        messenger.clearSnackBars();
+        messenger.showSnackBar(
+          SnackBar(
+            content: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(icon, color: color, size: 28),
+                Icon(icon, color: colorScheme.onPrimary, size: 16),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: GestureDetector(
-                    onTap: () {
-                      final messenger = ScaffoldMessenger.of(context);
-                      messenger.clearSnackBars();
-                      messenger.showSnackBar(
-                        SnackBar(
-                          content: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                icon,
-                                color: Theme.of(context).colorScheme.onPrimary,
-                                size: 16,
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  '$title: $value',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          backgroundColor: color.withAlpha(230),
-                          duration: const Duration(seconds: 3),
-                          behavior: SnackBarBehavior.floating,
-                          margin: const EdgeInsets.all(16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                      );
-                    },
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            _formatLargeNumber(value),
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.bold,
-                              color: color,
-                            ),
-                            textAlign: TextAlign.right,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        SizedBox(
-                          height: 14,
-                          child: Visibility(
-                            visible: _formatLargeNumber(value) != value,
-                            maintainSize: true,
-                            maintainAnimation: true,
-                            maintainState: true,
-                            child: Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: Text(
-                                  'Tap for details',
-                                  style: TextStyle(
-                                    fontSize: 9,
-                                    color: Colors.grey.shade600,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                  textAlign: TextAlign.right,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  child: Text(
+                    '$title: $value',
+                    style: const TextStyle(fontWeight: FontWeight.w500),
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 6),
-            Flexible(
-              child: Text(
-                title,
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+            backgroundColor: colorScheme.primary,
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+          ),
+        );
+      },
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Icon in colored container
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: containerColor,
+                borderRadius: BorderRadius.circular(8),
               ),
+              child: Icon(icon, color: onContainerColor, size: 20),
+            ),
+            const SizedBox(height: 8),
+
+            // Title
+            Text(
+              title,
+              style: textTheme.labelSmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+
+            // Value with hint icon
+            Row(
+              children: [
+                Flexible(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _formatLargeNumber(value),
+                      style: textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: colorScheme.onSurface,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_formatLargeNumber(value) != value) ...[
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.info_outline,
+                    size: 14,
+                    color: colorScheme.outline.withOpacity(0.6),
+                  ),
+                ],
+              ],
             ),
           ],
         ),

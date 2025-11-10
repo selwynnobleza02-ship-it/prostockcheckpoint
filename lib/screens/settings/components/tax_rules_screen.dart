@@ -46,7 +46,7 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
           .toSet()
           .toList();
 
-      if (productIds.isNotEmpty) {
+      if (productIds.isNotEmpty && mounted) {
         final inventoryProvider = context.read<InventoryProvider>();
         for (final productId in productIds) {
           final product = inventoryProvider.getProductById(productId);

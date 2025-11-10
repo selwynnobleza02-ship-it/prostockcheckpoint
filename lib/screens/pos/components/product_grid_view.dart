@@ -43,7 +43,7 @@ class ProductGridView extends StatelessWidget {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(provider.error!),
-                backgroundColor: Colors.red,
+                backgroundColor: Theme.of(context).colorScheme.error,
                 duration: const Duration(seconds: 4),
                 action: SnackBarAction(
                   label: 'Retry',
@@ -74,24 +74,27 @@ class ProductGridView extends StatelessWidget {
                         Icon(
                           Icons.search_off,
                           size: 64,
-                          color: Colors.grey[400],
+                          color: Theme.of(context).colorScheme.outline,
                         ),
                         const SizedBox(height: 16),
                         Text(
                           'No products found',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Try adjusting your search or add new products',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[500],
-                          ),
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 16),
@@ -123,133 +126,239 @@ class ProductGridView extends StatelessWidget {
             final product = productsToDisplay[index];
             final visualStock = provider.getVisualStock(product.id!);
             final isOutOfStock = visualStock <= 0;
+            final isLowStock = product.isLowStock && !isOutOfStock;
             final isQueued = !provider.isOnline;
+            final colorScheme = Theme.of(context).colorScheme;
+            final textTheme = Theme.of(context).textTheme;
+
+            // Determine stock status colors
+            Color stockBadgeColor;
+            Color stockBadgeTextColor;
+            if (isOutOfStock) {
+              stockBadgeColor = colorScheme.errorContainer;
+              stockBadgeTextColor = colorScheme.onErrorContainer;
+            } else if (isLowStock) {
+              stockBadgeColor = colorScheme.tertiaryContainer;
+              stockBadgeTextColor = colorScheme.onTertiaryContainer;
+            } else {
+              stockBadgeColor = colorScheme.primaryContainer;
+              stockBadgeTextColor = colorScheme.onPrimaryContainer;
+            }
+
             return Card(
+              elevation: isOutOfStock ? 0 : 1,
+              clipBehavior: Clip.antiAlias,
               child: InkWell(
-                onTap: () async {
-                  if (!isOutOfStock) {
-                    await Provider.of<SalesProvider>(
-                      context,
-                      listen: false,
-                    ).addItemToCurrentSale(product, 1);
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(UiConstants.spacingSmall),
-                  child: Stack(
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Container(
-                              width: double.infinity,
-                              decoration: BoxDecoration(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.surfaceContainer,
-                                borderRadius: BorderRadius.circular(
-                                  UiConstants.borderRadiusStandard,
-                                ),
+                onTap: isOutOfStock
+                    ? null
+                    : () async {
+                        await Provider.of<SalesProvider>(
+                          context,
+                          listen: false,
+                        ).addItemToCurrentSale(product, 1);
+                      },
+                borderRadius: BorderRadius.circular(12),
+                child: Stack(
+                  children: [
+                    // Main content with opacity for out-of-stock
+                    Opacity(
+                      opacity: isOutOfStock ? 0.5 : 1.0,
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Icon/Image area with stock badge
+                            Expanded(
+                              flex: 3,
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    width: double.infinity,
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.surfaceContainer,
+                                      borderRadius: BorderRadius.circular(
+                                        UiConstants.borderRadiusStandard,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.inventory,
+                                      size: 32,
+                                      color: colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  // Stock count badge on icon
+                                  Positioned(
+                                    bottom: 2,
+                                    right: 2,
+                                    child: CircleAvatar(
+                                      radius: 12,
+                                      backgroundColor: stockBadgeColor,
+                                      child: Text(
+                                        visualStock.toString(),
+                                        style: textTheme.labelSmall?.copyWith(
+                                          color: stockBadgeTextColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 10,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              child: Icon(
-                                Icons.inventory,
-                                size: UiConstants.iconSizeMedium,
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurfaceVariant,
-                              ),
                             ),
-                          ),
-                          const SizedBox(height: UiConstants.spacingSmall),
-                          Text(
-                            product.name,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: UiConstants.fontSizeSmall,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          FutureBuilder<double>(
-                            future: TaxService.calculateSellingPriceWithRule(
-                              product.cost,
-                              productId: product.id,
-                              categoryName: product.category,
-                            ),
-                            builder: (context, snapshot) {
-                              final price = snapshot.data;
-                              return Text(
-                                price != null
-                                    ? CurrencyUtils.formatCurrency(price)
-                                    : 'Calculating...',
-                                style: const TextStyle(
-                                  color: Colors.green,
+                            const SizedBox(height: 4),
+
+                            // Product name
+                            Expanded(
+                              flex: 2,
+                              child: Text(
+                                product.name,
+                                style: textTheme.labelMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  fontSize: UiConstants.fontSizeSmall,
                                 ),
-                              );
-                            },
-                          ),
-                          Text(
-                            'Stock: $visualStock',
-                            style: TextStyle(
-                              color: visualStock > 0
-                                  ? Colors.grey[600]
-                                  : Colors.red,
-                              fontSize: UiConstants.fontSizeExtraSmall,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                          ),
+
+                            // Price
+                            FutureBuilder<double>(
+                              future: TaxService.calculateSellingPriceWithRule(
+                                product.cost,
+                                productId: product.id,
+                                categoryName: product.category,
+                              ),
+                              builder: (context, snapshot) {
+                                final price = snapshot.data;
+                                return Text(
+                                  price != null
+                                      ? CurrencyUtils.formatCurrency(price)
+                                      : '...',
+                                  style: textTheme.labelLarge?.copyWith(
+                                    color: colorScheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    // Status badges overlay
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          if (isQueued)
+                            Container(
+                              margin: const EdgeInsets.only(bottom: 4),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.secondaryContainer,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: colorScheme.outline.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Text(
+                                'Queued',
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSecondaryContainer,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 9,
+                                ),
+                              ),
+                            ),
+                          if (isOutOfStock)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.errorContainer,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: colorScheme.error.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.remove_circle_outline,
+                                    size: 10,
+                                    color: colorScheme.onErrorContainer,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    'Out',
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.onErrorContainer,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 9,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          else if (isLowStock)
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorScheme.tertiaryContainer,
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: colorScheme.tertiary.withValues(
+                                    alpha: 0.3,
+                                  ),
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.warning_amber_rounded,
+                                    size: 10,
+                                    color: colorScheme.onTertiaryContainer,
+                                  ),
+                                  const SizedBox(width: 2),
+                                  Text(
+                                    'Low',
+                                    style: textTheme.labelSmall?.copyWith(
+                                      color: colorScheme.onTertiaryContainer,
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 9,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
                         ],
                       ),
-                      if (isOutOfStock)
-                        Positioned(
-                          top: 4,
-                          right: 4,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.red.withValues(alpha: 0.9),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              'Out of stock',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onError,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 10,
-                              ),
-                            ),
-                          ),
-                        ),
-                      if (isQueued)
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 6,
-                              vertical: 2,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.orange[700],
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              'Queued',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.onPrimary,
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             );

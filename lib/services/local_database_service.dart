@@ -23,7 +23,7 @@ class LocalDatabaseService {
 
     return await openDatabase(
       path,
-      version: 9, // Increment version for FIFO batch tracking
+      version: 10, // Increment version to backfill unitCost for old sales
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -345,6 +345,38 @@ ON inventory_batches(quantity_remaining)
             'created_at': now,
             'updated_at': now,
           });
+        }
+      }
+    }
+
+    // Backfill unitCost for old sale items (pre-FIFO sales)
+    if (oldVersion < 10) {
+      // Get all sale items with zero or null unitCost
+      final saleItems = await db.query(
+        'sale_items',
+        where: 'unitCost IS NULL OR unitCost = 0.0',
+      );
+
+      if (saleItems.isNotEmpty) {
+        // Get current product costs for fallback
+        final products = await db.query('products');
+        final productCostMap = {for (var p in products) p['id']: p['cost']};
+
+        // Update each sale item with the product's current cost
+        for (final item in saleItems) {
+          final productId = item['productId'] as String?;
+          if (productId != null && productCostMap.containsKey(productId)) {
+            final cost = productCostMap[productId] as double;
+            await db.update(
+              'sale_items',
+              {
+                'unitCost': cost,
+                'batchCost': cost, // Also update batchCost for consistency
+              },
+              where: 'id = ?',
+              whereArgs: [item['id']],
+            );
+          }
         }
       }
     }

@@ -76,26 +76,53 @@ class ReportService {
 
   /// Calculate Cost of Goods Sold (COGS) based on actual items sold
   /// This uses the unitCost captured at the time of sale for exact COGS
+  /// Falls back to current product cost if unitCost is missing (for old sales)
   double calculateTotalCost(List<SaleItem> saleItems, List<Product> products) {
+    // Create product lookup map for fallback
+    final productMap = {for (var p in products) p.id: p};
+
     return saleItems.fold(0.0, (sum, item) {
       // Use unitCost from sale item (captured at time of sale)
-      // This provides exact COGS regardless of subsequent cost changes
-      return sum + (item.quantity * item.unitCost);
+      if (item.unitCost > 0) {
+        return sum + (item.quantity * item.unitCost);
+      }
+
+      // FALLBACK: For old sales without unitCost, use current product cost
+      // This happens with pre-FIFO sales data
+      final product = productMap[item.productId];
+      if (product != null) {
+        return sum + (item.quantity * product.cost);
+      }
+
+      // If product not found, skip this item
+      return sum;
     });
   }
 
   // Calculate COGS for credit purchases from transaction items (uses unitCost from items)
+  // Falls back to current product cost if unitCost is missing (for old credit sales)
   double calculateTotalCostFromCreditTransactions(
     List<CreditTransaction> transactions,
     List<Product> products,
   ) {
+    // Create product lookup map for fallback
+    final productMap = {for (var p in products) p.id: p};
+
     double total = 0.0;
     for (final tx in transactions.where(
       (t) => t.type.toLowerCase() == 'purchase',
     )) {
       for (final item in tx.items) {
         // Use unitCost from credit sale item (captured at time of sale)
-        total += item.unitCost * item.quantity;
+        if (item.unitCost > 0) {
+          total += item.unitCost * item.quantity;
+        } else {
+          // FALLBACK: For old credit sales without unitCost, use current product cost
+          final product = productMap[item.productId];
+          if (product != null) {
+            total += product.cost * item.quantity;
+          }
+        }
       }
     }
     return total;

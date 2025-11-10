@@ -110,6 +110,7 @@ class _StaffReportTabState extends State<StaffReportTab> {
 
                   try {
                     // Show progress dialog
+                    if (!context.mounted) return;
                     showDialog(
                       context: context,
                       barrierDismissible: false,
@@ -165,6 +166,7 @@ class _StaffReportTabState extends State<StaffReportTab> {
                       );
 
                       // Show progress dialog for paginated generation
+                      if (!context.mounted) return;
                       showDialog(
                         context: context,
                         barrierDismissible: false,
