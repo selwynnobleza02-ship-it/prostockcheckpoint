@@ -415,12 +415,20 @@ class ReportService {
         .toList();
   }
 
-  /// Calculate loss breakdown by reason
-  Map<String, double> getLossBreakdown(List<Loss> losses) {
+  /// Calculate loss breakdown by product
+  Map<String, double> getLossBreakdown(
+    List<Loss> losses,
+    List<Product> products,
+  ) {
     final breakdown = <String, double>{};
+    final productById = {for (final p in products) p.id: p};
+
     for (final loss in losses) {
+      final productName =
+          productById[loss.productId]?.name ??
+          'Unknown Product (${loss.productId})';
       breakdown.update(
-        loss.reason.name,
+        productName,
         (value) => value + loss.totalCost,
         ifAbsent: () => loss.totalCost,
       );

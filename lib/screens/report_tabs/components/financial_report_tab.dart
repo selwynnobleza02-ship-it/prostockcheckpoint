@@ -202,6 +202,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
             final lossBreakdown = reportService.getLossBreakdown(
               filteredLosses,
+              inventory.products,
             );
 
             return SingleChildScrollView(
@@ -243,6 +244,33 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
                             final options = result;
                             final scaffold = ScaffoldMessenger.of(context);
+
+                            // Validate we have data to export
+                            if (filteredSales.isEmpty) {
+                              scaffold.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'No sales data available for the selected period.',
+                                  ),
+                                  backgroundColor: Colors.orange,
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                              return;
+                            }
+
+                            if (filteredSaleItems.isEmpty) {
+                              scaffold.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'No sale items available for the selected period.',
+                                  ),
+                                  backgroundColor: Colors.orange,
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                              return;
+                            }
 
                             // Show loading indicator
                             scaffold.showSnackBar(
@@ -353,55 +381,38 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               localDatabaseService,
                             );
 
-                            // Get sales provider before async operations
-                            final salesProvider = Provider.of<SalesProvider>(
-                              context,
-                              listen: false,
-                            );
+                            // Get the earliest sale date for batch query
+                            final saleDate = filteredSales.isNotEmpty
+                                ? filteredSales.first.createdAt
+                                : DateTime.now();
 
-                            // Group sale items by product and get historical costs
-                            final Map<String, List<SaleItem>> itemsByProduct =
-                                {};
+                            // BATCH QUERY: Get all historical costs at once
+                            final itemCosts = await historicalCostService
+                                .getHistoricalCostsForSaleItems(
+                                  filteredSaleItems,
+                                  saleDate,
+                                );
+
+                            // Group by product and cost using the batch results
                             for (final item in filteredSaleItems) {
-                              itemsByProduct[item.productId] ??= [];
-                              itemsByProduct[item.productId]!.add(item);
-                            }
+                              final productId = item.productId;
+                              final historicalCost = itemCosts[item.id] ?? 0.0;
 
-                            for (final entry in itemsByProduct.entries) {
-                              final productId = entry.key;
-                              final items = entry.value;
+                              // Round cost to 2 decimals to avoid floating noise
+                              final roundedCost =
+                                  (historicalCost * 100).round() / 100.0;
 
-                              // Group by historical cost for each sale item
-                              for (final item in items) {
-                                // Get historical cost at the time of sale
-                                final saleDate = salesProvider.sales
-                                    .firstWhere((s) => s.id == item.saleId)
-                                    .createdAt;
+                              qtyByProductCost[productId] ??= {};
+                              qtyByProductCost[productId]![roundedCost] =
+                                  (qtyByProductCost[productId]![roundedCost] ??
+                                      0) +
+                                  item.quantity;
 
-                                // Get historical cost for this sale item
-                                final historicalCost =
-                                    await historicalCostService
-                                        .getHistoricalCostForSaleItem(
-                                          item,
-                                          saleDate,
-                                        );
-
-                                // Round cost to 2 decimals to avoid floating noise
-                                final roundedCost =
-                                    (historicalCost * 100).round() / 100.0;
-
-                                qtyByProductCost[productId] ??= {};
-                                qtyByProductCost[productId]![roundedCost] =
-                                    (qtyByProductCost[productId]![roundedCost] ??
-                                        0) +
-                                    item.quantity;
-
-                                costByProductCost[productId] ??= {};
-                                costByProductCost[productId]![roundedCost] =
-                                    (costByProductCost[productId]![roundedCost] ??
-                                        0) +
-                                    (roundedCost * item.quantity);
-                              }
+                              costByProductCost[productId] ??= {};
+                              costByProductCost[productId]![roundedCost] =
+                                  (costByProductCost[productId]![roundedCost] ??
+                                      0) +
+                                  (roundedCost * item.quantity);
                             }
 
                             // Build COGS rows per product per cost
@@ -696,13 +707,29 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
                               // Show technical details to help debugging
                               if (kDebugMode) {
+                                final errorMsg = e.toString();
+                                print('DEBUG: Full PDF generation error:');
+                                print(errorMsg);
+                                print('Stack trace:');
+                                print(stack);
+
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
                                     content: Text(
-                                      'DEBUG: PDF Error: ${e.toString().substring(0, min(100, e.toString().length))}',
+                                      'DEBUG: Generating PDF: ${errorMsg.length > 150 ? '${errorMsg.substring(0, 150)}...' : errorMsg}',
                                     ),
                                     backgroundColor: Colors.red,
                                     duration: const Duration(seconds: 10),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Error generating PDF. Please try again or check your data.',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                    duration: Duration(seconds: 5),
                                   ),
                                 );
                               }
@@ -923,136 +950,6 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                   ),
 
                   const SizedBox(height: 24),
-
-                  // UPDATED: Enhanced Profit Analysis section
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Profit Analysis',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Profit Margin:',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Flexible(
-                              child: Text(
-                                '${profitMargin.toStringAsFixed(1)}%',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: totalProfit >= 0
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primary
-                                          : Theme.of(context).colorScheme.error,
-                                    ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        // NEW: Markup Percentage row
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Markup Percentage:',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Flexible(
-                              child: Text(
-                                '${markupPercentage.toStringAsFixed(1)}%',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: totalProfit >= 0
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primary
-                                          : Theme.of(context).colorScheme.error,
-                                    ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Return on Investment:',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Flexible(
-                              child: Text(
-                                '${roi.toStringAsFixed(1)}%',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: totalProfit >= 0
-                                          ? Theme.of(
-                                              context,
-                                            ).colorScheme.primary
-                                          : Theme.of(context).colorScheme.error,
-                                    ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        // NEW: Stock Turns Per Year
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Stock Turns/Year:',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Flexible(
-                              child: Text(
-                                '${_calculateAnnualizedTurnover(inventoryTurnover).toStringAsFixed(1)}x',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
                   TopSellingProductsList(
                     topProducts: topProducts.map((entry) => entry.key).toList(),
                     saleItems: filteredSaleItems,
@@ -1066,17 +963,6 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
         );
       },
     );
-  }
-
-  // NEW: Helper method to calculate annualized turnover
-  double _calculateAnnualizedTurnover(double inventoryTurnover) {
-    if (_startDate != null && _endDate != null) {
-      final daysDiff = _endDate!.difference(_startDate!).inDays;
-      if (daysDiff > 0) {
-        return inventoryTurnover * (365 / daysDiff);
-      }
-    }
-    return inventoryTurnover;
   }
 
   List<Sale> _filterSalesByDate(List<Sale> sales) {

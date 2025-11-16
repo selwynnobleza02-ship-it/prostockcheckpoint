@@ -71,6 +71,20 @@ class _StaffReportTabState extends State<StaffReportTab> {
 
                   final activities = await _activityStream.first;
 
+                  // Validate we have data to export
+                  if (activities.isEmpty) {
+                    scaffold.showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'No staff activity data available to export.',
+                        ),
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                    return;
+                  }
+
                   final actionsCount = <String, int>{};
                   for (final a in activities) {
                     actionsCount.update(
@@ -217,7 +231,9 @@ class _StaffReportTabState extends State<StaffReportTab> {
                   if (mounted && context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Error generating PDF: $e'),
+                        content: Text(
+                          'Error generating PDF: ${e.toString().length > 100 ? e.toString().substring(0, 100) + '...' : e.toString()}',
+                        ),
                         backgroundColor: Colors.red,
                         duration: const Duration(seconds: 5),
                       ),

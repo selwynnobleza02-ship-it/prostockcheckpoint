@@ -257,6 +257,62 @@ class ProductGridView extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
+                          // Batch indicator badge
+                          FutureBuilder<List<dynamic>>(
+                            future: provider.getBatchesForProduct(product.id!),
+                            builder: (context, snapshot) {
+                              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                                return const SizedBox.shrink();
+                              }
+
+                              final batches = snapshot.data!;
+                              final activeBatchCount = batches
+                                  .where((b) => b.quantityRemaining > 0)
+                                  .length;
+
+                              // Only show if there are multiple batches
+                              if (activeBatchCount <= 1) {
+                                return const SizedBox.shrink();
+                              }
+
+                              return Container(
+                                margin: const EdgeInsets.only(bottom: 4),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 3,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: colorScheme.primaryContainer,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(
+                                    color: colorScheme.primary.withValues(
+                                      alpha: 0.3,
+                                    ),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.layers,
+                                      size: 10,
+                                      color: colorScheme.onPrimaryContainer,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    Text(
+                                      '$activeBatchCount',
+                                      style: textTheme.labelSmall?.copyWith(
+                                        color: colorScheme.onPrimaryContainer,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 9,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
                           if (isQueued)
                             Container(
                               margin: const EdgeInsets.only(bottom: 4),

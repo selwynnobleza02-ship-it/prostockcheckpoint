@@ -66,18 +66,60 @@ class HistoricalCostService {
     }
   }
 
-  /// Get historical costs for multiple sale items
+  /// Get historical costs for multiple sale items (BATCH OPTIMIZED)
+  /// Returns a Map of saleItemId -> historical cost
   Future<Map<String, double>> getHistoricalCostsForSaleItems(
     List<SaleItem> saleItems,
     DateTime saleDate,
   ) async {
-    final Map<String, double> costs = {};
+    try {
+      if (saleItems.isEmpty) return {};
 
-    for (final item in saleItems) {
-      costs[item.id] = await getHistoricalCostForSaleItem(item, saleDate);
+      // Get unique product IDs
+      final productIds = saleItems
+          .map((item) => item.productId)
+          .toSet()
+          .toList();
+
+      // Fetch historical costs for all products in batches
+      final productCosts = await _costHistoryService.getBatchCostsAtTime(
+        productIds,
+        saleDate,
+      );
+
+      // Get current products as fallback
+      final products = await _localDatabaseService.getAllProducts();
+      final productById = {for (final p in products) p.id: p};
+
+      // Map sale items to their costs
+      final Map<String, double> costs = {};
+      for (final item in saleItems) {
+        // Try historical cost first
+        double cost = productCosts[item.productId] ?? 0.0;
+
+        // Fallback to current product cost if no historical data
+        if (cost == 0.0) {
+          final product = productById[item.productId];
+          cost = product?.cost ?? 0.0;
+        }
+
+        costs[item.id] = cost;
+      }
+
+      return costs;
+    } catch (e) {
+      // Fallback to current product costs on error
+      final products = await _localDatabaseService.getAllProducts();
+      final productById = {for (final p in products) p.id: p};
+
+      final Map<String, double> costs = {};
+      for (final item in saleItems) {
+        final product = productById[item.productId];
+        costs[item.id] = product?.cost ?? 0.0;
+      }
+
+      return costs;
     }
-
-    return costs;
   }
 
   /// Get cost history for a product within a date range

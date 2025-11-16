@@ -107,6 +107,59 @@ class CostHistoryService {
     }
   }
 
+  /// Get costs at a specific time for multiple products (batch operation)
+  /// Returns a Map of productId -> cost
+  /// Uses Firestore 'in' operator which supports up to 10 items per query
+  Future<Map<String, double>> getBatchCostsAtTime(
+    List<String> productIds,
+    DateTime timestamp,
+  ) async {
+    try {
+      if (productIds.isEmpty) return {};
+
+      final Map<String, double> costs = {};
+      final timestampFilter = Timestamp.fromDate(timestamp);
+
+      // Process in batches of 10 (Firestore 'in' operator limit)
+      for (int i = 0; i < productIds.length; i += 10) {
+        final batch = productIds.skip(i).take(10).toList();
+
+        final snapshot = await costHistoryCollection
+            .where('productId', whereIn: batch)
+            .where('timestamp', isLessThanOrEqualTo: timestampFilter)
+            .orderBy('timestamp', descending: true)
+            .get();
+
+        // Group by productId and get the most recent cost for each
+        final Map<String, double> batchCosts = {};
+        for (final doc in snapshot.docs) {
+          final data = doc.data() as Map<String, dynamic>;
+          final productId = data['productId'] as String;
+          final cost = data['cost'] as double;
+          final docTimestamp = data['timestamp'] as Timestamp;
+
+          // Only use if it's the most recent cost for this product
+          if (!batchCosts.containsKey(productId)) {
+            batchCosts[productId] = cost;
+          } else {
+            // Check if this timestamp is more recent than what we have
+            // (shouldn't happen due to orderBy, but defensive programming)
+            final existingTimestamp = data['timestamp'] as Timestamp;
+            if (docTimestamp.compareTo(existingTimestamp) > 0) {
+              batchCosts[productId] = cost;
+            }
+          }
+        }
+
+        costs.addAll(batchCosts);
+      }
+
+      return costs;
+    } catch (e) {
+      throw FirestoreException('Failed to get batch costs at time: $e');
+    }
+  }
+
   /// Get the latest cost for a product
   Future<double?> getLatestCost(String productId) async {
     try {

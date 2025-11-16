@@ -90,6 +90,20 @@ class InventoryReportTab extends StatelessWidget {
                             // Capture context-dependent values before async gap
                             final scaffold = ScaffoldMessenger.of(context);
 
+                            // Validate we have data to export
+                            if (provider.products.isEmpty) {
+                              scaffold.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'No inventory data available to export.',
+                                  ),
+                                  backgroundColor: Colors.orange,
+                                  duration: Duration(seconds: 3),
+                                ),
+                              );
+                              return;
+                            }
+
                             scaffold.showSnackBar(
                               const SnackBar(
                                 content: Text('Generating PDF...'),
@@ -400,7 +414,9 @@ class InventoryReportTab extends StatelessWidget {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Error generating PDF: $e'),
+                                  content: Text(
+                                    'Error generating PDF: ${e.toString().length > 100 ? '${e.toString().substring(0, 100)}...' : e.toString()}',
+                                  ),
                                   backgroundColor: Colors.red,
                                   duration: const Duration(seconds: 5),
                                 ),
@@ -487,104 +503,6 @@ class InventoryReportTab extends StatelessWidget {
                     CurrencyUtils.formatCurrency(potentialProfit),
                     Icons.trending_up,
                     Colors.indigo,
-                  ),
-
-                  const SizedBox(height: 24),
-
-                  // Inventory Analysis
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Theme.of(
-                        context,
-                      ).colorScheme.surfaceContainerHighest,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Inventory Analysis',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Average Stock Value:',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ),
-                            Flexible(
-                              child: Text(
-                                CurrencyUtils.formatCurrency(averageStockValue),
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(fontWeight: FontWeight.bold),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Stock Health:',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ),
-                            Flexible(
-                              child: Text(
-                                _getStockHealth(
-                                  totalProducts,
-                                  lowStockCount,
-                                  outOfStockCount,
-                                ),
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: _getStockHealthColor(
-                                        totalProducts,
-                                        lowStockCount,
-                                        outOfStockCount,
-                                        context,
-                                      ),
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Flexible(
-                              child: Text(
-                                'Markup Potential:',
-                                style: Theme.of(context).textTheme.bodyMedium,
-                              ),
-                            ),
-                            Flexible(
-                              child: Text(
-                                '${totalValue > 0 ? ((potentialProfit / totalValue) * 100).toStringAsFixed(1) : 0.0}%',
-                                style: Theme.of(context).textTheme.bodyMedium
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.bold,
-                                      color: Theme.of(
-                                        context,
-                                      ).colorScheme.primary,
-                                    ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
                   ),
 
                   const SizedBox(height: 24),
@@ -825,34 +743,5 @@ class InventoryReportTab extends StatelessWidget {
       'totalRetailValue': totalRetailValue,
       'potentialProfit': potentialProfit,
     };
-  }
-
-  String _getStockHealth(int total, int lowStock, int outOfStock) {
-    if (total == 0) return 'No Products';
-
-    final healthyPercentage = ((total - lowStock - outOfStock) / total) * 100;
-
-    if (healthyPercentage >= 80) return 'Excellent';
-    if (healthyPercentage >= 60) return 'Good';
-    if (healthyPercentage >= 40) return 'Fair';
-    return 'Needs Attention';
-  }
-
-  Color _getStockHealthColor(
-    int total,
-    int lowStock,
-    int outOfStock,
-    BuildContext context,
-  ) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    if (total == 0) return colorScheme.outline;
-
-    final healthyPercentage = ((total - lowStock - outOfStock) / total) * 100;
-
-    if (healthyPercentage >= 80) return colorScheme.primary;
-    if (healthyPercentage >= 60) return colorScheme.secondary;
-    if (healthyPercentage >= 40) return colorScheme.tertiary;
-    return colorScheme.error;
   }
 }

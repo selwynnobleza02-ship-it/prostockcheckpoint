@@ -94,6 +94,33 @@ class SalesReportTab extends StatelessWidget {
                         final options = result;
                         final scaffold = ScaffoldMessenger.of(context);
 
+                        // Validate we have data to export
+                        if (provider.sales.isEmpty) {
+                          scaffold.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'No sales data available to export.',
+                              ),
+                              backgroundColor: Colors.orange,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                          return;
+                        }
+
+                        if (provider.saleItems.isEmpty) {
+                          scaffold.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'No sale items available to export.',
+                              ),
+                              backgroundColor: Colors.orange,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                          return;
+                        }
+
                         // Show loading indicator
                         scaffold.showSnackBar(
                           const SnackBar(
@@ -213,9 +240,6 @@ class SalesReportTab extends StatelessWidget {
                             now.month,
                             now.day,
                           );
-                          final tomorrowStart = todayStart.add(
-                            const Duration(days: 1),
-                          );
 
                           final weekStart = todayStart.subtract(
                             Duration(days: todayStart.weekday - 1),
@@ -231,12 +255,7 @@ class SalesReportTab extends StatelessWidget {
                             1,
                           );
 
-                          final todaySaleIds = saleIdsWhere(
-                            (ts) =>
-                                (ts.isAtSameMomentAs(todayStart) ||
-                                    ts.isAfter(todayStart)) &&
-                                ts.isBefore(tomorrowStart),
-                          );
+                          // Removed todaySaleIds as we're only showing Weekly, Monthly, and Total breakdowns
                           final weekSaleIds = saleIdsWhere(
                             (ts) =>
                                 (ts.isAtSameMomentAs(weekStart) ||
@@ -288,15 +307,8 @@ class SalesReportTab extends StatelessWidget {
                             ),
                           ];
 
-                          final todayRows = buildRowsForSaleIds(todaySaleIds);
-                          if (todayRows.isNotEmpty) {
-                            sections.add(
-                              PdfReportSection(
-                                title: "Today's Sales Breakdown",
-                                rows: todayRows,
-                              ),
-                            );
-                          }
+                          // Only include Weekly, Monthly, and Total Sales breakdowns
+                          // Removed Today's Sales breakdown as per requirement
 
                           final weekRows = buildRowsForSaleIds(weekSaleIds);
                           if (weekRows.isNotEmpty) {
@@ -458,7 +470,9 @@ class SalesReportTab extends StatelessWidget {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Error generating PDF: $e'),
+                              content: Text(
+                                'Error generating PDF: ${e.toString().length > 100 ? '${e.toString().substring(0, 100)}...' : e.toString()}',
+                              ),
                               backgroundColor: Colors.red,
                               duration: const Duration(seconds: 5),
                             ),
@@ -534,102 +548,6 @@ class SalesReportTab extends StatelessWidget {
                     ),
                   ),
                 ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Sales Performance Analysis
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Sales Performance',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Daily Average:',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            CurrencyUtils.formatCurrency(
-                              totalSales /
-                                  (provider.sales.isEmpty
-                                      ? 1
-                                      : _getUniqueDaysCount(provider.sales)),
-                            ),
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Transactions Today:',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            _getTodayTransactionCount(
-                              provider.sales,
-                            ).toString(),
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Sales Growth:',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ),
-                        Flexible(
-                          child: Text(
-                            '${_calculateGrowthPercentage(provider.sales).toStringAsFixed(1)}%',
-                            style: Theme.of(context).textTheme.bodyMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                  color:
-                                      _calculateGrowthPercentage(
-                                            provider.sales,
-                                          ) >=
-                                          0
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.error,
-                                ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
               ),
 
               const SizedBox(height: 24),
@@ -769,58 +687,6 @@ class SalesReportTab extends StatelessWidget {
         );
       },
     );
-  }
-
-  int _getUniqueDaysCount(List<dynamic> sales) {
-    if (sales.isEmpty) return 1;
-    final uniqueDates = <String>{};
-    for (final sale in sales) {
-      final dateStr =
-          '${sale.createdAt.year}-${sale.createdAt.month}-${sale.createdAt.day}';
-      uniqueDates.add(dateStr);
-    }
-    return uniqueDates.length;
-  }
-
-  int _getTodayTransactionCount(List<dynamic> sales) {
-    final today = DateTime.now();
-    return sales
-        .where(
-          (sale) =>
-              sale.createdAt.day == today.day &&
-              sale.createdAt.month == today.month &&
-              sale.createdAt.year == today.year,
-        )
-        .length;
-  }
-
-  double _calculateGrowthPercentage(List<dynamic> sales) {
-    if (sales.length < 2) return 0.0;
-
-    final now = DateTime.now();
-    final yesterday = now.subtract(const Duration(days: 1));
-
-    final todaySales = sales
-        .where(
-          (sale) =>
-              sale.createdAt.day == now.day &&
-              sale.createdAt.month == now.month &&
-              sale.createdAt.year == now.year,
-        )
-        .fold(0.0, (sum, sale) => sum + sale.totalAmount);
-
-    final yesterdaySales = sales
-        .where(
-          (sale) =>
-              sale.createdAt.day == yesterday.day &&
-              sale.createdAt.month == yesterday.month &&
-              sale.createdAt.year == yesterday.year,
-        )
-        .fold(0.0, (sum, sale) => sum + sale.totalAmount);
-
-    if (yesterdaySales == 0) return todaySales > 0 ? 100.0 : 0.0;
-
-    return ((todaySales - yesterdaySales) / yesterdaySales) * 100;
   }
 
   String _formatDate(DateTime date) {

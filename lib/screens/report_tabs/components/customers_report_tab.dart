@@ -83,6 +83,20 @@ class CustomersReportTab extends StatelessWidget {
                         final options = result;
                         final scaffold = ScaffoldMessenger.of(context);
 
+                        // Validate we have data to export
+                        if (customerProvider.customers.isEmpty) {
+                          scaffold.showSnackBar(
+                            const SnackBar(
+                              content: Text(
+                                'No customer data available to export.',
+                              ),
+                              backgroundColor: Colors.orange,
+                              duration: Duration(seconds: 3),
+                            ),
+                          );
+                          return;
+                        }
+
                         // Show loading indicator
                         scaffold.showSnackBar(
                           const SnackBar(
@@ -419,7 +433,9 @@ class CustomersReportTab extends StatelessWidget {
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
-                              content: Text('Error generating PDF: $e'),
+                              content: Text(
+                                'Error generating PDF: ${e.toString().length > 100 ? '${e.toString().substring(0, 100)}...' : e.toString()}',
+                              ),
                               backgroundColor: Colors.red,
                               duration: const Duration(seconds: 5),
                             ),
@@ -506,112 +522,6 @@ class CustomersReportTab extends StatelessWidget {
                 CurrencyUtils.formatCurrency(highestBalance),
                 Icons.trending_up,
                 Colors.indigo,
-              ),
-
-              const SizedBox(height: 24),
-
-              // Customer Analysis
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Theme.of(context).colorScheme.surfaceContainer,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Customer Analysis',
-                      style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Flexible(child: Text('Active Customers:')),
-                        Flexible(
-                          child: Text(
-                            '${totalCustomers > 0 ? ((activeCustomers / totalCustomers) * 100).toStringAsFixed(1) : 0}%',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.green,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Flexible(child: Text('Contact Coverage:')),
-                        Flexible(
-                          child: Text(
-                            '${totalCustomers > 0 ? ((customerProvider.customers.where((c) => c.phone?.isNotEmpty == true).length / totalCustomers) * 100).toStringAsFixed(1) : 0}%',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color:
-                                  customerProvider.customers
-                                              .where(
-                                                (c) =>
-                                                    c.phone?.isNotEmpty == true,
-                                              )
-                                              .length /
-                                          (totalCustomers == 0
-                                              ? 1
-                                              : totalCustomers) >=
-                                      0.8
-                                  ? Colors.green
-                                  : Colors.orange,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Flexible(child: Text('Collection Status:')),
-                        Flexible(
-                          child: Text(
-                            _getCollectionStatus(totalBalance),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: _getCollectionStatusColor(totalBalance),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Flexible(child: Text('Customer Health:')),
-                        Flexible(
-                          child: Text(
-                            _getCustomerHealth(
-                              customersWithBalance,
-                              totalCustomers,
-                            ),
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: _getCustomerHealthColor(
-                                customersWithBalance,
-                                totalCustomers,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
               ),
 
               const SizedBox(height: 24),
@@ -800,39 +710,5 @@ class CustomersReportTab extends StatelessWidget {
         );
       },
     );
-  }
-
-  String _getCollectionStatus(double totalBalance) {
-    if (totalBalance == 0) return 'Excellent';
-    if (totalBalance < 10000) return 'Good';
-    if (totalBalance < 50000) return 'Fair';
-    return 'Needs Attention';
-  }
-
-  Color _getCollectionStatusColor(double totalBalance) {
-    if (totalBalance == 0) return Colors.green;
-    if (totalBalance < 10000) return Colors.blue;
-    if (totalBalance < 50000) return Colors.orange;
-    return Colors.red;
-  }
-
-  String _getCustomerHealth(int withBalance, int total) {
-    if (total == 0) return 'No Data';
-    final healthyPercentage = ((total - withBalance) / total) * 100;
-
-    if (healthyPercentage >= 90) return 'Excellent';
-    if (healthyPercentage >= 75) return 'Good';
-    if (healthyPercentage >= 60) return 'Fair';
-    return 'Needs Attention';
-  }
-
-  Color _getCustomerHealthColor(int withBalance, int total) {
-    if (total == 0) return Colors.grey;
-    final healthyPercentage = ((total - withBalance) / total) * 100;
-
-    if (healthyPercentage >= 90) return Colors.green;
-    if (healthyPercentage >= 75) return Colors.blue;
-    if (healthyPercentage >= 60) return Colors.orange;
-    return Colors.red;
   }
 }

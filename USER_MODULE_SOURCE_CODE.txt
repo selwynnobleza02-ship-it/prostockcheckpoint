@@ -1,0 +1,4733 @@
+﻿========================================
+PROSTOCK - USER MODULE SOURCE CODE
+Generated: 11/12/2025 11:10:53
+========================================
+
+MODULE DESCRIPTION:
+This module contains all user/staff functionality including:
+- User Dashboard
+- Stock Management (View, Add, Update)
+- Point of Sale (POS)
+- Inventory Management
+- Customer Management
+- Sales & Purchase Records
+- Report Generation
+- Receipt Printing
+- Product Search & Filtering
+
+========================================
+
+
+================================================================
+FILE #1: D:\flutter project\prostock\lib\screens\user\user_profile.dart
+SIZE: 9.96 KB
+MODIFIED: 10/26/2025 13:05:50
+================================================================
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:prostock/providers/auth_provider.dart';
+import 'package:prostock/models/user_role.dart';
+import 'package:prostock/providers/theme_provider.dart';
+import 'package:prostock/screens/settings/components/change_password_screen.dart';
+import 'package:prostock/screens/user/profile/components/profile_action.dart';
+
+class UserProfile extends StatelessWidget {
+  const UserProfile({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<AuthProvider>(
+      builder: (context, authProvider, child) {
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surface,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withAlpha(26),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    CircleAvatar(
+                      radius: 40,
+                      backgroundColor:
+                          Theme.of(context).brightness == Brightness.dark
+                          ? Colors.teal.withValues(alpha: 0.3)
+                          : Colors.teal[100],
+                      child: Icon(
+                        Icons.person,
+                        size: 40,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.teal[200]
+                            : Colors.teal[600],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      authProvider.username ?? 'User',
+                      style: const TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color:
+                            (authProvider.userRole ?? UserRole.user) ==
+                                UserRole.admin
+                            ? Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.blue.withValues(alpha: 0.2)
+                                  : Colors.blue.withValues(alpha: 0.1)
+                            : Theme.of(context).brightness == Brightness.dark
+                            ? Colors.grey.withValues(alpha: 0.2)
+                            : Colors.grey.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        (authProvider.userRole ?? UserRole.user).displayName,
+                        style: TextStyle(
+                          color:
+                              (authProvider.userRole ?? UserRole.user) ==
+                                  UserRole.admin
+                              ? Theme.of(context).brightness == Brightness.dark
+                                    ? Colors.blue[300]
+                                    : Colors.blue
+                              : Theme.of(context).brightness == Brightness.dark
+                              ? Colors.grey[400]
+                              : Colors.grey[600],
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              ProfileAction(
+                title: 'Change Password',
+                subtitle: 'Update your account password',
+                icon: Icons.lock,
+                onTap: () => _showChangePasswordDialog(context),
+              ),
+              const SizedBox(height: 12),
+              ProfileAction(
+                title: 'Appearance',
+                subtitle: 'Customize app theme',
+                icon: Icons.palette_outlined,
+                onTap: () => _showAppearanceDialog(context),
+              ),
+              const SizedBox(height: 12),
+              ProfileAction(
+                title: 'Help & Support',
+                subtitle: 'Get help with using the app',
+                icon: Icons.help,
+                onTap: () => _showHelpDialog(context),
+              ),
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    await authProvider.logout();
+                    if (context.mounted) {
+                      Navigator.of(context).pushReplacementNamed('/login');
+                    }
+                  },
+                  icon: const Icon(Icons.logout),
+                  label: const Text('Logout'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showChangePasswordDialog(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => const ChangePasswordScreen()),
+    );
+  }
+
+  void _showHelpDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Help & Support'),
+        content: const Text(
+          'For assistance, please contact your system administrator.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAppearanceDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        final themeProvider = Provider.of<ThemeProvider>(
+          context,
+          listen: false,
+        );
+        return AlertDialog(
+          title: const Text('Appearance'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildThemeOption(
+                context: context,
+                title: 'Light Mode',
+                icon: Icons.light_mode,
+                isSelected: themeProvider.themeMode == ThemeMode.light,
+                onTap: () {
+                  themeProvider.setThemeMode(ThemeMode.light);
+                  Navigator.of(context).pop();
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildThemeOption(
+                context: context,
+                title: 'Dark Mode',
+                icon: Icons.dark_mode,
+                isSelected: themeProvider.themeMode == ThemeMode.dark,
+                onTap: () {
+                  themeProvider.setThemeMode(ThemeMode.dark);
+                  Navigator.of(context).pop();
+                },
+              ),
+              const SizedBox(height: 8),
+              _buildThemeOption(
+                context: context,
+                title: 'System Default',
+                icon: Icons.brightness_auto,
+                isSelected: themeProvider.themeMode == ThemeMode.system,
+                onTap: () {
+                  themeProvider.setThemeMode(ThemeMode.system);
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildThemeOption({
+    required BuildContext context,
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required VoidCallback onTap,
+  }) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final primaryColor = Theme.of(context).primaryColor;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(8),
+          color: isSelected
+              ? primaryColor.withValues(alpha: isDarkMode ? 0.2 : 0.1)
+              : isDarkMode
+              ? Colors.grey[800]
+              : null,
+          border: isSelected
+              ? Border.all(color: primaryColor)
+              : Border.all(
+                  color: isDarkMode
+                      ? Colors.grey[700]!.withValues(alpha: 0.5)
+                      : Colors.grey.withValues(alpha: 0.2),
+                ),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, color: isSelected ? primaryColor : null),
+            const SizedBox(width: 16),
+            Text(
+              title,
+              style: TextStyle(
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? primaryColor : null,
+              ),
+            ),
+            const Spacer(),
+            if (isSelected) Icon(Icons.check_circle, color: primaryColor),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+
+
+
+================================================================
+FILE #2: D:\flutter project\prostock\lib\screens\user\user_screen.dart
+SIZE: 2.37 KB
+MODIFIED: 10/04/2025 04:57:01
+================================================================
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:prostock/screens/user/dashboard/user_dashboard.dart';
+import 'package:prostock/screens/user/stock/stock_management.dart';
+import 'package:prostock/screens/user/user_profile.dart';
+import '../../providers/auth_provider.dart';
+import '../../widgets/sync_status_indicator.dart';
+import '../pos/pos_screen.dart';
+
+class UserScreen extends StatefulWidget {
+  const UserScreen({super.key});
+
+  @override
+  State<UserScreen> createState() => _UserScreenState();
+}
+
+class _UserScreenState extends State<UserScreen> {
+  int _selectedIndex = 0;
+
+  void changeTab(int index) {
+    setState(() {
+      _selectedIndex = index;
+    });
+  }
+
+  List<Widget> get _screens => [
+    UserDashboard(onNavigateToTab: (index) => changeTab(index)),
+    const POSScreen(),
+    const StockManagement(),
+    const UserProfile(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+
+    return Scaffold(
+      backgroundColor: Colors.grey[50],
+      appBar: AppBar(
+        title: Text('Welcome, ${authProvider.username}'),
+        backgroundColor: Colors.teal[600],
+        foregroundColor: Colors.white,
+        elevation: 0,
+        actions: [
+          const SyncStatusIndicator(color: Colors.white),
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await authProvider.logout();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacementNamed('/login');
+              }
+            },
+          ),
+        ],
+      ),
+      body: _screens[_selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedIndex,
+        onTap: (index) => setState(() => _selectedIndex = index),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: Colors.teal[600],
+        unselectedItemColor: Colors.grey[600],
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.point_of_sale),
+            label: 'POS',
+          ),
+          BottomNavigationBarItem(icon: Icon(Icons.inventory), label: 'Stock'),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+}
+
+
+
+
+================================================================
+FILE #3: D:\flutter project\prostock\lib\screens\user\dashboard\user_dashboard.dart
+SIZE: 6.53 KB
+MODIFIED: 10/04/2025 00:09:02
+================================================================
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:prostock/providers/auth_provider.dart';
+import 'package:prostock/screens/user/dashboard/components/action_card.dart';
+import 'package:prostock/screens/user/dashboard/components/activity_item.dart';
+import 'package:prostock/services/firestore/activity_service.dart';
+import 'package:prostock/widgets/barcode_scanner_widget.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class UserDashboard extends StatelessWidget {
+  final Function(int) onNavigateToTab;
+
+  const UserDashboard({super.key, required this.onNavigateToTab});
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.teal[600]!, Colors.teal[400]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Quick Actions',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurface,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Make sales and manage inventory',
+                  style: TextStyle(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.onSurface.withAlpha(230),
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(
+                child: ActionCard(
+                  title: 'Make Sale',
+                  subtitle: 'Process customer transactions',
+                  icon: Icons.point_of_sale,
+                  color: Colors.blue,
+                  onTap: () => onNavigateToTab(1),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: ActionCard(
+                  title: 'Scan Barcode',
+                  subtitle: 'Scan items for stock management',
+                  icon: Icons.qr_code_scanner,
+                  color: Colors.green,
+                  onTap: () => onNavigateToTab(2),
+                ),
+              ),
+            ],
+          ),
+          if (authProvider.isAdmin) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: ActionCard(
+                    title: 'Receive Stock',
+                    subtitle: 'Scan items to add to inventory',
+                    icon: Icons.add_box,
+                    color: Colors.green,
+                    onTap: () =>
+                        _openBarcodeScanner(context, ScannerMode.receiveStock),
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: ActionCard(
+                    title: 'Remove Stock',
+                    subtitle: 'Scan items to remove from inventory',
+                    icon: Icons.remove_circle,
+                    color: Colors.red,
+                    onTap: () =>
+                        _openBarcodeScanner(context, ScannerMode.removeStock),
+                  ),
+                ),
+              ],
+            ),
+          ],
+          const SizedBox(height: 24),
+          const Text(
+            'Your Recent Activity',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          Consumer<AuthProvider>(
+            builder: (context, authProvider, child) {
+              return FutureBuilder<List<Map<String, dynamic>>>(
+                future: _getUserRecentActivity(authProvider.currentUser?.id),
+                builder: (context, snapshot) {
+                  if (snapshot.connectionState == ConnectionState.waiting) {
+                    return const Center(child: CircularProgressIndicator());
+                  }
+
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return Container(
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Center(
+                        child: Column(
+                          children: [
+                            Icon(Icons.history, size: 48, color: Colors.grey),
+                            SizedBox(height: 16),
+                            Text(
+                              'No recent activity',
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: Colors.grey,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+
+                  final activities = snapshot.data!.take(5).toList();
+                  return Column(
+                    children: activities
+                        .map((activity) => ActivityItem(activity: activity))
+                        .toList(),
+                  );
+                },
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> _getUserRecentActivity(
+    String? userId,
+  ) async {
+    if (userId == null) return [];
+
+    try {
+      final activityService = ActivityService(FirebaseFirestore.instance);
+      final activities = await activityService.getUserActivitiesPaginated(
+        role: 'user',
+        limit: 10,
+      );
+      return activities.items.map((activity) => activity.toMap()).toList();
+    } catch (e) {
+      return [];
+    }
+  }
+
+  void _openBarcodeScanner(BuildContext context, ScannerMode mode) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => BarcodeScannerWidget(mode: mode)),
+    );
+  }
+}
+
+
+
+
+================================================================
+FILE #4: D:\flutter project\prostock\lib\screens\user\stock\stock_management.dart
+SIZE: 4.9 KB
+MODIFIED: 08/29/2025 21:05:07
+================================================================
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:prostock/providers/auth_provider.dart';
+import 'package:prostock/providers/inventory_provider.dart';
+import 'package:prostock/screens/user/stock/components/product_card.dart';
+import 'package:prostock/widgets/barcode_scanner_widget.dart';
+
+class StockManagement extends StatefulWidget {
+  const StockManagement({super.key});
+
+  @override
+  State<StockManagement> createState() => _StockManagementState();
+}
+
+class _StockManagementState extends State<StockManagement> {
+  String _searchQuery = '';
+
+  @override
+  Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    return Column(
+      children: [
+        Container(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            children: [
+              TextField(
+                decoration: InputDecoration(
+                  hintText: 'Search products...',
+                  prefixIcon: const Icon(Icons.search),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  filled: true,
+                  fillColor: Colors.white,
+                ),
+                onChanged: (value) {
+                  setState(() => _searchQuery = value);
+                },
+              ),
+              if (authProvider.isAdmin) ...[
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openBarcodeScanner(
+                          context,
+                          ScannerMode.receiveStock,
+                        ),
+                        icon: const Icon(Icons.add_box),
+                        label: const Text('Receive Stock'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _openBarcodeScanner(
+                          context,
+                          ScannerMode.removeStock,
+                        ),
+                        icon: const Icon(Icons.remove_circle),
+                        label: const Text('Remove Stock'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
+        Expanded(
+          child: Consumer<InventoryProvider>(
+            builder: (context, inventoryProvider, child) {
+              final products = _searchQuery.isEmpty
+                  ? inventoryProvider.products
+                  : inventoryProvider.products
+                        .where(
+                          (product) =>
+                              product.name.toLowerCase().contains(
+                                _searchQuery.toLowerCase(),
+                              ) ||
+                              (product.barcode?.toLowerCase().contains(
+                                    _searchQuery.toLowerCase(),
+                                  ) ??
+                                  false),
+                        )
+                        .toList();
+
+              if (products.isEmpty) {
+                return const Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(Icons.inventory_2, size: 64, color: Colors.grey),
+                      SizedBox(height: 16),
+                      Text(
+                        'No products found',
+                        style: TextStyle(fontSize: 18, color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                itemCount: products.length,
+                itemBuilder: (context, index) {
+                  final product = products[index];
+                  return ProductCard(product: product);
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  void _openBarcodeScanner(BuildContext context, ScannerMode mode) {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (context) => BarcodeScannerWidget(mode: mode)),
+    );
+  }
+}
+
+
+
+
+================================================================
+FILE #5: D:\flutter project\prostock\lib\screens\pos\pos_screen.dart
+SIZE: 6.74 KB
+MODIFIED: 10/04/2025 04:57:01
+================================================================
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:prostock/utils/app_constants.dart';
+import '../../providers/sales_provider.dart';
+import '../../providers/inventory_provider.dart';
+import '../../models/customer.dart';
+import '../../widgets/barcode_scanner_widget.dart';
+import '../../widgets/receipt_dialog.dart';
+import '../../widgets/confirmation_dialog.dart';
+import '../../widgets/sync_status_indicator.dart';
+import 'dart:async';
+
+import 'components/cart_view.dart';
+import 'components/product_grid_view.dart';
+import 'components/product_search_view.dart';
+
+class POSScreen extends StatefulWidget {
+  final Customer? customer;
+  final String? paymentMethod;
+
+  const POSScreen({super.key, this.customer, this.paymentMethod});
+
+  @override
+  State<POSScreen> createState() => _POSScreenState();
+}
+
+class _POSScreenState extends State<POSScreen> {
+  final GlobalKey<CartViewState> _cartViewKey = GlobalKey<CartViewState>();
+  Customer? _selectedCustomer;
+  String _paymentMethod = 'cash';
+  final TextEditingController _productSearchController =
+      TextEditingController();
+  Timer? _productSearchDebounce;
+  bool _isProcessingSale = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedCustomer = widget.customer;
+    if (widget.paymentMethod != null) {
+      _paymentMethod = widget.paymentMethod!;
+    }
+    _productSearchController.addListener(_onProductSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _productSearchController.removeListener(_onProductSearchChanged);
+    _productSearchController.dispose();
+    _productSearchDebounce?.cancel();
+    super.dispose();
+  }
+
+  void _onProductSearchChanged() {
+    if (_productSearchDebounce?.isActive ?? false) {
+      _productSearchDebounce!.cancel();
+    }
+    _productSearchDebounce = Timer(UiConstants.debounceDuration, () {
+      Provider.of<InventoryProvider>(
+        context,
+        listen: false,
+      ).loadProducts(searchQuery: _productSearchController.text.toLowerCase());
+    });
+  }
+
+  void _onCustomerChanged(Customer? customer) {
+    setState(() {
+      _selectedCustomer = customer;
+      if (_selectedCustomer == null) {
+        _paymentMethod = 'cash';
+      }
+    });
+  }
+
+  void _onPaymentMethodChanged(String? value) {
+    setState(() {
+      _paymentMethod = value!;
+    });
+  }
+
+  Future<void> _completeSale() async {
+    final confirmed = await showConfirmationDialog(
+      context: context,
+      title: 'Complete Sale',
+      content: 'Are you sure you want to complete this sale?',
+      confirmText: 'Complete',
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      _isProcessingSale = true;
+    });
+    try {
+      if (!mounted) return;
+      DateTime? dueDate;
+      if (_paymentMethod == 'credit') {
+        dueDate = await showDatePicker(
+          context: context,
+          initialDate: DateTime.now().add(const Duration(days: 30)),
+          firstDate: DateTime.now(),
+          lastDate: DateTime.now().add(const Duration(days: 365)),
+        );
+      }
+      if (!mounted) return;
+      final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+      final receipt = await salesProvider.completeSale(
+        customerId: _selectedCustomer?.id,
+        paymentMethod: _paymentMethod,
+        dueDate: dueDate,
+      );
+
+      final cashTendered = _cartViewKey.currentState?.getCashTendered();
+      final change = _cartViewKey.currentState?.getChange();
+
+      if (context.mounted) {
+        if (receipt != null) {
+          if (!mounted) return;
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => ReceiptDialog(
+              receipt: receipt,
+              cashTendered: double.tryParse(cashTendered ?? '0.0') ?? 0.0,
+              change: change ?? 0.0,
+            ),
+          );
+        } else {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(salesProvider.error ?? 'Sale failed'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessingSale = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      resizeToAvoidBottomInset: true,
+      appBar: AppBar(
+        title: const Text('Point of Sale'),
+        actions: [
+          const SyncStatusIndicator(),
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Scan Product Barcode',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BarcodeScannerWidget(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Product section - gets most of the space (70%)
+          Expanded(
+            flex: 7, // Increased from 3 to give more space to products
+            child: Column(
+              children: [
+                // Search bar (let it size itself to avoid overflow on loading/keyboard)
+                ProductSearchView(
+                  controller: _productSearchController,
+                  onChanged: (value) => _onProductSearchChanged(),
+                ),
+                // Product grid takes remaining space in this section
+                const Expanded(child: ProductGridView()),
+              ],
+            ),
+          ),
+          // Cart section - adaptive height (30% of available space, respects keyboard)
+          Builder(
+            builder: (context) {
+              final media = MediaQuery.of(context);
+              final availableHeight =
+                  (media.size.height - media.viewInsets.bottom).clamp(
+                    0.0,
+                    double.infinity,
+                  );
+              final targetHeight = (availableHeight * 0.3).clamp(160.0, 360.0);
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: targetHeight,
+                child: CartView(
+                  key: _cartViewKey,
+                  selectedCustomer: _selectedCustomer,
+                  paymentMethod: _paymentMethod,
+                  isProcessingSale: _isProcessingSale,
+                  onCustomerChanged: _onCustomerChanged,
+                  onPaymentMethodChanged: _onPaymentMethodChanged,
+                  onCompleteSale: _completeSale,
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+
+
+
+================================================================
+FILE #6: D:\flutter project\prostock\lib\screens\inventory\demand_suggestions_screen.dart
+SIZE: 3.36 KB
+MODIFIED: 09/30/2025 15:48:11
+================================================================
+
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:prostock/providers/demand_provider.dart';
+
+class DemandSuggestionsScreen extends StatefulWidget {
+  const DemandSuggestionsScreen({super.key});
+
+  @override
+  State<DemandSuggestionsScreen> createState() =>
+      _DemandSuggestionsScreenState();
+}
+
+class _DemandSuggestionsScreenState extends State<DemandSuggestionsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<DemandProvider>().refresh();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('High Demand Suggestions'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              context.read<DemandProvider>().refresh();
+            },
+          ),
+        ],
+      ),
+      body: Consumer<DemandProvider>(
+        builder: (context, dp, _) {
+          if (dp.isLoading) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (dp.suggestions.isEmpty) {
+            return const Center(child: Text('No suggestions at the moment'));
+          }
+          return ListView.separated(
+            itemCount: dp.suggestions.length,
+            separatorBuilder: (context, _) => const Divider(height: 1),
+            itemBuilder: (context, index) {
+              final s = dp.suggestions[index];
+              return ListTile(
+                title: Text(s.product.name),
+                subtitle: Text(
+                  'Velocity: ${s.velocityPerDay.toStringAsFixed(1)}/day\nMin-stock: ${s.currentThreshold} → ${s.suggestedThreshold}',
+                ),
+                isThreeLine: true,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.snooze),
+                      tooltip: 'Snooze 7 days',
+                      onPressed: () async {
+                        if (s.product.id != null) {
+                          await context.read<DemandProvider>().snooze(
+                            s.product.id!,
+                          );
+                        }
+                      },
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        if (s.product.id != null) {
+                          await context.read<DemandProvider>().accept(
+                            s.product.id!,
+                            s.suggestedThreshold,
+                          );
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                'Updated ${s.product.name} threshold to ${s.suggestedThreshold}',
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      child: const Text('Update'),
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
+
+
+
+
+================================================================
+FILE #7: D:\flutter project\prostock\lib\screens\inventory\inventory_screen.dart
+SIZE: 2.31 KB
+MODIFIED: 09/19/2025 15:21:00
+================================================================
+
+import 'package:flutter/material.dart';
+
+import '../../widgets/add_product_dialog.dart';
+import '../../widgets/barcode_scanner_widget.dart';
+import 'dart:async';
+
+import 'components/inventory_action_buttons.dart';
+import 'components/inventory_search_bar.dart';
+import 'components/product_list_view.dart';
+import '../../widgets/sync_status_indicator.dart';
+
+class InventoryScreen extends StatefulWidget {
+  const InventoryScreen({super.key});
+
+  @override
+  State<InventoryScreen> createState() => _InventoryScreenState();
+}
+
+class _InventoryScreenState extends State<InventoryScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _searchQuery = _searchController.text.toLowerCase();
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Inventory'),
+        actions: [
+          const SyncStatusIndicator(),
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            tooltip: 'Scan Barcode',
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const BarcodeScannerWidget(),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          InventorySearchBar(controller: _searchController),
+          const InventoryActionButtons(),
+          const SizedBox(height: 16),
+          Expanded(child: ProductListView(searchQuery: _searchQuery)),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (context) => const AddProductDialog(),
+          );
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+
+
+
+================================================================
+FILE #8: D:\flutter project\prostock\lib\screens\customers\customers_screen.dart
+SIZE: 6.19 KB
+MODIFIED: 10/04/2025 04:57:01
+================================================================
+
+import 'package:prostock/screens/customers/dialogs/overdue_customers_list_dialog.dart';
+import 'package:flutter/material.dart';
+import 'package:prostock/screens/customers/dialogs/customer_options_dialog.dart';
+import 'package:provider/provider.dart';
+import 'package:prostock/models/customer.dart';
+import 'package:prostock/providers/credit_provider.dart';
+import 'package:prostock/providers/customer_provider.dart';
+import 'package:prostock/screens/customers/components/customer_list.dart';
+import 'package:prostock/screens/customers/components/customer_qr_scanner.dart';
+import 'package:prostock/widgets/add_customer_dialog.dart';
+import 'package:prostock/widgets/sync_status_indicator.dart';
+import 'dart:async';
+
+class CustomersScreen extends StatefulWidget {
+  const CustomersScreen({super.key});
+
+  @override
+  State<CustomersScreen> createState() => _CustomersScreenState();
+}
+
+class _CustomersScreenState extends State<CustomersScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  Timer? _debounce;
+  String _searchQuery = '';
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      Provider.of<CustomerProvider>(context, listen: false).loadCustomers();
+      Provider.of<CreditProvider>(
+        context,
+        listen: false,
+      ).fetchOverdueCustomers(context);
+    });
+
+    _scrollController.addListener(() {
+      if (_scrollController.position.pixels ==
+          _scrollController.position.maxScrollExtent) {
+        Provider.of<CustomerProvider>(
+          context,
+          listen: false,
+        ).loadMoreCustomers();
+      }
+    });
+
+    _searchController.addListener(_onSearchChanged);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  void _onSearchChanged() {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      if (_searchQuery != _searchController.text.toLowerCase()) {
+        setState(() {
+          _searchQuery = _searchController.text.toLowerCase();
+        });
+        Provider.of<CustomerProvider>(
+          context,
+          listen: false,
+        ).loadCustomers(searchQuery: _searchQuery);
+      }
+    });
+  }
+
+  Future<void> _scanCustomerQRCode() async {
+    final customerName = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(builder: (context) => const CustomerQRScanner()),
+    );
+
+    if (customerName != null && customerName.isNotEmpty) {
+      if (!mounted) return;
+      final customerProvider = Provider.of<CustomerProvider>(
+        context,
+        listen: false,
+      );
+      final Customer? customer = await customerProvider.getCustomerByName(
+        customerName,
+      );
+
+      if (customer != null) {
+        if (!mounted) return;
+        showDialog(
+          context: context,
+          builder: (context) => CustomerOptionsDialog(customer: customer),
+        );
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('This customer does not exist.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Customers'),
+        actions: [
+          const SyncStatusIndicator(),
+          IconButton(
+            icon: const Icon(Icons.qr_code_scanner),
+            onPressed: _scanCustomerQRCode,
+          ),
+          IconButton(
+            icon: const Icon(Icons.filter_list),
+            onPressed: () {
+              // Show filter options
+            },
+          ),
+        ],
+      ),
+      body: Consumer<CreditProvider>(
+        builder: (context, creditProvider, child) {
+          final overdueCustomers = creditProvider.overdueCustomers;
+          return Column(
+            children: [
+              if (overdueCustomers.isNotEmpty)
+                GestureDetector(
+                  onTap: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => OverdueCustomersListDialog(
+                        overdueCustomers: overdueCustomers,
+                      ),
+                    );
+                  },
+                  child: Container(
+                    color: Colors.red,
+                    padding: const EdgeInsets.all(8.0),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.warning, color: Colors.white),
+                        const SizedBox(width: 8.0),
+                        Text(
+                          '${overdueCustomers.length} customer(s) with overdue balance',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: TextField(
+                  controller: _searchController,
+                  decoration: const InputDecoration(
+                    hintText: 'Search customers...',
+                    prefixIcon: Icon(Icons.search),
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+              ),
+              Expanded(
+                child: CustomerList(scrollController: _scrollController),
+              ),
+            ],
+          );
+        },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          showDialog(
+            context: context,
+            builder: (context) => AddCustomerDialog(
+              offlineManager: Provider.of<CustomerProvider>(
+                context,
+                listen: false,
+              ).offlineManager,
+            ),
+          );
+        },
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+}
+
+
+
+
+================================================================
+FILE #9: D:\flutter project\prostock\lib\screens\report_tabs\reports_screen.dart
+SIZE: 5.95 KB
+MODIFIED: 10/04/2025 04:57:01
+================================================================
+
+import 'package:flutter/material.dart';
+import 'package:prostock/models/loss.dart';
+import 'package:prostock/providers/customer_provider.dart';
+import 'package:prostock/providers/inventory_provider.dart';
+import 'package:prostock/providers/sales_provider.dart';
+import 'package:prostock/providers/stock_movement_provider.dart';
+import 'package:prostock/screens/report_tabs/components/customers_report_tab.dart';
+import 'package:prostock/screens/report_tabs/components/financial_report_tab.dart';
+import 'package:prostock/screens/report_tabs/components/inventory_report_tab.dart';
+import 'package:prostock/screens/report_tabs/components/report_tabs.dart';
+import 'package:prostock/screens/report_tabs/components/sales_report_tab.dart';
+import 'package:prostock/services/firestore/inventory_service.dart';
+import 'package:prostock/services/firestore/sale_service.dart';
+import 'package:prostock/services/local_database_service.dart';
+import 'package:prostock/services/offline_manager.dart';
+import 'package:prostock/widgets/analytics_report_widget.dart';
+import 'package:prostock/widgets/stock_movement_report_widget.dart';
+import 'package:prostock/widgets/sync_status_indicator.dart';
+import 'package:provider/provider.dart';
+import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/models/credit_transaction.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+
+class ReportsScreen extends StatefulWidget {
+  const ReportsScreen({super.key});
+
+  @override
+  State<ReportsScreen> createState() => _ReportsScreenState();
+}
+
+class _ReportsScreenState extends State<ReportsScreen>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+  List<Loss> _losses = [];
+  List<SaleItem> _saleItems = [];
+  List<CreditTransaction> _creditTransactions = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: ReportTabs.tabs.length, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _loadData());
+  }
+
+  Future<void> _loadData({bool refresh = false}) async {
+    final salesProvider = Provider.of<SalesProvider>(context, listen: false);
+    final customersProvider = Provider.of<CustomerProvider>(
+      context,
+      listen: false,
+    );
+    final inventoryProvider = Provider.of<InventoryProvider>(
+      context,
+      listen: false,
+    );
+    final stockMovementProvider = Provider.of<StockMovementProvider>(
+      context,
+      listen: false,
+    );
+    final offlineManager = Provider.of<OfflineManager>(context, listen: false);
+    final inventoryService = InventoryService(FirebaseFirestore.instance);
+    // final saleService = SaleService(FirebaseFirestore.instance);
+
+    await salesProvider.loadSales(refresh: refresh);
+    if (!mounted) return;
+    await customersProvider.loadCustomers(refresh: refresh);
+    if (!mounted) return;
+    await inventoryProvider.loadProducts(refresh: refresh);
+    if (!mounted) return;
+    await stockMovementProvider.loadMovements(refresh: refresh);
+
+    // Load losses from both Firestore and local database
+    List<Loss> losses = [];
+    if (offlineManager.isOnline) {
+      losses = await inventoryService.getLosses();
+    } else {
+      final localLossesData = await LocalDatabaseService.instance.getLosses();
+      losses = localLossesData.map((loss) => Loss.fromMap(loss)).toList();
+    }
+
+    // Prefer provider-managed sale items when available.
+    // If online, provider already fetched sale items from Firestore for all loaded sales.
+    // If offline, fall back to local DB per sale.
+    List<SaleItem> allSaleItems = [];
+    if (offlineManager.isOnline && salesProvider.saleItems.isNotEmpty) {
+      allSaleItems = salesProvider.saleItems;
+    } else {
+      for (final sale in salesProvider.sales) {
+        if (sale.id != null) {
+          final localItems = await LocalDatabaseService.instance.getSaleItems(
+            sale.id!,
+          );
+          allSaleItems.addAll(
+            localItems.map((item) => SaleItem.fromMap(item)).toList(),
+          );
+        }
+      }
+    }
+
+    final creditTx = await _loadCreditTransactions(offlineManager);
+    if (mounted) {
+      setState(() {
+        _losses = losses;
+        _saleItems = allSaleItems;
+        _creditTransactions = creditTx;
+      });
+    }
+  }
+
+  Future<List<CreditTransaction>> _loadCreditTransactions(
+    OfflineManager offlineManager,
+  ) async {
+    try {
+      if (offlineManager.isOnline) {
+        final saleService = SaleService(FirebaseFirestore.instance);
+        return await saleService.getAllCreditTransactions();
+      } else {
+        final rows = await LocalDatabaseService.instance
+            .getAllCreditTransactions();
+        return rows
+            .map((m) => CreditTransaction.fromMap(m, m['id']?.toString() ?? ''))
+            .toList();
+      }
+    } catch (_) {
+      return [];
+    }
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Reports'),
+        actions: [
+          const SyncStatusIndicator(),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _loadData(refresh: true),
+          ),
+        ],
+        bottom: TabBar(
+          controller: _tabController,
+          isScrollable: true,
+          tabs: ReportTabs.tabs,
+        ),
+      ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          const SalesReportTab(),
+          const InventoryReportTab(),
+          CustomersReportTab(creditTransactions: _creditTransactions),
+          FinancialReportTab(
+            losses: _losses,
+            creditTransactions: _creditTransactions,
+          ),
+          AnalyticsReportWidget(saleItems: _saleItems, losses: _losses),
+          const StockMovementReportWidget(),
+        ],
+      ),
+    );
+  }
+}
+
+
+
+
+================================================================
+FILE #10: D:\flutter project\prostock\lib\services\firestore\product_service.dart
+SIZE: 8.05 KB
+MODIFIED: 10/02/2025 12:23:17
+================================================================
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/models/paginated_result.dart';
+import 'package:prostock/models/price_history.dart';
+import 'package:prostock/models/product.dart';
+import 'package:prostock/services/firestore/firestore_exception.dart';
+import 'package:prostock/services/tax_service.dart';
+import 'package:prostock/utils/app_constants.dart';
+import 'package:prostock/utils/constants.dart';
+
+class ProductService {
+  final FirebaseFirestore _firestore;
+
+  ProductService(this._firestore);
+
+  CollectionReference get products =>
+      _firestore.collection(AppConstants.productsCollection);
+  CollectionReference get priceHistory => _firestore.collection('priceHistory');
+
+  Product _productFromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return Product.fromMap(data);
+  }
+
+  bool _isValidProduct(Product product) {
+    return product.name.isNotEmpty && product.cost >= 0 && product.stock >= 0;
+  }
+
+  Future<void> insertProduct(Product product) async {
+    try {
+      if (!_isValidProduct(product)) {
+        throw ArgumentError('Invalid product data');
+      }
+      if (product.id == null || product.id!.isEmpty) {
+        throw ArgumentError(
+          'Product ID cannot be null or empty for insertion.',
+        );
+      }
+
+      final productData = product.toMap();
+
+      // Use the product's own ID to set the document, ensuring a single ID.
+      await products.doc(product.id).set(productData);
+    } catch (e) {
+      throw FirestoreException('Failed to insert product: $e');
+    }
+  }
+
+  Future<void> addProductWithPriceHistory(Product product) async {
+    try {
+      if (!_isValidProduct(product)) {
+        throw ArgumentError('Invalid product data');
+      }
+      if (product.id == null || product.id!.isEmpty) {
+        throw ArgumentError(
+          'Product ID cannot be null or empty for insertion.',
+        );
+      }
+
+      final batch = _firestore.batch();
+
+      final productRef = products.doc(product.id);
+      batch.set(productRef, product.toMap());
+
+      final priceHistoryRef = priceHistory.doc();
+      final sellingPrice = await TaxService.calculateSellingPriceWithRule(
+        product.cost,
+        productId: product.id,
+        categoryName: product.category,
+      );
+      final priceHistoryData = PriceHistory(
+        id: priceHistoryRef.id,
+        productId: product.id!,
+        price: sellingPrice,
+        timestamp: DateTime.now(),
+      ).toMap();
+      batch.set(priceHistoryRef, priceHistoryData);
+
+      await batch.commit();
+    } catch (e) {
+      throw FirestoreException(
+        'Failed to insert product with price history: $e',
+      );
+    }
+  }
+
+  Future<void> updateProductWithPriceHistory(
+    Product product,
+    bool priceChanged,
+  ) async {
+    try {
+      if (!_isValidProduct(product)) {
+        throw ArgumentError('Invalid product data');
+      }
+
+      final batch = _firestore.batch();
+
+      final productRef = products.doc(product.id);
+      batch.update(productRef, product.toMap());
+
+      if (priceChanged) {
+        final priceHistoryRef = priceHistory.doc();
+        final sellingPrice = await TaxService.calculateSellingPriceWithRule(
+          product.cost,
+          productId: product.id,
+          categoryName: product.category,
+        );
+        final priceHistoryData = PriceHistory(
+          id: priceHistoryRef.id,
+          productId: product.id!,
+          price: sellingPrice,
+          timestamp: DateTime.now(),
+        ).toMap();
+        batch.set(priceHistoryRef, priceHistoryData);
+      }
+
+      await batch.commit();
+    } catch (e) {
+      throw FirestoreException(
+        'Failed to update product with price history: $e',
+      );
+    }
+  }
+
+  Future<List<String>> insertProductsBatch(List<Product> productsList) async {
+    try {
+      final batch = FirebaseFirestore.instance.batch();
+      final List<String> docIds = [];
+
+      for (final product in productsList) {
+        if (!_isValidProduct(product)) {
+          throw ArgumentError('Invalid product data: ${product.name}');
+        }
+
+        final docRef = products.doc(); // Use the collection reference
+        final productData = product.toMap();
+        productData.remove('id');
+
+        batch.set(docRef, productData);
+        docIds.add(docRef.id);
+      }
+
+      await batch.commit();
+      return docIds;
+    } catch (e) {
+      throw FirestoreException('Failed to insert products batch: $e');
+    }
+  }
+
+  Future<List<Product>> getAllProducts() async {
+    try {
+      final snapshot = await products.orderBy('name').get();
+      return snapshot.docs.map(_productFromDocument).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to get all products: $e');
+    }
+  }
+
+  Future<List<Product>> searchProducts(String query) async {
+    try {
+      final snapshot = await products
+          .where('name', isGreaterThanOrEqualTo: query)
+          .where('name', isLessThan: '$query\ufff0')
+          .get();
+      return snapshot.docs.map(_productFromDocument).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to search products: $e');
+    }
+  }
+
+  Future<Product?> getProductByBarcode(String barcode) async {
+    try {
+      if (barcode.isEmpty) return null;
+
+      final snapshot = await products
+          .where('barcode', isEqualTo: barcode)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        return _productFromDocument(snapshot.docs.first);
+      }
+      return null;
+    } catch (e) {
+      throw FirestoreException('Failed to get product by barcode: $e');
+    }
+  }
+
+  Future<Product?> getProductById(String id) async {
+    try {
+      final doc = await products.doc(id).get();
+
+      if (doc.exists) {
+        return _productFromDocument(doc);
+      }
+      return null;
+    } catch (e) {
+      throw FirestoreException('Failed to get product by ID: $e');
+    }
+  }
+
+  Future<void> updateProduct(Product product) async {
+    try {
+      if (!_isValidProduct(product)) {
+        throw ArgumentError('Invalid product data');
+      }
+
+      final productData = product.toMap();
+      productData.remove('id');
+
+      await products.doc(product.id).update(productData);
+    } catch (e) {
+      throw FirestoreException('Failed to update product: $e');
+    }
+  }
+
+  Future<void> deleteProduct(String id) async {
+    try {
+      await products.doc(id).delete();
+    } catch (e) {
+      throw FirestoreException('Failed to delete product: $e');
+    }
+  }
+
+  Future<PaginatedResult<Product>> getProductsPaginated({
+    int limit = ApiConstants.productSearchLimit,
+    DocumentSnapshot? lastDocument,
+    String? searchQuery,
+  }) async {
+    try {
+      Query query = products.orderBy('name');
+
+      // Apply search filter if searchQuery is provided
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        query = query
+            .where('name', isGreaterThanOrEqualTo: searchQuery)
+            .where('name', isLessThan: '$searchQuery\ufff0');
+      }
+
+      if (lastDocument != null) {
+        query = query.startAfterDocument(lastDocument);
+      }
+
+      query = query.limit(limit);
+
+      final snapshot = await query.get();
+
+      final productsList = snapshot.docs.map(_productFromDocument).toList();
+
+      return PaginatedResult(
+        items: productsList,
+        lastDocument: snapshot.docs.isNotEmpty ? snapshot.docs.last : null,
+      );
+    } catch (e) {
+      throw FirestoreException('Failed to get paginated products: $e');
+    }
+  }
+
+  Future<List<PriceHistory>> getPriceHistory(String productId) async {
+    try {
+      final snapshot = await priceHistory
+          .where('productId', isEqualTo: productId)
+          .orderBy('timestamp', descending: true)
+          .get();
+
+      return snapshot.docs.map((doc) {
+        return PriceHistory.fromFirestore(doc);
+      }).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to get price history: $e');
+    }
+  }
+}
+
+
+
+
+================================================================
+FILE #11: D:\flutter project\prostock\lib\services\firestore\customer_service.dart
+SIZE: 5.59 KB
+MODIFIED: 09/29/2025 08:08:35
+================================================================
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:prostock/models/customer.dart';
+import 'package:prostock/models/paginated_result.dart';
+import 'package:prostock/services/firestore/firestore_exception.dart';
+import 'package:prostock/utils/app_constants.dart';
+import 'package:prostock/utils/constants.dart';
+
+class CustomerService {
+  final FirebaseFirestore _firestore;
+
+  CustomerService(this._firestore);
+
+  CollectionReference get customers =>
+      _firestore.collection(AppConstants.customersCollection);
+
+  Customer _customerFromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+    data['id'] = doc.id;
+    return Customer.fromMap(data);
+  }
+
+  bool _isValidCustomer(Customer customer) {
+    return customer.name.isNotEmpty && customer.balance >= 0;
+  }
+
+  Future<String> insertCustomer(Customer customer) async {
+    try {
+      if (!_isValidCustomer(customer)) {
+        throw ArgumentError('Invalid customer data');
+      }
+
+      final customerData = customer.toMap();
+      customerData.remove('id');
+
+      final docRef = await customers.add(customerData);
+      return docRef.id;
+    } catch (e) {
+      throw FirestoreException('Failed to insert customer: $e');
+    }
+  }
+
+  Future<List<Customer>> getAllCustomers() async {
+    try {
+      final snapshot = await customers.orderBy('name').get();
+      return snapshot.docs.map(_customerFromDocument).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to get all customers: $e');
+    }
+  }
+
+  Future<List<Customer>> searchCustomers(String query) async {
+    try {
+      final snapshot = await customers
+          .where('name', isGreaterThanOrEqualTo: query)
+          .where('name', isLessThan: '$query\ufff0')
+          .get();
+      return snapshot.docs.map(_customerFromDocument).toList();
+    } catch (e) {
+      throw FirestoreException('Failed to search customers: $e');
+    }
+  }
+
+  Future<Customer?> getCustomerById(String id) async {
+    try {
+      final doc = await customers.doc(id).get();
+
+      if (doc.exists) {
+        return _customerFromDocument(doc);
+      }
+      return null;
+    } catch (e) {
+      throw FirestoreException('Failed to get customer by ID: $e');
+    }
+  }
+
+  Future<Customer?> getCustomerByName(String name) async {
+    try {
+      final snapshot = await customers
+          .where('name', isEqualTo: name)
+          .limit(1)
+          .get();
+
+      if (snapshot.docs.isNotEmpty) {
+        return _customerFromDocument(snapshot.docs.first);
+      }
+      return null;
+    } catch (e) {
+      throw FirestoreException('Failed to get customer by name: $e');
+    }
+  }
+
+  Future<void> updateCustomer(Customer customer) async {
+    try {
+      if (!_isValidCustomer(customer)) {
+        throw ArgumentError('Invalid customer data');
+      }
+
+      final customerData = customer.toMap();
+      customerData.remove('id');
+
+      await customers.doc(customer.id).update(customerData);
+    } catch (e) {
+      throw FirestoreException('Failed to update customer: $e');
+    }
+  }
+
+  Future<void> deleteCustomer(String id) async {
+    try {
+      await customers.doc(id).delete();
+    } catch (e) {
+      throw FirestoreException('Failed to delete customer: $e');
+    }
+  }
+
+  Future<double> updateCustomerBalance(
+    String customerId,
+    double amountChange,
+  ) async {
+    try {
+      return await _firestore.runTransaction((transaction) async {
+        final customerRef = customers.doc(customerId);
+        final customerDoc = await transaction.get(customerRef);
+
+        if (!customerDoc.exists) {
+          throw Exception('Customer not found');
+        }
+
+        final data = customerDoc.data() as Map<String, dynamic>;
+        final currentBalance = (data['balance'] ?? 0.0) as double;
+        final newBalance = currentBalance + amountChange;
+
+        transaction.update(customerRef, {
+          'balance': newBalance,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+        return newBalance;
+      });
+    } catch (e) {
+      throw FirestoreException('Failed to update customer balance: $e');
+    }
+  }
+
+  Future<PaginatedResult<Customer>> getCustomersPaginated({
+    int limit = ApiConstants.productSearchLimit,
+    DocumentSnapshot? lastDocument,
+    String? searchQuery,
+  }) async {
+    try {
+      Query query = customers.orderBy('name');
+
+      // Note: We don't apply Firestore search filters here because they are case-sensitive
+      // and would miss results. Instead, we fetch all customers and filter client-side
+      // for better case-insensitive search results.
+
+      if (lastDocument != null) {
+        query = query.startAfterDocument(lastDocument);
+      }
+
+      query = query.limit(limit);
+
+      final snapshot = await query.get();
+
+      final customersList = snapshot.docs.map(_customerFromDocument).toList();
+
+      // Apply client-side filtering for case-insensitive search
+      if (searchQuery != null && searchQuery.isNotEmpty) {
+        final filteredCustomers = customersList.where((customer) {
+          final query = searchQuery.toLowerCase();
+          return customer.name.toLowerCase().contains(query) ||
+              (customer.phone?.toLowerCase().contains(query) ?? false) ||
+              (customer.email?.toLowerCase().contains(query) ?? false);
+        }).toList();
+
+        return PaginatedResult(
+          items: filteredCustomers,
+          lastDocument: snapshot.docs.isNotEmpty ? snapshot.docs.last : null,
+        );
+      }
+
+      return PaginatedResult(
+        items: customersList,
+        lastDocument: snapshot.docs.isNotEmpty ? snapshot.docs.last : null,
+      );
+    } catch (e) {
+      throw FirestoreException('Failed to get paginated customers: $e');
+    }
+  }
+}
+
+
+
+
+================================================================
+FILE #12: D:\flutter project\prostock\lib\services\report_service.dart
+SIZE: 14.95 KB
+MODIFIED: 10/27/2025 08:49:05
+================================================================
+
+import 'package:prostock/models/customer.dart';
+import 'package:prostock/models/loss.dart';
+import 'package:prostock/models/product.dart';
+import 'package:prostock/models/sale.dart';
+import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/models/credit_transaction.dart';
+import 'package:prostock/models/stock_movement.dart';
+import 'package:prostock/models/tax_rule.dart';
+import 'package:prostock/services/tax_service.dart';
+import 'package:prostock/services/tax_rules_service.dart';
+
+class ReportService {
+  // Sales calculations
+  // Treat only cash-like sales as sales (exclude credit checkouts and payment entries)
+  double calculateTotalSales(List<Sale> sales) {
+    return sales
+        .where((s) => _isCashLikeSale(s.paymentMethod))
+        .fold(0.0, (sum, sale) => sum + sale.totalAmount);
+  }
+
+  double calculateTodaySales(List<Sale> sales) {
+    final today = DateTime.now();
+    return sales
+        .where((s) => _isCashLikeSale(s.paymentMethod))
+        .where(
+          (sale) =>
+              sale.createdAt.day == today.day &&
+              sale.createdAt.month == today.month &&
+              sale.createdAt.year == today.year,
+        )
+        .fold(0.0, (sum, sale) => sum + sale.totalAmount);
+  }
+
+  double calculateTotalCreditReceived(List<Sale> sales) {
+    return sales
+        .where((sale) {
+          final method = sale.paymentMethod.toLowerCase();
+          return method == 'credit payment' ||
+              method == 'credit_payment' ||
+              method == 'debt payment' ||
+              method == 'debt_payment';
+        })
+        .fold(0.0, (sum, sale) => sum + sale.totalAmount);
+  }
+
+  // New: Calculate total credit payments from credit transactions (preferred source)
+  double calculateTotalCreditPayments(List<CreditTransaction> transactions) {
+    return transactions
+        .where((t) => t.type.toLowerCase() == 'payment')
+        .fold(0.0, (sum, t) => sum + t.amount);
+  }
+
+  // Customer calculations
+  int calculateTotalCustomers(List<Customer> customers) {
+    return customers.length;
+  }
+
+  int calculateCustomersWithBalance(List<Customer> customers) {
+    return customers.where((c) => c.balance > 0).length;
+  }
+
+  double calculateTotalBalance(List<Customer> customers) {
+    return customers.fold(0.0, (sum, c) => sum + c.balance);
+  }
+
+  // Financial calculations - CORRECTED VERSIONS
+
+  /// Calculate total revenue: cash-like sales + credit payments
+  double calculateTotalRevenue(List<Sale> sales) {
+    final cashLike = sales
+        .where((s) => _isCashLikeSale(s.paymentMethod))
+        .fold(0.0, (sum, s) => sum + s.totalAmount);
+    final creditPayments = calculateTotalCreditReceived(sales);
+    return cashLike + creditPayments;
+  }
+
+  /// Calculate Cost of Goods Sold (COGS) based on actual items sold
+  /// This uses the unitCost captured at the time of sale for exact COGS
+  /// Falls back to current product cost if unitCost is missing (for old sales)
+  double calculateTotalCost(List<SaleItem> saleItems, List<Product> products) {
+    // Create product lookup map for fallback
+    final productMap = {for (var p in products) p.id: p};
+
+    return saleItems.fold(0.0, (sum, item) {
+      // Use unitCost from sale item (captured at time of sale)
+      if (item.unitCost > 0) {
+        return sum + (item.quantity * item.unitCost);
+      }
+
+      // FALLBACK: For old sales without unitCost, use current product cost
+      // This happens with pre-FIFO sales data
+      final product = productMap[item.productId];
+      if (product != null) {
+        return sum + (item.quantity * product.cost);
+      }
+
+      // If product not found, skip this item
+      return sum;
+    });
+  }
+
+  // Calculate COGS for credit purchases from transaction items (uses unitCost from items)
+  // Falls back to current product cost if unitCost is missing (for old credit sales)
+  double calculateTotalCostFromCreditTransactions(
+    List<CreditTransaction> transactions,
+    List<Product> products,
+  ) {
+    // Create product lookup map for fallback
+    final productMap = {for (var p in products) p.id: p};
+
+    double total = 0.0;
+    for (final tx in transactions.where(
+      (t) => t.type.toLowerCase() == 'purchase',
+    )) {
+      for (final item in tx.items) {
+        // Use unitCost from credit sale item (captured at time of sale)
+        if (item.unitCost > 0) {
+          total += item.unitCost * item.quantity;
+        } else {
+          // FALLBACK: For old credit sales without unitCost, use current product cost
+          final product = productMap[item.productId];
+          if (product != null) {
+            total += product.cost * item.quantity;
+          }
+        }
+      }
+    }
+    return total;
+  }
+
+  /// Calculate total losses (damaged goods, expired items, etc.)
+  double calculateTotalLoss(List<Loss> losses) {
+    return losses.fold(0.0, (sum, loss) => sum + loss.totalCost);
+  }
+
+  /// Calculate Gross Profit
+  /// Formula: Revenue - COGS - Losses
+  double calculateGrossProfit(
+    double totalRevenue,
+    double totalCost,
+    double totalLoss,
+  ) {
+    return totalRevenue - totalCost - totalLoss;
+  }
+
+  /// Calculate Net Profit (if you want to include operating expenses)
+  /// Formula: Gross Profit - Operating Expenses
+  double calculateNetProfit(double grossProfit, double operatingExpenses) {
+    return grossProfit - operatingExpenses;
+  }
+
+  /// Calculate Gross Profit Margin
+  /// Formula: (Gross Profit / Revenue) × 100
+  double calculateProfitMargin(double grossProfit, double totalRevenue) {
+    if (totalRevenue == 0) {
+      return 0.0;
+    }
+    return (grossProfit / totalRevenue) * 100;
+  }
+
+  /// Calculate Return on Investment (ROI)
+  /// Formula: (Net Profit / Total Investment) × 100
+  /// Using COGS as investment proxy since we don't have initial investment data
+  double calculateRoi(double grossProfit, double totalCost) {
+    if (totalCost == 0) {
+      return 0.0;
+    }
+    return (grossProfit / totalCost) * 100;
+  }
+
+  /// Alternative ROI calculation using markup percentage
+  /// Formula: ((Selling Price - Cost Price) / Cost Price) × 100
+  double calculateMarkupPercentage(double totalRevenue, double totalCost) {
+    if (totalCost == 0) {
+      return 0.0;
+    }
+    return ((totalRevenue - totalCost) / totalCost) * 100;
+  }
+
+  /// Calculate inventory turnover ratio
+  /// Formula: COGS / Average Inventory Value
+  double calculateInventoryTurnover(
+    double totalCost,
+    double averageInventoryValue,
+  ) {
+    if (averageInventoryValue == 0) {
+      return 0.0;
+    }
+    return totalCost / averageInventoryValue;
+  }
+
+  /// Calculate days in inventory
+  /// Formula: 365 / Inventory Turnover
+  double calculateDaysInInventory(double inventoryTurnover) {
+    if (inventoryTurnover == 0) {
+      return 0.0;
+    }
+    return 365 / inventoryTurnover;
+  }
+
+  // Inventory calculations
+  int calculateTotalProducts(List<Product> products) {
+    return products.length;
+  }
+
+  int calculateLowStockCount(List<Product> products) {
+    return products.where((p) => p.stock <= p.minStock).length;
+  }
+
+  /// Calculate total inventory value using cost price (recommended for financial reporting)
+  /// This represents your actual investment/capital tied up in inventory
+  double calculateTotalInventoryValue(List<Product> products) {
+    return products.fold(
+      0.0,
+      (sum, product) => sum + (product.cost * product.stock),
+    );
+  }
+
+  double calculateBeginningInventoryValue(
+    List<Product> currentProducts,
+    List<StockMovement> movements,
+  ) {
+    final movementQuantities = <String, int>{};
+
+    for (final movement in movements) {
+      movementQuantities.update(
+        movement.productId,
+        (value) => value + movement.quantity,
+        ifAbsent: () => movement.quantity,
+      );
+    }
+
+    double beginningValue = 0.0;
+    for (final product in currentProducts) {
+      final quantityMoved = movementQuantities[product.id] ?? 0;
+      final beginningStock = product.stock - quantityMoved;
+      beginningValue += beginningStock * product.cost;
+    }
+
+    return beginningValue > 0 ? beginningValue : 0.0;
+  }
+
+  /// Calculate total inventory value using selling price (for retail/market value)
+  /// This represents potential revenue if all inventory is sold at current prices
+  Future<double> calculateTotalInventoryRetailValue(
+    List<Product> products,
+  ) async {
+    double total = 0.0;
+    for (final product in products) {
+      final price = await TaxService.calculateSellingPriceWithRule(
+        product.cost,
+        productId: product.id,
+        categoryName: product.category,
+      );
+      total += price * product.stock;
+    }
+    return total;
+  }
+
+  /// Calculate potential profit from current inventory
+  /// This shows how much profit you could make if all current stock is sold
+  Future<double> calculatePotentialInventoryProfit(
+    List<Product> products,
+  ) async {
+    double total = 0.0;
+    for (final product in products) {
+      final price = await TaxService.calculateSellingPriceWithRule(
+        product.cost,
+        productId: product.id,
+        categoryName: product.category,
+      );
+      total += (price - product.cost) * product.stock;
+    }
+    return total;
+  }
+
+  /// Batch calculate selling prices for multiple products efficiently
+  /// This reduces Firestore calls by fetching all rules once
+  Future<Map<String, double>> calculateBatchSellingPrices(
+    List<Product> products,
+  ) async {
+    final rules = await TaxRulesService.getAllRules(); // Single call
+    final result = <String, double>{};
+
+    for (final product in products) {
+      if (product.id == null) continue;
+
+      final rule = _findBestRuleSync(rules, product.id, product.category);
+      final price = _calculatePriceWithRule(product.cost, rule);
+      result[product.id!] = price;
+    }
+    return result;
+  }
+
+  /// Find the best matching rule synchronously from cached rules
+  TaxRule? _findBestRuleSync(
+    List<TaxRule> rules,
+    String? productId,
+    String? categoryName,
+  ) {
+    // Find product-specific rule first
+    if (productId != null) {
+      final productRule = rules.firstWhere(
+        (rule) => rule.productId == productId,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (productRule.id.isNotEmpty) return productRule;
+    }
+
+    // Find category-specific rule
+    if (categoryName != null) {
+      final categoryRule = rules.firstWhere(
+        (rule) => rule.categoryName == categoryName,
+        orElse: () => TaxRule(
+          id: '',
+          tubo: 0.0,
+          isInclusive: true,
+          priority: -1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+      if (categoryRule.id.isNotEmpty) return categoryRule;
+    }
+
+    // Return global rule
+    return rules.firstWhere(
+      (rule) => rule.isGlobal,
+      orElse: () => TaxRule(
+        id: '',
+        tubo: 0.0,
+        isInclusive: true,
+        priority: -1,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ),
+    );
+  }
+
+  /// Calculate price with a specific rule
+  double _calculatePriceWithRule(double cost, TaxRule? rule) {
+    if (rule != null && rule.id.isNotEmpty) {
+      // Use rule: always add-on-top
+      final rawPrice = cost + rule.tubo;
+      return rawPrice.round().toDouble();
+    }
+    // Fallback to global settings
+    return TaxService.calculateSellingPriceSync(cost);
+  }
+
+  /// Get top selling products by quantity sold
+  List<Product> getTopSellingProducts(
+    List<SaleItem> saleItems,
+    List<Product> products,
+  ) {
+    final productSaleCount = <String, int>{};
+    for (final item in saleItems) {
+      productSaleCount.update(
+        item.productId,
+        (value) => value + item.quantity,
+        ifAbsent: () => item.quantity,
+      );
+    }
+
+    final sortedProductIds = productSaleCount.keys.toList(growable: false)
+      ..sort((a, b) => productSaleCount[b]!.compareTo(productSaleCount[a]!));
+
+    final productMap = {for (var p in products) p.id: p};
+    final topProducts = sortedProductIds
+        .map((id) => productMap[id])
+        .where((p) => p != null)
+        .cast<Product>()
+        .take(10) // Limit to top 10
+        .toList();
+
+    return topProducts;
+  }
+
+  /// Get top selling products by revenue generated
+  List<MapEntry<Product, double>> getTopSellingProductsByRevenue(
+    List<SaleItem> saleItems,
+    List<Product> products,
+  ) {
+    final productRevenue = <String, double>{};
+    final productMap = {for (var p in products) p.id: p};
+
+    for (final item in saleItems) {
+      final product = productMap[item.productId];
+      if (product != null) {
+        final revenue =
+            item.quantity *
+            item.unitPrice; // Use item.price (actual selling price)
+        productRevenue.update(
+          item.productId,
+          (value) => value + revenue,
+          ifAbsent: () => revenue,
+        );
+      }
+    }
+
+    final sortedEntries = productRevenue.entries.toList(growable: false)
+      ..sort((a, b) => b.value.compareTo(a.value));
+
+    return sortedEntries
+        .where((entry) => productMap[entry.key] != null) // Check before mapping
+        .map((entry) => MapEntry(productMap[entry.key]!, entry.value))
+        .take(10)
+        .toList();
+  }
+
+  /// Calculate loss breakdown by reason
+  Map<String, double> getLossBreakdown(List<Loss> losses) {
+    final breakdown = <String, double>{};
+    for (final loss in losses) {
+      breakdown.update(
+        loss.reason.name,
+        (value) => value + loss.totalCost,
+        ifAbsent: () => loss.totalCost,
+      );
+    }
+    return breakdown;
+  }
+
+  /// Calculate average order value
+  double calculateAverageOrderValue(List<Sale> sales) {
+    if (sales.isEmpty) return 0.0;
+    final filtered = sales.where((s) => _isCashLikeSale(s.paymentMethod));
+    if (filtered.isEmpty) return 0.0;
+    final totalSales = calculateTotalSales(filtered.toList());
+    return totalSales / filtered.length;
+  }
+
+  /// Calculate conversion rate (if you have visitor/inquiry data)
+  double calculateConversionRate(int totalSales, int totalInquiries) {
+    if (totalInquiries == 0) return 0.0;
+    return (totalSales / totalInquiries) * 100;
+  }
+
+  /// Calculate customer lifetime value (simplified version)
+  double calculateCustomerLifetimeValue(
+    double averageOrderValue,
+    double purchaseFrequency,
+    double customerLifespanYears,
+  ) {
+    return averageOrderValue * purchaseFrequency * customerLifespanYears;
+  }
+
+  bool _isCashLikeSale(String method) {
+    final m = method.toLowerCase();
+    // Treat standard immediate methods as sales; exclude credit and any payment entries
+    return m == 'cash' || m == 'card' || m == 'gcash' || m == 'paymaya';
+  }
+}
+
+
+
+
+================================================================
+FILE #13: D:\flutter project\prostock\lib\services\pdf_report_service.dart
+SIZE: 43.85 KB
+MODIFIED: 10/24/2025 08:08:24
+================================================================
+
+import 'dart:async';
+import 'dart:io';
+import 'dart:math' as math;
+import 'package:flutter/foundation.dart';
+import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:prostock/utils/error_logger.dart';
+
+class PdfReportSection {
+  final String title;
+  final List<List<String>> rows; // [ [label, value], ... ]
+
+  PdfReportSection({required this.title, required this.rows});
+
+  // Create a copy with limited rows
+  PdfReportSection copyWithLimitedRows(int maxRows) {
+    if (rows.length <= maxRows) {
+      return this;
+    }
+
+    // Take some rows from the beginning and end
+    final firstHalfCount = maxRows ~/ 2;
+    final secondHalfCount = maxRows - firstHalfCount;
+
+    final firstHalf = rows.take(firstHalfCount).toList();
+    final secondHalf = rows.skip(rows.length - secondHalfCount).toList();
+
+    // Add a summary row in the middle with the same number of columns as the other rows
+    List<String> summaryRow = [];
+    if (rows.isNotEmpty) {
+      int columnCount = rows.first.length;
+      summaryRow = List.filled(columnCount, '');
+      summaryRow[0] =
+          '... (${rows.length - maxRows} more entries not shown) ...';
+    }
+
+    return PdfReportSection(
+      title: title,
+      rows: [...firstHalf, summaryRow, ...secondHalf],
+    );
+  }
+}
+
+class PdfCalculationSection {
+  final String title;
+  final String formula;
+  final String calculation;
+  final String result;
+
+  PdfCalculationSection({
+    required this.title,
+    required this.formula,
+    required this.calculation,
+    required this.result,
+  });
+}
+
+class PdfSummarySection {
+  final String title;
+  final String value;
+
+  PdfSummarySection({required this.title, required this.value});
+}
+
+// Data structure for passing PDF generation parameters to isolate
+class PdfGenerationParams {
+  final String reportTitle;
+  final DateTime? startDate;
+  final DateTime? endDate;
+  final List<PdfReportSection> sections;
+  final List<PdfCalculationSection>? calculations;
+  final List<PdfSummarySection>? summaries;
+
+  PdfGenerationParams({
+    required this.reportTitle,
+    this.startDate,
+    this.endDate,
+    required this.sections,
+    this.calculations,
+    this.summaries,
+  });
+}
+
+// Simple semaphore implementation to limit concurrent operations
+class _PdfSemaphore {
+  final int maxConcurrent;
+  int _currentCount = 0;
+  final List<Completer<void>> _waiters = [];
+
+  _PdfSemaphore({required this.maxConcurrent});
+
+  Future<void> acquire() async {
+    if (_currentCount < maxConcurrent) {
+      _currentCount++;
+      return Future.value();
+    }
+
+    final completer = Completer<void>();
+    _waiters.add(completer);
+    return completer.future;
+  }
+
+  void release() {
+    if (_waiters.isNotEmpty) {
+      final completer = _waiters.removeAt(0);
+      completer.complete();
+    } else {
+      _currentCount = math.max(0, _currentCount - 1);
+    }
+  }
+}
+
+class PdfReportService {
+  // Singleton instance to manage concurrent PDF generations
+  static final PdfReportService _instance = PdfReportService._internal();
+  factory PdfReportService() => _instance;
+  PdfReportService._internal();
+
+  // Semaphore to limit concurrent PDF operations
+  static final _semaphore = _PdfSemaphore(maxConcurrent: 2);
+
+  /// Tests if we can write to storage by creating a small test file
+  /// Returns the directory that works, or throws an exception if no writable directory is found
+  Future<Directory> _testStorage() async {
+    try {
+      debugPrint('[PDF] Testing storage write access');
+
+      List<Directory> dirsToTry = [];
+
+      // First try: User's requested path for downloads
+      if (Platform.isAndroid) {
+        // Try the requested path first (most visible to users)
+        dirsToTry.add(Directory('/My Phone/Internal Storage/Download'));
+        dirsToTry.add(Directory('/storage/emulated/0/Download'));
+        dirsToTry.add(Directory('/sdcard/Download'));
+      }
+
+      try {
+        // Next try: Application documents directory
+        final docsDir = await getApplicationDocumentsDirectory();
+        dirsToTry.add(docsDir);
+
+        // Then: Application support directory
+        final supportDir = await getApplicationSupportDirectory();
+        dirsToTry.add(supportDir);
+
+        // Last: Temporary directory
+        final tempDir = await getTemporaryDirectory();
+        dirsToTry.add(tempDir);
+      } catch (e) {
+        debugPrint('[PDF] Error getting standard directories: $e');
+        // If all else fails, try hard-coded paths
+        if (Platform.isAndroid) {
+          dirsToTry.add(
+            Directory('/data/user/0/com.example.prostock/app_flutter'),
+          );
+          dirsToTry.add(Directory('/data/user/0/com.example.prostock/files'));
+          dirsToTry.add(Directory('/data/user/0/com.example.prostock/cache'));
+        }
+      }
+
+      // Try each directory until one works
+      for (var dir in dirsToTry) {
+        try {
+          debugPrint('[PDF] Trying directory: ${dir.path}');
+
+          if (!await dir.exists()) {
+            await dir.create(recursive: true);
+          }
+
+          final testFile = File('${dir.path}/test_write_access.txt');
+          await testFile.writeAsString('Test write access: ${DateTime.now()}');
+
+          if (await testFile.exists()) {
+            // Clean up
+            await testFile.delete();
+
+            debugPrint('[PDF] Found writable directory: ${dir.path}');
+            return dir;
+          }
+        } catch (e) {
+          debugPrint('[PDF] Directory not writable: ${dir.path}, error: $e');
+          // Continue to next directory
+        }
+      }
+
+      throw Exception('No writable storage directory found');
+    } catch (e) {
+      debugPrint('[PDF] Failed to find writable storage: $e');
+      rethrow;
+    }
+  }
+
+  /// Generate PDF in the background using Flutter's compute function
+  Future<File> generatePdfInBackground({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+  }) async {
+    // Acquire semaphore to limit concurrent PDF operations
+    await _semaphore.acquire();
+
+    try {
+      ErrorLogger.logInfo(
+        'Starting PDF generation in background',
+        context: 'PdfReportService.generatePdfInBackground',
+        metadata: {
+          'reportTitle': reportTitle,
+          'sectionsCount': sections.length,
+          'startDate': startDate?.toIso8601String() ?? 'null',
+          'endDate': endDate?.toIso8601String() ?? 'null',
+        },
+      );
+
+      // Apply stricter limits to avoid TooManyPagesException
+      // For large reports, automatically use paginated PDFs
+      if (sections.length > 5 ||
+          sections.any((s) => s.rows.length > 50) ||
+          (calculations?.length ?? 0) > 5) {
+        try {
+          final files = await generatePaginatedPDFsInBackground(
+            reportTitle: reportTitle,
+            startDate: startDate,
+            endDate: endDate,
+            sections: applyDataLimits(
+              sections,
+              maxRowsPerSection: 50,
+            ), // Stricter limit
+            calculations: calculations,
+            summaries: summaries,
+            sectionsPerPdf: 3, // Fewer sections per PDF
+          );
+          return files.first; // Return the first file as a fallback
+        } catch (e, stack) {
+          ErrorLogger.logError(
+            'Paginated PDF generation fallback failed',
+            error: e,
+            stackTrace: stack,
+            context: 'PdfReportService.generatePdfInBackground',
+          );
+          rethrow;
+        }
+      }
+
+      // For smaller reports, try the normal approach
+      final params = PdfGenerationParams(
+        reportTitle: reportTitle,
+        startDate: startDate,
+        endDate: endDate,
+        sections: applyDataLimits(
+          sections,
+          maxRowsPerSection: 50,
+        ), // Apply stricter limit
+        calculations: calculations,
+        summaries: summaries,
+      );
+
+      try {
+        return await compute(_generatePdfInIsolate, params);
+      } catch (e, stack) {
+        ErrorLogger.logError(
+          'PDF generation in background failed',
+          error: e,
+          stackTrace: stack,
+          context: 'PdfReportService.generatePdfInBackground',
+          metadata: {
+            'reportTitle': reportTitle,
+            'sectionsCount': sections.length,
+          },
+        );
+
+        // If we get a TooManyPagesException, try with even stricter limits
+        if (e.toString().contains('TooManyPagesException')) {
+          ErrorLogger.logInfo(
+            'Retrying with stricter data limits',
+            context: 'PdfReportService.generatePdfInBackground',
+          );
+
+          try {
+            final files = await generatePaginatedPDFsInBackground(
+              reportTitle: reportTitle,
+              startDate: startDate,
+              endDate: endDate,
+              sections: applyDataLimits(
+                sections,
+                maxRowsPerSection: 20,
+              ), // Much stricter limit
+              calculations: calculations
+                  ?.take(3)
+                  .toList(), // Limit calculations too
+              summaries: summaries,
+              sectionsPerPdf: 2, // Even fewer sections per PDF
+            );
+            return files.first; // Return the first file
+          } catch (e2, stack2) {
+            ErrorLogger.logError(
+              'Final PDF generation attempt failed',
+              error: e2,
+              stackTrace: stack2,
+              context: 'PdfReportService.generatePdfInBackground',
+            );
+            rethrow;
+          }
+        }
+
+        rethrow;
+      }
+    } finally {
+      // Always release the semaphore when done
+      _semaphore.release();
+    }
+  }
+
+  /// Generate paginated PDFs in background using Flutter's compute function
+  Future<List<File>> generatePaginatedPDFsInBackground({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+    int sectionsPerPdf = 5,
+    int maxRowsPerSection = 50, // New parameter to control rows per section
+  }) async {
+    // Acquire semaphore to limit concurrent operations
+    await _semaphore.acquire();
+
+    try {
+      ErrorLogger.logInfo(
+        'Starting paginated PDF generation in background',
+        context: 'PdfReportService.generatePaginatedPDFsInBackground',
+        metadata: {
+          'reportTitle': reportTitle,
+          'sectionsCount': sections.length,
+          'sectionsPerPdf': sectionsPerPdf,
+          'maxRowsPerSection': maxRowsPerSection,
+        },
+      );
+
+      // Apply row limits to all sections first to avoid TooManyPagesException
+      final limitedSections = applyDataLimits(
+        sections,
+        maxRowsPerSection: maxRowsPerSection,
+      );
+
+      // For very large reports, split large sections into multiple sections
+      if (limitedSections.any((section) => section.rows.length > 100)) {
+        List<PdfReportSection> splitSections = [];
+
+        for (var section in limitedSections) {
+          if (section.rows.length > 100) {
+            // Split this section into multiple smaller sections
+            final totalSplits = (section.rows.length / 50).ceil();
+
+            for (int i = 0; i < totalSplits; i++) {
+              final start = i * 50;
+              final end = (start + 50 < section.rows.length)
+                  ? start + 50
+                  : section.rows.length;
+
+              splitSections.add(
+                PdfReportSection(
+                  title: '${section.title} (Part ${i + 1} of $totalSplits)',
+                  rows: section.rows.sublist(start, end),
+                ),
+              );
+            }
+          } else {
+            // Keep section as is
+            splitSections.add(section);
+          }
+        }
+
+        // Replace with the split sections
+        limitedSections.clear();
+        limitedSections.addAll(splitSections);
+      }
+
+      // Calculate how many PDFs we'll need
+      int totalPdfs = (limitedSections.length / sectionsPerPdf).ceil();
+      List<File> pdfFiles = [];
+
+      // Generate PDFs sequentially instead of in parallel to avoid resource contention
+      for (int i = 0; i < limitedSections.length; i += sectionsPerPdf) {
+        int end = (i + sectionsPerPdf < limitedSections.length)
+            ? i + sectionsPerPdf
+            : limitedSections.length;
+        List<PdfReportSection> sectionChunk = limitedSections.sublist(i, end);
+
+        int pageNumber = (i ~/ sectionsPerPdf) + 1;
+
+        // Log progress
+        ErrorLogger.logInfo(
+          'Generating PDF $pageNumber of $totalPdfs',
+          context: 'PdfReportService.generatePaginatedPDFsInBackground',
+        );
+
+        // For calculations, distribute them across PDFs if there are many
+        List<PdfCalculationSection>? pdfCalculations;
+        if (calculations != null && calculations.isNotEmpty) {
+          if (pageNumber == 1 || calculations.length <= 3) {
+            // For short calculation lists or first PDF, include all or the first few
+            pdfCalculations = pageNumber == 1
+                ? (calculations.length > 4
+                      ? calculations.sublist(0, 4)
+                      : calculations)
+                : null;
+          } else if (totalPdfs > 1 && calculations.length > 4) {
+            // Distribute remaining calculations across PDFs
+            final calcPerPdf = (calculations.length - 4) ~/ (totalPdfs - 1);
+            final startIdx = 4 + (pageNumber - 2) * calcPerPdf;
+            final endIdx = pageNumber == totalPdfs
+                ? calculations.length
+                : math.min(startIdx + calcPerPdf, calculations.length);
+
+            if (startIdx < endIdx) {
+              pdfCalculations = calculations.sublist(startIdx, endIdx);
+            }
+          }
+        }
+
+        final params = PdfGenerationParams(
+          reportTitle: '$reportTitle - Part $pageNumber of $totalPdfs',
+          startDate: startDate,
+          endDate: endDate,
+          sections: sectionChunk,
+          calculations: pdfCalculations,
+          summaries: pageNumber == totalPdfs
+              ? summaries
+              : null, // Only include in last PDF
+        );
+
+        // Insert a delay between PDF generations to avoid resource contention
+        if (i > 0) {
+          await Future.delayed(const Duration(milliseconds: 300));
+        }
+
+        try {
+          File pdfFile = await compute(_generatePdfInIsolate, params);
+          pdfFiles.add(pdfFile);
+
+          // Log success
+          ErrorLogger.logInfo(
+            'PDF $pageNumber of $totalPdfs generated successfully',
+            context: 'PdfReportService.generatePaginatedPDFsInBackground',
+          );
+        } catch (e, stack) {
+          ErrorLogger.logError(
+            'Failed to generate PDF $pageNumber of $totalPdfs',
+            error: e,
+            stackTrace: stack,
+            context: 'PdfReportService.generatePaginatedPDFsInBackground',
+          );
+
+          // Continue with other PDFs instead of failing completely
+          continue;
+        }
+      }
+
+      return pdfFiles;
+    } finally {
+      // Always release the semaphore when done
+      _semaphore.release();
+    }
+  }
+
+  /// Static method to be executed in isolate
+  /// Method to be executed in isolate
+  static Future<File> _generatePdfInIsolate(PdfGenerationParams params) async {
+    try {
+      // We'll skip Firebase initialization in the isolate and avoid using
+      // Firebase-dependent code in the PDF generation
+
+      debugPrint(
+        '[PDF ISOLATE] Starting PDF generation: ${params.reportTitle}',
+      );
+
+      final service = PdfReportService();
+      final file = await service.generateFinancialReport(
+        reportTitle: params.reportTitle,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        sections: params.sections,
+        calculations: params.calculations,
+        summaries: params.summaries,
+      );
+
+      debugPrint(
+        '[PDF ISOLATE] PDF generation completed: ${params.reportTitle}',
+      );
+
+      return file;
+    } catch (e, stack) {
+      debugPrint('[CRITICAL ERROR] PDF generation in isolate failed: $e');
+      debugPrint('[CRITICAL ERROR] Stack trace: $stack');
+      rethrow;
+    } finally {
+      // Clean up resources after PDF generation
+      debugPrint(
+        '[PDF ISOLATE] Cleaning up resources for: ${params.reportTitle}',
+      );
+    }
+  }
+
+  /// Apply data limits to all sections to prevent TooManyPagesException
+  List<PdfReportSection> applyDataLimits(
+    List<PdfReportSection> sections, {
+    int maxRowsPerSection = 100,
+    bool summaryOnly = false,
+  }) {
+    // Calculate total rows to gauge complexity
+    int totalRows = sections.fold(
+      0,
+      (sum, section) => sum + section.rows.length,
+    );
+
+    // For extremely large data sets (>1000 rows), automatically apply summary mode
+    if (totalRows > 1000 && !summaryOnly) {
+      ErrorLogger.logInfo(
+        'Applying summary-only mode due to large dataset ($totalRows rows)',
+        context: 'PdfReportService.applyDataLimits',
+      );
+      summaryOnly = true;
+      // Also reduce max rows per section for very large datasets
+      if (maxRowsPerSection > 50) {
+        maxRowsPerSection = 50;
+      }
+    }
+    // For large data sets (>500 rows), further reduce rows per section
+    else if (totalRows > 500 && maxRowsPerSection > 75) {
+      maxRowsPerSection = 75;
+      ErrorLogger.logInfo(
+        'Reducing max rows per section to $maxRowsPerSection due to large dataset',
+        context: 'PdfReportService.applyDataLimits',
+      );
+    }
+
+    // If summary only is enabled, only include sections with "Summary" in the title
+    if (summaryOnly) {
+      sections = sections
+          .where(
+            (s) =>
+                s.title.toLowerCase().contains('summary') ||
+                s.title.toLowerCase().contains('total') ||
+                s.rows.length <= 10, // Keep small sections
+          )
+          .toList();
+    }
+
+    // For large sections, apply stricter limits
+    List<PdfReportSection> limitedSections = [];
+    for (var section in sections) {
+      // Apply different limits based on section size
+      int sectionLimit = maxRowsPerSection;
+
+      // For very large sections, apply even stricter limits
+      if (section.rows.length > 200) {
+        sectionLimit = math.min(maxRowsPerSection, 40); // Stricter limit
+      }
+
+      limitedSections.add(section.copyWithLimitedRows(sectionLimit));
+    }
+
+    return limitedSections;
+  }
+
+  /// Split sections into multiple PDFs to prevent TooManyPagesException
+  Future<List<File>> generatePaginatedPDFs({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+    int sectionsPerPdf = 5,
+  }) async {
+    List<File> pdfFiles = [];
+
+    // Calculate how many PDFs we'll need
+    int totalPdfs = (sections.length / sectionsPerPdf).ceil();
+
+    // Generate one PDF for each batch of sections
+    for (int i = 0; i < sections.length; i += sectionsPerPdf) {
+      int end = (i + sectionsPerPdf < sections.length)
+          ? i + sectionsPerPdf
+          : sections.length;
+      List<PdfReportSection> sectionChunk = sections.sublist(i, end);
+
+      int pageNumber = (i ~/ sectionsPerPdf) + 1;
+      final file = await generateFinancialReport(
+        reportTitle: '$reportTitle - Part $pageNumber of $totalPdfs',
+        startDate: startDate,
+        endDate: endDate,
+        sections: sectionChunk,
+        calculations: pageNumber == 1
+            ? calculations
+            : null, // Only include in first PDF
+        summaries: pageNumber == totalPdfs
+            ? summaries
+            : null, // Only include in last PDF
+      );
+
+      pdfFiles.add(file);
+    }
+
+    return pdfFiles;
+  }
+
+  Future<File> generateFinancialReport({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+  }) async {
+    try {
+      debugPrint('[PDF] Starting PDF generation for: $reportTitle');
+      debugPrint(
+        '[PDF] Sections: ${sections.length}, Calculations: ${calculations?.length ?? 0}, Summaries: ${summaries?.length ?? 0}',
+      );
+
+      final doc = pw.Document();
+      final df = DateFormat('yyyy-MM-dd');
+
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          // Set maxPages high enough to handle reasonable content
+          maxPages: 100,
+          footer: (context) => pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Page ${context.pageNumber} of ${context.pagesCount}',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+            ),
+          ),
+          build: (context) => [
+            pw.Header(
+              level: 0,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(
+                    child: pw.Text(
+                      reportTitle,
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  pw.Text(
+                    startDate != null && endDate != null
+                        ? '${df.format(startDate)} - ${df.format(endDate)}'
+                        : 'All Time',
+                    style: const pw.TextStyle(fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+            ...sections.map((s) => _buildSection(s)),
+            if (calculations != null)
+              ...calculations.map((c) => _buildCalculation(c)),
+            if (summaries != null) ...summaries.map((s) => _buildSummary(s)),
+            pw.SizedBox(height: 16),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text(
+                'Generated on ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      debugPrint('[PDF] Building document structure');
+
+      // Try to find a writable directory by testing
+      Directory? directoryToUse;
+      try {
+        debugPrint('[PDF] Finding writable storage directory');
+
+        // Try to use the Download directory directly first
+        if (Platform.isAndroid) {
+          // Try the requested path first
+          final downloadDir = Directory('/My Phone/Internal Storage/Download');
+          bool canCreateDir = false;
+
+          try {
+            if (await downloadDir.exists()) {
+              canCreateDir = true;
+            } else {
+              await downloadDir.create(recursive: true);
+              canCreateDir = await downloadDir.exists();
+            }
+          } catch (e) {
+            debugPrint('[PDF] Error creating directory: $e');
+            canCreateDir = false;
+          }
+
+          if (canCreateDir) {
+            // Test if we can write to this directory
+            try {
+              final testFile = File(
+                '${downloadDir.path}/test_write_access.txt',
+              );
+              await testFile.writeAsString(
+                'Test write access: ${DateTime.now()}',
+              );
+              if (await testFile.exists()) {
+                await testFile.delete();
+                debugPrint(
+                  '[PDF] Using requested Download directory: ${downloadDir.path}',
+                );
+                directoryToUse = downloadDir;
+                // If this succeeds, don't try other directories
+              }
+            } catch (e) {
+              debugPrint(
+                '[PDF] Cannot write to Download directory, will try alternatives: $e',
+              );
+            }
+          }
+        }
+
+        // If we couldn't use the Download directory, find another writable directory
+        if (directoryToUse == null) {
+          // Use the test function to find a directory we can actually write to
+          directoryToUse = await _testStorage();
+          debugPrint(
+            '[PDF] Selected storage directory: ${directoryToUse.path}',
+          );
+        }
+      } catch (e) {
+        debugPrint('[PDF] Failed to find writable storage directory: $e');
+
+        // Last resort - use temporary directory which should work in isolates
+        debugPrint('[PDF] Using temporary directory as last resort');
+        directoryToUse = await getTemporaryDirectory();
+      }
+
+      Directory dir = directoryToUse;
+
+      // Check that directory is valid and exists
+      if (!(await dir.exists())) {
+        debugPrint('[PDF] Directory does not exist: ${dir.path}, creating it');
+        await dir.create(recursive: true);
+      }
+
+      debugPrint('[PDF] Using directory: ${dir.path}');
+
+      // Generate filename based on report title
+      String baseFileName = 'financial_report';
+      if (reportTitle.toLowerCase().contains('sales')) {
+        baseFileName = 'sales_report';
+      } else if (reportTitle.toLowerCase().contains('inventory')) {
+        baseFileName = 'inventory_report';
+      } else if (reportTitle.toLowerCase().contains('customer')) {
+        baseFileName = 'customer_report';
+      } else if (reportTitle.toLowerCase().contains('staff')) {
+        baseFileName = 'staff_report';
+      } else if (reportTitle.toLowerCase().contains('financial')) {
+        baseFileName = 'financial_report';
+      }
+
+      final fileName =
+          '${baseFileName}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+      var file = File(p.join(dir.path, fileName));
+
+      debugPrint('[PDF] Saving PDF to: ${file.path}');
+
+      try {
+        debugPrint('[PDF] About to generate PDF bytes...');
+        final pdfBytes = await doc.save();
+        debugPrint('[PDF] PDF generated, size: ${pdfBytes.length} bytes');
+
+        // Check if directory exists and is writable
+        final parentDir = file.parent;
+        if (!await parentDir.exists()) {
+          debugPrint('[PDF] Creating parent directory: ${parentDir.path}');
+          try {
+            await parentDir.create(recursive: true);
+            debugPrint('[PDF] Parent directory created successfully');
+          } catch (e) {
+            debugPrint('[PDF] Error creating parent directory: $e');
+            // Try a fallback location if we can't create the directory
+            dir = await getTemporaryDirectory();
+            debugPrint(
+              '[PDF] Falling back to temporary directory: ${dir.path}',
+            );
+            final fileName =
+                '${baseFileName}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+            file = File(p.join(dir.path, fileName));
+          }
+        }
+
+        // Write file
+        debugPrint('[PDF] Writing file to: ${file.path}');
+        try {
+          await file.writeAsBytes(pdfBytes);
+          debugPrint('[PDF] File written successfully');
+        } catch (e) {
+          debugPrint('[PDF] Error writing file: $e');
+          // Try one more fallback to the cache directory
+          dir = await getTemporaryDirectory();
+          final fileName =
+              '${baseFileName}_${DateTime.now().millisecondsSinceEpoch}.pdf';
+          file = File(p.join(dir.path, fileName));
+          debugPrint('[PDF] Final fallback attempt to: ${file.path}');
+          await file.writeAsBytes(pdfBytes);
+        }
+
+        // Verify file was created
+        final exists = await file.exists();
+        final fileSize = exists ? await file.length() : 0;
+
+        debugPrint(
+          '[PDF] PDF saved successfully: ${file.path}, exists: $exists, size: $fileSize bytes',
+        );
+
+        // Log additional information about the file path for debugging
+        if (exists) {
+          debugPrint('[PDF] Full absolute path: ${file.absolute.path}');
+          debugPrint('[PDF] Parent directory: ${file.parent.path}');
+
+          // On Android, also try to make sure the file is accessible in the media store
+          if (Platform.isAndroid && dir.path.contains('/Download')) {
+            try {
+              // Log that the file should be visible in Downloads
+              debugPrint('[PDF] PDF should be visible in Downloads folder');
+            } catch (e) {
+              debugPrint('[PDF] Note: Media scanning not available: $e');
+            }
+          }
+        }
+      } catch (e, stack) {
+        debugPrint('[PDF] Failed to write PDF file: $e');
+        debugPrint('[PDF] Stack trace: $stack');
+        rethrow;
+      }
+
+      return file;
+    } catch (e, stack) {
+      debugPrint('[PDF] Error generating PDF: $e');
+      debugPrint('[PDF] Stack trace: $stack');
+      rethrow;
+    }
+  }
+
+  pw.Widget _buildSection(PdfReportSection section) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 16),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          // Section title with numbering
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(vertical: 6),
+            child: pw.Text(
+              section.title,
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+            ),
+          ),
+          pw.SizedBox(height: 8),
+
+          // Table with clean formatting
+          _buildFlexibleTable(section),
+        ],
+      ),
+    );
+  }
+
+  String _getHeaderText(String sectionTitle) {
+    final lower = sectionTitle.toLowerCase();
+    if (lower.contains('income')) return 'Product';
+    if (lower.contains('cogs') || lower.contains('cost')) return 'Product';
+    if (lower.contains('expense')) return 'Expense Item';
+    if (lower.contains('cash flow')) return 'Description';
+    if (lower.contains('inventory distribution')) return 'Category';
+    return 'Description';
+  }
+
+  pw.Widget _buildFlexibleTable(PdfReportSection section) {
+    final hasAtLeastThreeColumns =
+        section.rows.isNotEmpty && section.rows.first.length >= 3;
+    final hasFourColumns =
+        section.rows.isNotEmpty && section.rows.first.length >= 4;
+
+    if (!hasAtLeastThreeColumns) {
+      // Fallback to 2-column table (label, amount)
+      return pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(3),
+          1: const pw.FlexColumnWidth(2),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  _getHeaderText(section.title),
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Amount',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          for (int i = 0; i < section.rows.length; i++)
+            pw.TableRow(
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    section.rows[i][0],
+                    style: pw.TextStyle(fontSize: 10),
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    _stripCurrencySymbols(section.rows[i][1]),
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight:
+                          _isTotalRow(section.rows[i][0]) ||
+                              _isNumericValue(section.rows[i][1])
+                          ? pw.FontWeight.bold
+                          : pw.FontWeight.normal,
+                    ),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      );
+    }
+
+    if (hasFourColumns) {
+      // 4-column table: product, quantity, price, amount
+      return pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(3),
+          1: const pw.FlexColumnWidth(1),
+          2: const pw.FlexColumnWidth(1.5),
+          3: const pw.FlexColumnWidth(2),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Product',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Quantity',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Price',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  'Amount',
+                  style: pw.TextStyle(
+                    fontWeight: pw.FontWeight.bold,
+                    fontSize: 11,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+          for (int i = 0; i < section.rows.length; i++)
+            pw.TableRow(
+              children: [
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    section.rows[i][0],
+                    style: pw.TextStyle(fontSize: 10),
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    section.rows[i][1],
+                    style: const pw.TextStyle(fontSize: 10),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    _stripCurrencySymbols(section.rows[i][2]),
+                    style: const pw.TextStyle(fontSize: 10),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+                pw.Padding(
+                  padding: const pw.EdgeInsets.all(6),
+                  child: pw.Text(
+                    _stripCurrencySymbols(section.rows[i][3]),
+                    style: pw.TextStyle(
+                      fontSize: 10,
+                      fontWeight:
+                          _isTotalRow(section.rows[i][0]) ||
+                              _isNumericValue(section.rows[i][3])
+                          ? pw.FontWeight.bold
+                          : pw.FontWeight.normal,
+                    ),
+                    textAlign: pw.TextAlign.right,
+                  ),
+                ),
+              ],
+            ),
+        ],
+      );
+    }
+
+    // 3-column table: product, quantity, amount
+    final isInventoryDistribution = section.title.toLowerCase().contains(
+      'inventory distribution',
+    );
+    return pw.Table(
+      border: pw.TableBorder.all(color: PdfColors.black, width: 0.5),
+      columnWidths: {
+        0: const pw.FlexColumnWidth(3),
+        1: const pw.FlexColumnWidth(1),
+        2: const pw.FlexColumnWidth(2),
+      },
+      children: [
+        pw.TableRow(
+          decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+          children: [
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text(
+                isInventoryDistribution ? 'Category' : 'Product',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 11,
+                ),
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text(
+                isInventoryDistribution ? 'Distribution' : 'Quantity',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 11,
+                ),
+                textAlign: pw.TextAlign.right,
+              ),
+            ),
+            pw.Padding(
+              padding: const pw.EdgeInsets.all(6),
+              child: pw.Text(
+                isInventoryDistribution ? 'Quantity' : 'Amount',
+                style: pw.TextStyle(
+                  fontWeight: pw.FontWeight.bold,
+                  fontSize: 11,
+                ),
+                textAlign: pw.TextAlign.right,
+              ),
+            ),
+          ],
+        ),
+        for (int i = 0; i < section.rows.length; i++)
+          pw.TableRow(
+            children: [
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  section.rows[i][0],
+                  style: pw.TextStyle(fontSize: 10),
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  section.rows[i][1],
+                  style: const pw.TextStyle(fontSize: 10),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+              pw.Padding(
+                padding: const pw.EdgeInsets.all(6),
+                child: pw.Text(
+                  _stripCurrencySymbols(section.rows[i][2]),
+                  style: pw.TextStyle(
+                    fontSize: 10,
+                    fontWeight:
+                        _isTotalRow(section.rows[i][0]) ||
+                            _isNumericValue(section.rows[i][2])
+                        ? pw.FontWeight.bold
+                        : pw.FontWeight.normal,
+                  ),
+                  textAlign: pw.TextAlign.right,
+                ),
+              ),
+            ],
+          ),
+      ],
+    );
+  }
+
+  bool _isTotalRow(String text) {
+    return text.toLowerCase().contains('total') ||
+        text.toLowerCase().contains('net profit') ||
+        text.toLowerCase().contains('gross profit');
+  }
+
+  pw.Widget _buildCalculation(PdfCalculationSection calculation) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 16),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: [
+          // Section title
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.symmetric(vertical: 6),
+            child: pw.Text(
+              calculation.title,
+              style: pw.TextStyle(
+                fontSize: 14,
+                fontWeight: pw.FontWeight.bold,
+                color: PdfColors.black,
+              ),
+            ),
+          ),
+          pw.SizedBox(height: 8),
+
+          // Formula
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              border: pw.Border.all(color: PdfColors.black, width: 0.5),
+            ),
+            child: pw.Text(
+              'Formula: ${calculation.formula}',
+              style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          pw.SizedBox(height: 8),
+
+          // Calculation
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey200,
+              border: pw.Border.all(color: PdfColors.black, width: 0.5),
+            ),
+            child: pw.Text(
+              'Calculation: ${calculation.calculation}',
+              style: pw.TextStyle(
+                fontSize: 11,
+                fontWeight: pw.FontWeight.normal,
+              ),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+          pw.SizedBox(height: 8),
+
+          // Result
+          pw.Container(
+            width: double.infinity,
+            padding: const pw.EdgeInsets.all(8),
+            decoration: pw.BoxDecoration(
+              color: PdfColors.grey100,
+              border: pw.Border.all(color: PdfColors.black, width: 0.5),
+            ),
+            child: pw.Text(
+              'Result: ${_stripCurrencySymbols(calculation.result)}',
+              style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+              textAlign: pw.TextAlign.center,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  pw.Widget _buildSummary(PdfSummarySection summary) {
+    return pw.Container(
+      margin: const pw.EdgeInsets.only(bottom: 16),
+      child: pw.Row(
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: [
+          pw.Text(
+            summary.title,
+            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+          ),
+          pw.Text(
+            _stripCurrencySymbols(summary.value),
+            style: pw.TextStyle(fontSize: 12, fontWeight: pw.FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _stripCurrencySymbols(String value) {
+    // Remove currency symbols that the default PDF font may not support
+    final withoutSymbols = value
+        .replaceAll('₱', '') // Peso symbol
+        .replaceAll(RegExp(r'[₱$€£¥₹¢]'), '') // Other currency symbols
+        .replaceAll('PHP', '') // PHP currency code
+        .replaceAll('P', '') // Sometimes P is used for peso
+        .trim();
+    return withoutSymbols;
+  }
+
+  bool _isNumericValue(String value) {
+    // Check if the value looks like a currency amount or percentage
+    return value.contains('₱') ||
+        value.contains('%') ||
+        value.contains('x') ||
+        RegExp(r'^\d+\.?\d*$').hasMatch(value.replaceAll(',', ''));
+  }
+}
+
+
+
+
+================================================================
+FILE #14: D:\flutter project\prostock\lib\services\printing_service.dart
+SIZE: 12.03 KB
+MODIFIED: 09/17/2025 01:35:50
+================================================================
+
+import 'package:bluetooth_thermal_printer_plus/bluetooth_thermal_printer_plus.dart';
+import 'package:esc_pos_utils_plus/esc_pos_utils_plus.dart';
+import 'package:flutter/foundation.dart';
+import 'package:prostock/models/bluetooth_device.dart';
+import 'package:prostock/models/receipt.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+class PrintingService with ChangeNotifier {
+  static final PrintingService _instance = PrintingService._internal();
+  factory PrintingService() => _instance;
+  PrintingService._internal();
+
+  bool _isConnected = false;
+  String? _connectedDeviceAddress;
+  String? _connectedDeviceName;
+  PaperSize _paperSize = PaperSize.mm80;
+
+  bool get isConnected => _isConnected;
+  String? get connectedDeviceAddress => _connectedDeviceAddress;
+  String? get connectedDeviceName => _connectedDeviceName;
+  PaperSize get paperSize => _paperSize;
+
+  Future<void> loadPaperSize() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final paperSizeName = prefs.getString('paper_size');
+
+      if (paperSizeName == 'mm58') {
+        _paperSize = PaperSize.mm58;
+      } else {
+        _paperSize = PaperSize.mm80; // default
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading paper size: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<void> savePaperSize(PaperSize paperSize) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+
+      String paperSizeName;
+      if (paperSize == PaperSize.mm58) {
+        paperSizeName = 'mm58';
+      } else {
+        paperSizeName = 'mm80';
+      }
+
+      await prefs.setString('paper_size', paperSizeName);
+      _paperSize = paperSize;
+
+      if (kDebugMode) {
+        print('Saved paper size: $paperSizeName');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving paper size: $e');
+      }
+    }
+    notifyListeners();
+  }
+
+  Future<List<BluetoothDevice>> getBluetooths() async {
+    try {
+      final devices = await BluetoothThermalPrinter.getBluetooths ?? [];
+      return devices.map((device) {
+        String name = 'Unknown Device';
+        String address = '';
+        if (device is String && device.contains('#')) {
+          final parts = device.split('#');
+          if (parts.length == 2) {
+            name = parts[0];
+            address = parts[1];
+          }
+        } else if (device is Map) {
+          name = device['name'] ?? 'Unknown Device';
+          address = device['address'] ?? '';
+        }
+        return BluetoothDevice(name: name, address: address);
+      }).toList();
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error getting bluetooth devices: $e');
+      }
+      rethrow; // Re-throw to allow UI to handle the error
+    }
+  }
+
+  Future<bool> connect(BluetoothDevice device) async {
+    if (kDebugMode) {
+      print('Connect called with device: ${device.name}');
+    }
+
+    if (device.address.isEmpty) {
+      if (kDebugMode) {
+        print('Device address is null or empty for device: ${device.name}');
+      }
+      return false;
+    }
+
+    try {
+      if (kDebugMode) {
+        print('Attempting to connect to: ${device.name} (${device.address})');
+      }
+
+      final result = await BluetoothThermalPrinter.connect(device.address);
+      if (kDebugMode) {
+        print('Connection result: $result');
+      }
+
+      if (result == 'true') {
+        _isConnected = true;
+        _connectedDeviceAddress = device.address;
+        _connectedDeviceName = device.name;
+        await saveDefaultPrinter(device.address);
+        notifyListeners();
+
+        if (kDebugMode) {
+          print('Successfully connected to ${device.name}');
+        }
+        return true;
+      } else {
+        if (kDebugMode) {
+          print('Connection failed with result: $result');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error connecting to printer: $e');
+        print('Stack trace: ${StackTrace.current}');
+      }
+      // Reset connection state on error
+      _isConnected = false;
+      _connectedDeviceAddress = null;
+      _connectedDeviceName = null;
+      notifyListeners();
+    }
+    return false;
+  }
+
+  Future<void> disconnect() async {
+    try {
+      await BluetoothThermalPrinter.disconnect(); // Fixed: Added parentheses
+      if (kDebugMode) {
+        print('Disconnected from printer');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error disconnecting: $e');
+      }
+    } finally {
+      // Always reset the connection state
+      _isConnected = false;
+      _connectedDeviceAddress = null;
+      _connectedDeviceName = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> saveDefaultPrinter(String address) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('default_printer_address', address);
+      if (kDebugMode) {
+        print('Saved default printer: $address');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error saving default printer: $e');
+      }
+    }
+  }
+
+  Future<String?> loadDefaultPrinter() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final address = prefs.getString('default_printer_address');
+      if (kDebugMode) {
+        print('Loaded default printer: $address');
+      }
+      return address;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error loading default printer: $e');
+      }
+      return null;
+    }
+  }
+
+  Future<bool> printTest() async {
+    if (!_isConnected) {
+      if (kDebugMode) {
+        print('Cannot print: No printer connected');
+      }
+      return false;
+    }
+
+    try {
+      final List<int> bytes = await _generateTestTicket();
+      await BluetoothThermalPrinter.writeBytes(bytes);
+      if (kDebugMode) {
+        print('Test print sent successfully');
+      }
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error printing test: $e');
+      }
+      return false;
+    }
+  }
+
+  Future<bool> printReceipt(
+    Receipt receipt, {
+    double? cashTendered,
+    double? change,
+  }) async {
+    if (!_isConnected) {
+      if (kDebugMode) {
+        print('Cannot print receipt: No printer connected');
+      }
+      return false;
+    }
+
+    try {
+      final List<int> bytes = await _generateReceiptTicket(
+        receipt,
+        cashTendered: cashTendered,
+        change: change,
+      );
+      await BluetoothThermalPrinter.writeBytes(bytes);
+      if (kDebugMode) {
+        print('Receipt printed successfully');
+      }
+      return true;
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error printing receipt: $e');
+      }
+      return false;
+    }
+  }
+
+  Future<List<int>> _generateTestTicket() async {
+    final profile = await CapabilityProfile.load();
+    final generator = Generator(_paperSize, profile);
+    List<int> bytes = [];
+
+    bytes += generator.text(
+      'ProStock POS',
+      styles: const PosStyles(
+        align: PosAlign.center,
+        height: PosTextSize.size2,
+        width: PosTextSize.size2,
+        bold: true,
+      ),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'Test Print',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'Connection Successful!',
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'Printer: $_connectedDeviceName',
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.text(
+      'Address: $_connectedDeviceAddress',
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      DateTime.now().toString(),
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.hr();
+    bytes += generator.feed(2);
+    bytes += generator.cut();
+
+    return bytes;
+  }
+
+  Future<List<int>> _generateReceiptTicket(
+    Receipt receipt, {
+    double? cashTendered,
+    double? change,
+  }) async {
+    final profile = await CapabilityProfile.load();
+    final generator = Generator(_paperSize, profile);
+    List<int> bytes = [];
+
+    // Header
+    bytes += generator.text(
+      'RETAIL CREDIT MANAGER',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
+    );
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'Receipt: ${receipt.formattedReceiptNumber}',
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.text(
+      receipt.formattedTimestamp,
+      styles: const PosStyles(align: PosAlign.center),
+    );
+    bytes += generator.hr();
+
+    // Customer and Payment Info - Single line format for 58mm
+    bytes += generator.text(
+      'Customer: ${receipt.customerName ?? 'Walk-in Customer'}',
+      styles: const PosStyles(align: PosAlign.left),
+    );
+    bytes += generator.text(
+      'Payment: ${receipt.paymentMethod.toUpperCase()}',
+      styles: const PosStyles(align: PosAlign.left),
+    );
+    bytes += generator.hr();
+
+    // Items - Simplified format for 58mm
+    bytes += generator.text(
+      'ITEMS',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
+    );
+    bytes += generator.hr(ch: '-');
+
+    // Each item on multiple lines for better readability on 58mm
+    for (final item in receipt.items) {
+      // Product name
+      bytes += generator.text(
+        item.productName,
+        styles: const PosStyles(bold: true),
+      );
+
+      // Quantity, price, and total on one line
+      bytes += generator.row([
+        PosColumn(
+          text: '${item.quantity} x PHP${item.unitPrice.toStringAsFixed(2)}',
+          width: 8,
+          styles: const PosStyles(align: PosAlign.left),
+        ),
+        PosColumn(
+          text: 'PHP${item.totalPrice.toStringAsFixed(2)}',
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]);
+      bytes += generator.feed(1);
+    }
+
+    bytes += generator.hr();
+
+    // Totals - Right aligned for 58mm
+    bytes += generator.row([
+      PosColumn(
+        text: 'Subtotal',
+        width: 8,
+        styles: const PosStyles(align: PosAlign.left),
+      ),
+      PosColumn(
+        text: 'PHP${receipt.subtotal.toStringAsFixed(2)}',
+        width: 4,
+        styles: const PosStyles(align: PosAlign.right),
+      ),
+    ]);
+
+    bytes += generator.row([
+      PosColumn(
+        text: 'TOTAL',
+        width: 8,
+        styles: const PosStyles(align: PosAlign.left, bold: true),
+      ),
+      PosColumn(
+        text: 'PHP${receipt.total.toStringAsFixed(2)}',
+        width: 4,
+        styles: const PosStyles(align: PosAlign.right, bold: true),
+      ),
+    ]);
+
+    // Cash and change information
+    if (cashTendered != null && cashTendered > 0) {
+      bytes += generator.row([
+        PosColumn(
+          text: 'Cash Tendered',
+          width: 8,
+          styles: const PosStyles(align: PosAlign.left),
+        ),
+        PosColumn(
+          text: 'PHP${cashTendered.toStringAsFixed(2)}',
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right),
+        ),
+      ]);
+    }
+
+    if (change != null && change > 0) {
+      bytes += generator.row([
+        PosColumn(
+          text: 'Change',
+          width: 8,
+          styles: const PosStyles(align: PosAlign.left, bold: true),
+        ),
+        PosColumn(
+          text: 'PHP${change.toStringAsFixed(2)}',
+          width: 4,
+          styles: const PosStyles(align: PosAlign.right, bold: true),
+        ),
+      ]);
+    }
+
+    bytes += generator.hr(ch: '=');
+
+    // Footer
+    bytes += generator.feed(1);
+    bytes += generator.text(
+      'Thank you for your business!',
+      styles: const PosStyles(align: PosAlign.center, bold: true),
+    );
+    bytes += generator.feed(2);
+    bytes += generator.cut();
+
+    return bytes;
+  }
+}
+
+
+
+
+================================================================
+FILE #15: D:\flutter project\prostock\lib\models\product.dart
+SIZE: 4.04 KB
+MODIFIED: 10/25/2025 14:35:58
+================================================================
+
+import 'package:prostock/utils/app_constants.dart';
+
+class Product {
+  final String? id;
+  final String name;
+  final String? barcode;
+  final double cost;
+  final double?
+  sellingPrice; // Fixed selling price (overrides calculated price)
+  final int stock;
+  final int minStock;
+  final String? category;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final int version;
+
+  Product({
+    this.id,
+    required this.name,
+    this.barcode,
+    required this.cost,
+    this.sellingPrice,
+    required this.stock,
+    this.minStock = 5,
+    this.category,
+    required this.createdAt,
+    required this.updatedAt,
+    this.version = 1,
+  }) {
+    _validateProduct();
+  }
+
+  // Price calculation moved to UI level using TaxService
+  // This allows dynamic tax rate configuration
+
+  void _validateProduct() {
+    if (name.trim().isEmpty) {
+      throw ArgumentError('Product name cannot be empty');
+    }
+    if (name.length > ValidationConstants.maxNameLength) {
+      throw ArgumentError('Product name cannot exceed 100 characters');
+    }
+    if (cost < 0) {
+      throw ArgumentError('Product cost cannot be negative');
+    }
+    if (sellingPrice != null && sellingPrice! < 0) {
+      throw ArgumentError('Selling price cannot be negative');
+    }
+    if (stock < 0) {
+      throw ArgumentError('Product stock cannot be negative');
+    }
+    if (minStock < 0) {
+      throw ArgumentError('Minimum stock cannot be negative');
+    }
+    if (barcode != null && barcode!.isNotEmpty) {
+      if (!_isValidBarcode(barcode!)) {
+        throw ArgumentError('Invalid barcode format');
+      }
+    }
+    if (category != null &&
+        category!.length > ValidationConstants.maxCategoryLength) {
+      throw ArgumentError('Category name cannot exceed 50 characters');
+    }
+  }
+
+  bool _isValidBarcode(String barcode) {
+    // Basic barcode validation - alphanumeric, 8-13 characters
+    final barcodeRegex = RegExp(r'^[A-Za-z0-9]{8,13}');
+    return barcodeRegex.hasMatch(barcode);
+  }
+
+  // Price-dependent methods moved to UI level using TaxService
+  // This allows dynamic tax rate configuration
+
+  /// Get the actual selling price to use (manual override or calculated)
+  double getPriceForSale(double calculatedPrice) {
+    return sellingPrice ?? calculatedPrice;
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'barcode': barcode,
+      'cost': cost,
+      'selling_price': sellingPrice,
+      'stock': stock,
+      'min_stock': minStock,
+      'category': category,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+      'version': version,
+    };
+  }
+
+  factory Product.fromMap(Map<String, dynamic> map) {
+    return Product(
+      id: map['id']?.toString(),
+      name: map['name'],
+      barcode: map['barcode'],
+      cost: map['cost'].toDouble(),
+      sellingPrice: map['selling_price'] != null
+          ? (map['selling_price'] as num).toDouble()
+          : null,
+      stock: map['stock'],
+      minStock: map['min_stock'] ?? 5,
+      category: map['category'],
+      createdAt: DateTime.parse(map['created_at']),
+      updatedAt: DateTime.parse(map['updated_at']),
+      version: map['version'] ?? 1,
+    );
+  }
+
+  Product copyWith({
+    String? id,
+    String? name,
+    String? barcode,
+    double? cost,
+    double? sellingPrice,
+    int? stock,
+    int? minStock,
+    String? category,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int? version,
+  }) {
+    return Product(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      barcode: barcode ?? this.barcode,
+      cost: cost ?? this.cost,
+      sellingPrice: sellingPrice ?? this.sellingPrice,
+      stock: stock ?? this.stock,
+      minStock: minStock ?? this.minStock,
+      category: category ?? this.category,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
+    );
+  }
+
+  bool get isLowStock => stock <= minStock;
+}
+
+
+
+
+================================================================
+FILE #16: D:\flutter project\prostock\lib\models\customer.dart
+SIZE: 4.2 KB
+MODIFIED: 09/19/2025 11:05:42
+================================================================
+
+import 'package:prostock/utils/app_constants.dart';
+import 'package:uuid/uuid.dart';
+
+class Customer {
+  final String id;
+  final String name;
+  final String? phone;
+  final String? email;
+  final String? address;
+  final String? imageUrl;
+  final String? localImagePath;
+  final double balance;
+  final double creditLimit;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final int version; // Add version field for conflict detection
+
+  Customer({
+    String? id,
+    required this.name,
+    this.phone,
+    this.email,
+    this.address,
+    this.imageUrl,
+    this.localImagePath,
+    this.balance = 0,
+    this.creditLimit = 0,
+    required this.createdAt,
+    required this.updatedAt,
+    this.version = 1, // Default version
+  }) : id = id ?? const Uuid().v4() {
+    _validateCustomer();
+  }
+
+  void _validateCustomer() {
+    if (name.trim().isEmpty) {
+      throw ArgumentError('Customer name cannot be empty');
+    }
+    if (name.length > ValidationConstants.maxNameLength) {
+      throw ArgumentError('Customer name cannot exceed 100 characters');
+    }
+    if (phone != null && phone!.isNotEmpty && !_isValidPhoneNumber(phone!)) {
+      throw ArgumentError('Invalid phone number format');
+    }
+    if (email != null && email!.isNotEmpty && !_isValidEmail(email!)) {
+      throw ArgumentError('Invalid email format');
+    }
+    if (address != null &&
+        address!.length > ValidationConstants.maxDescriptionLength) {
+      throw ArgumentError('Address cannot exceed 200 characters');
+    }
+    if (balance < 0) {
+      throw ArgumentError('Balance cannot be negative');
+    }
+    if (creditLimit < 0) {
+      throw ArgumentError('Credit limit cannot be negative');
+    }
+  }
+
+  bool _isValidEmail(String email) {
+    final emailRegex = RegExp(
+      r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+    );
+    return emailRegex.hasMatch(email);
+  }
+
+  bool _isValidPhoneNumber(String phone) {
+    // Philippine phone number format validation
+    final phoneRegex = RegExp(r'^(\+63|0)[0-9]{10}');
+    return phoneRegex.hasMatch(phone.replaceAll(RegExp(r'[\s\-$]'), ''));
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'name': name,
+      'phone': phone,
+      'email': email,
+      'address': address,
+      'imageUrl': imageUrl,
+      'localImagePath': localImagePath,
+      'balance': balance,
+      'credit_limit': creditLimit,
+      'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt.toIso8601String(),
+      'version': version,
+    };
+  }
+
+  factory Customer.fromMap(Map<String, dynamic> map) {
+    return Customer(
+      id: map['id']?.toString(),
+      name: map['name'] ?? '',
+      phone: map['phone']?.toString(),
+      email: map['email']?.toString(),
+      address: map['address']?.toString(),
+      imageUrl: map['imageUrl']?.toString(),
+      localImagePath: map['localImagePath']?.toString(),
+      balance: (map['balance'] ?? 0).toDouble(),
+      creditLimit: (map['credit_limit'] ?? 0).toDouble(),
+      createdAt: DateTime.parse(
+        map['created_at'] ?? DateTime.now().toIso8601String(),
+      ),
+      updatedAt: DateTime.parse(
+        map['updated_at'] ?? DateTime.now().toIso8601String(),
+      ),
+      version: map['version'] ?? 1,
+    );
+  }
+
+  Customer copyWith({
+    String? id,
+    String? name,
+    String? phone,
+    String? email,
+    String? address,
+    String? imageUrl,
+    String? localImagePath,
+    double? balance,
+    double? creditLimit,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    int? version,
+  }) {
+    return Customer(
+      id: id ?? this.id,
+      name: name ?? this.name,
+      phone: phone ?? this.phone,
+      email: email ?? this.email,
+      address: address ?? this.address,
+      imageUrl: imageUrl ?? this.imageUrl,
+      localImagePath: localImagePath ?? this.localImagePath,
+      balance: balance ?? this.balance,
+      creditLimit: creditLimit ?? this.creditLimit,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
+    );
+  }
+
+  bool get hasUtang => balance > 0;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Customer && runtimeType == other.runtimeType && id == other.id;
+
+  @override
+  int get hashCode => id.hashCode;
+}
+
+
+
+
+================================================================
+FILE #17: D:\flutter project\prostock\lib\models\sale.dart
+SIZE: 5.18 KB
+MODIFIED: 10/03/2025 16:44:52
+================================================================
+
+import 'package:prostock/utils/app_constants.dart';
+
+class Sale {
+  late final String? id;
+  final String userId;
+  final String? customerId;
+  final double totalAmount;
+  final String paymentMethod;
+  final String status;
+  final DateTime createdAt;
+  final DateTime? dueDate;
+  final int isSynced;
+
+  Sale({
+    this.id,
+    required this.userId,
+    this.customerId,
+    required this.totalAmount,
+    required this.paymentMethod,
+    required this.status,
+    required this.createdAt,
+    this.dueDate,
+    this.isSynced = AppDefaults.notSynced,
+  }) {
+    _validateSale();
+  }
+
+  void _validateSale() {
+    if (totalAmount <= 0) {
+      throw ArgumentError('Total amount must be greater than zero');
+    }
+    if (totalAmount > ValidationConstants.maxTransactionAmount) {
+      throw ArgumentError('Total amount cannot exceed ₱1,000,000');
+    }
+    if (!_isValidPaymentMethod(paymentMethod)) {
+      throw ArgumentError('Invalid payment method');
+    }
+    if (!_isValidStatus(status)) {
+      throw ArgumentError('Invalid sale status');
+    }
+    if (paymentMethod == 'credit' && dueDate == null) {
+      throw ArgumentError('Due date is required for credit sales');
+    }
+  }
+
+  bool _isValidPaymentMethod(String method) {
+    const validMethods = [
+      'cash',
+      'credit',
+      'card',
+      'gcash',
+      'paymaya',
+      // Special methods for customer debt settlements recorded as sales
+      'credit_payment',
+      'debt_payment',
+      'credit payment', // backward-compat for spaced label
+      'debt payment',
+    ];
+    return validMethods.contains(method.toLowerCase());
+  }
+
+  bool _isValidStatus(String saleStatus) {
+    const validStatuses = ['pending', 'completed', 'cancelled', 'refunded'];
+    return validStatuses.contains(saleStatus.toLowerCase());
+  }
+
+  bool get isCompleted => status.toLowerCase() == 'completed';
+  bool get isPending => status.toLowerCase() == 'pending';
+  bool get canBeModified => status.toLowerCase() == 'pending';
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'user_id': userId,
+      'customer_id': customerId,
+      'total_amount': totalAmount,
+      'payment_method': paymentMethod,
+      'status': status,
+      'created_at': createdAt.toIso8601String(),
+      'due_date': dueDate?.toIso8601String(),
+      'is_synced': isSynced,
+    };
+  }
+
+  factory Sale.fromMap(Map<String, dynamic> map) {
+    // Support both snake_case (local DB) and camelCase (Firestore) field names
+    final dynamic totalAmountRaw = map['total_amount'] ?? map['totalAmount'];
+    if (totalAmountRaw == null) {
+      throw ArgumentError('Total amount cannot be null');
+    }
+
+    final String userId = (map['user_id'] ?? map['userId'] ?? '').toString();
+    final String? customerId = (map['customer_id'] ?? map['customerId'])
+        ?.toString();
+    final String paymentMethod =
+        (map['payment_method'] ?? map['paymentMethod'] ?? '').toString();
+    final String status = (map['status'] ?? 'pending').toString();
+
+    // createdAt may be an ISO string (local) or a Firestore Timestamp
+    final dynamic createdAtRaw = map['created_at'] ?? map['createdAt'];
+    DateTime createdAt;
+    if (createdAtRaw == null) {
+      createdAt = DateTime.now();
+    } else if (createdAtRaw is DateTime) {
+      createdAt = createdAtRaw;
+    } else if (createdAtRaw is String) {
+      createdAt = DateTime.parse(createdAtRaw);
+    } else {
+      // Attempt to call toDate() if it's a Firestore Timestamp-like object
+      try {
+        createdAt = createdAtRaw.toDate();
+      } catch (_) {
+        createdAt = DateTime.now();
+      }
+    }
+
+    // dueDate may be ISO string or Firestore Timestamp or null
+    final dynamic dueDateRaw = map['due_date'] ?? map['dueDate'];
+    DateTime? dueDate;
+    if (dueDateRaw == null) {
+      dueDate = null;
+    } else if (dueDateRaw is DateTime) {
+      dueDate = dueDateRaw;
+    } else if (dueDateRaw is String) {
+      dueDate = DateTime.parse(dueDateRaw);
+    } else {
+      try {
+        dueDate = dueDateRaw.toDate();
+      } catch (_) {
+        dueDate = null;
+      }
+    }
+
+    final int isSynced =
+        (map['is_synced'] ?? map['isSynced'] ?? AppDefaults.notSynced) as int;
+
+    return Sale(
+      id: map['id']?.toString(),
+      userId: userId,
+      customerId: customerId,
+      totalAmount: (totalAmountRaw as num).toDouble(),
+      paymentMethod: paymentMethod,
+      status: status,
+      createdAt: createdAt,
+      dueDate: dueDate,
+      isSynced: isSynced,
+    );
+  }
+
+  Sale copyWith({
+    String? id,
+    String? userId,
+    String? customerId,
+    double? totalAmount,
+    String? paymentMethod,
+    String? status,
+    DateTime? createdAt,
+    DateTime? dueDate,
+    int? isSynced,
+  }) {
+    return Sale(
+      id: id ?? this.id,
+      userId: userId ?? this.userId,
+      customerId: customerId ?? this.customerId,
+      totalAmount: totalAmount ?? this.totalAmount,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      status: status ?? this.status,
+      createdAt: createdAt ?? this.createdAt,
+      dueDate: dueDate ?? this.dueDate,
+      isSynced: isSynced ?? this.isSynced,
+    );
+  }
+}
+
+
+
+
+========================================
+EXPORT SUMMARY
+========================================
+Total User Module Files: 17
+Export Date: 11/12/2025 11:10:53
+Project: ProStock Inventory Management
+Module: USER
+========================================
+
