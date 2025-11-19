@@ -357,7 +357,9 @@ class SalesProvider with ChangeNotifier {
 
       if (quantityDifference > 0) {
         // Increasing quantity - need more stock
-        final availableStock = _inventoryProvider.getVisualStock(product.id!);
+        final availableStock = await _inventoryProvider.getVisualStock(
+          product.id!,
+        );
         if (quantityDifference > availableStock) {
           _error =
               'Insufficient stock for ${product.name}. Available: $availableStock';

@@ -33,6 +33,8 @@ class InventoryProvider with ChangeNotifier {
   final Map<String, int> _reorderPoints = {};
   final Map<String, int> _visualStock = {};
   final Map<String, _StockAlertState> _lastAlertStates = {};
+  final Map<String, _StockCache> _stockCache =
+      {}; // Cache for batch-based stock
 
   final LocalDatabaseService _localDatabaseService =
       LocalDatabaseService.instance;
@@ -91,6 +93,8 @@ class InventoryProvider with ChangeNotifier {
         0,
         _visualStock[productId]!,
       );
+      // Invalidate stock cache when visual stock changes
+      _stockCache.remove(productId);
       notifyListeners();
     }
   }
@@ -102,11 +106,50 @@ class InventoryProvider with ChangeNotifier {
         0,
         product.stock,
       );
+      // Invalidate stock cache when visual stock changes
+      _stockCache.remove(productId);
       notifyListeners();
     }
   }
 
-  int getVisualStock(String productId) {
+  /// Get visual stock from batch system with caching for performance
+  /// This is now async to query actual batch availability
+  Future<int> getVisualStock(String productId) async {
+    // Check cache first (1 second TTL)
+    if (_stockCache.containsKey(productId)) {
+      final cache = _stockCache[productId]!;
+      if (DateTime.now().difference(cache.timestamp).inSeconds < 1) {
+        return cache.value;
+      }
+    }
+
+    // Query batch system for actual availability
+    final totalBatchStock = await _batchService.getTotalAvailableStock(
+      productId,
+    );
+    final reserved = _reservedStock[productId] ?? 0;
+    final available = (totalBatchStock - reserved).clamp(0, totalBatchStock);
+
+    // Cache result
+    _stockCache[productId] = _StockCache(
+      value: available,
+      timestamp: DateTime.now(),
+    );
+
+    return available;
+  }
+
+  /// Synchronous version for backward compatibility - returns cached value or 0
+  /// Use this only when you can't await, otherwise prefer getVisualStock()
+  int getVisualStockSync(String productId) {
+    // Return cached value if available and recent
+    if (_stockCache.containsKey(productId)) {
+      final cache = _stockCache[productId]!;
+      if (DateTime.now().difference(cache.timestamp).inSeconds < 2) {
+        return cache.value;
+      }
+    }
+    // Fallback to visual stock map or product stock
     return _visualStock[productId] ?? getProductById(productId)?.stock ?? 0;
   }
 
@@ -1872,3 +1915,11 @@ class InventoryProvider with ChangeNotifier {
 }
 
 enum _StockAlertState { normal, low, out }
+
+/// Cache for batch-based stock calculations with timestamp
+class _StockCache {
+  final int value;
+  final DateTime timestamp;
+
+  _StockCache({required this.value, required this.timestamp});
+}

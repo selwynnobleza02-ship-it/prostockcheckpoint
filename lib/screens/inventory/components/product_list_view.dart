@@ -43,14 +43,23 @@ class ProductListView extends StatelessWidget {
             itemCount: filteredProducts.length,
             itemBuilder: (context, index) {
               final product = filteredProducts[index];
-              final visualStock = provider.getVisualStock(product.id!);
               final isQueued = !provider.isOnline;
 
-              return ExpandableProductCard(
-                product: product,
-                visualStock: visualStock,
-                isQueued: isQueued,
-                provider: provider,
+              // Use FutureBuilder to get batch-based stock asynchronously
+              return FutureBuilder<int>(
+                future: provider.getVisualStock(product.id!),
+                builder: (context, stockSnapshot) {
+                  final visualStock =
+                      stockSnapshot.data ??
+                      provider.getVisualStockSync(product.id!);
+
+                  return ExpandableProductCard(
+                    product: product,
+                    visualStock: visualStock,
+                    isQueued: isQueued,
+                    provider: provider,
+                  );
+                },
               );
             },
           ),
