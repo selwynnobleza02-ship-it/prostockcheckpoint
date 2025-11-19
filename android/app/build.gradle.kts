@@ -11,7 +11,7 @@ plugins {
 android {
     namespace = "com.example.prostock"
     compileSdk = flutter.compileSdkVersion
-     ndkVersion "29.0.14206865"
+    ndkVersion = "29.0.14206865"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

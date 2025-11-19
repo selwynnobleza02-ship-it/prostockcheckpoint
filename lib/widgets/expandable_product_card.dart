@@ -366,15 +366,23 @@ class _ExpandableProductCardState extends State<ExpandableProductCard> {
                             children: [
                               Icon(
                                 Icons.inventory_2_outlined,
-                                size: 16,
+                                size: 18,
                                 color: colorScheme.primary,
                               ),
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 8),
                               Text(
-                                'Batch Details',
+                                'Stock Batches',
                                 style: textTheme.titleSmall?.copyWith(
                                   fontWeight: FontWeight.bold,
                                   color: colorScheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                '(Oldest to Newest)',
+                                style: textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontStyle: FontStyle.italic,
                                 ),
                               ),
                             ],

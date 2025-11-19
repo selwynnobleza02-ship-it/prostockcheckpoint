@@ -12,6 +12,12 @@ class BatchListWidget extends StatelessWidget {
     this.showDepleted = false,
   });
 
+  bool _isSystemNote(String? note) {
+    if (note == null) return false;
+    return note.toLowerCase().contains('initial stock migration') ||
+        note.toLowerCase().contains('fifo system');
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayBatches = showDepleted
@@ -42,162 +48,275 @@ class BatchListWidget extends StatelessWidget {
       itemCount: displayBatches.length,
       itemBuilder: (context, index) {
         final batch = displayBatches[index];
-        final isOldest = index == 0 && batch.hasStock;
+        final isActive = batch.hasStock && !batch.isDepleted;
 
         return Card(
-          elevation: isOldest ? 3 : 1,
-          margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-          color: batch.isDepleted
-              ? Colors.grey.shade100
-              : (isOldest ? Colors.blue.shade50 : null),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: batch.isDepleted
-                  ? Colors.grey
-                  : (isOldest ? Colors.blue : Colors.green),
-              child: Text(
-                '${index + 1}',
-                style: const TextStyle(color: Colors.white),
-              ),
+          elevation: 1,
+          margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(
+              color: isActive ? Colors.green.shade200 : Colors.grey.shade300,
+              width: isActive ? 2 : 1,
             ),
-            title: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    batch.batchNumber,
-                    style: TextStyle(
-                      fontWeight: isOldest
-                          ? FontWeight.bold
-                          : FontWeight.normal,
-                      decoration: batch.isDepleted
-                          ? TextDecoration.lineThrough
-                          : null,
-                    ),
-                  ),
-                ),
-                if (isOldest && !batch.isDepleted)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.blue,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'FIFO NEXT',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                if (batch.isDepleted)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.grey,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: const Text(
-                      'DEPLETED',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            subtitle: Column(
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 4),
+                // Header Row: Batch number and status
                 Row(
                   children: [
-                    Expanded(
+                    // Batch Number Badge
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isActive ? Colors.green : Colors.grey.shade400,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                       child: Text(
-                        'Received: ${DateFormat('MMM d, y').format(batch.dateReceived)}',
-                        style: const TextStyle(fontSize: 12),
-                      ),
-                    ),
-                    Text(
-                      'Cost: ₱${batch.unitCost.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: LinearProgressIndicator(
-                        value: batch.quantityReceived > 0
-                            ? batch.quantitySold / batch.quantityReceived
-                            : 0,
-                        backgroundColor: Colors.grey.shade300,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          batch.isDepleted
-                              ? Colors.grey
-                              : (batch.percentageSold > 75
-                                    ? Colors.orange
-                                    : Colors.green),
+                        'Batch ${index + 1}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const Spacer(),
+                    // Status Badge
+                    if (!isActive)
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade300,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: const Text(
+                          'Sold Out',
+                          style: TextStyle(
+                            color: Colors.black54,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                // Info Grid
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      // Date and Cost Row
+                      Row(
+                        children: [
+                          // Date
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Date Received',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  DateFormat(
+                                    'MMM d, y',
+                                  ).format(batch.dateReceived),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Cost per unit
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                const Text(
+                                  'Cost per Unit',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '₱${batch.unitCost.toStringAsFixed(2)}',
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      // Stock Status
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Stock',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    Text(
+                                      '${batch.quantityRemaining}',
+                                      style: TextStyle(
+                                        fontSize: 20,
+                                        fontWeight: FontWeight.bold,
+                                        color: isActive
+                                            ? Colors.green.shade700
+                                            : Colors.grey,
+                                      ),
+                                    ),
+                                    Text(
+                                      ' / ${batch.quantityReceived}',
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.black54,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    const Text(
+                                      'units',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.black45,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      // Progress Bar
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: batch.quantityReceived > 0
+                              ? batch.quantitySold / batch.quantityReceived
+                              : 0,
+                          backgroundColor: Colors.grey.shade300,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            batch.isDepleted
+                                ? Colors.grey
+                                : (batch.percentageSold > 75
+                                      ? Colors.orange
+                                      : Colors.green),
+                          ),
+                          minHeight: 8,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Sold: ${batch.quantitySold} units',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.black54,
+                            ),
+                          ),
+                          Text(
+                            '${batch.percentageSold.toStringAsFixed(0)}% sold',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 10),
+                // Total Value
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Total Value',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                    ),
                     Text(
-                      '${batch.quantityRemaining}/${batch.quantityReceived}',
+                      '₱${batch.totalValue.toStringAsFixed(2)}',
                       style: const TextStyle(
-                        fontSize: 11,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
+                        color: Colors.green,
                       ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Sold: ${batch.quantitySold} (${batch.percentageSold.toStringAsFixed(0)}%)',
-                  style: const TextStyle(fontSize: 11, color: Colors.grey),
-                ),
-                if (batch.notes != null && batch.notes!.isNotEmpty)
+                // User notes only (hide system notes)
+                if (batch.notes != null &&
+                    batch.notes!.isNotEmpty &&
+                    !_isSystemNote(batch.notes))
                   Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text(
-                      batch.notes!,
-                      style: const TextStyle(
-                        fontSize: 10,
-                        fontStyle: FontStyle.italic,
-                        color: Colors.grey,
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(
+                          color: Colors.blue.shade200,
+                          width: 1,
+                        ),
+                      ),
+                      child: Text(
+                        batch.notes!,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                          color: Colors.black87,
+                        ),
                       ),
                     ),
                   ),
-              ],
-            ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Text(
-                  '₱${batch.totalValue.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-                const Text(
-                  'Total Value',
-                  style: TextStyle(fontSize: 10, color: Colors.grey),
-                ),
               ],
             ),
           ),
