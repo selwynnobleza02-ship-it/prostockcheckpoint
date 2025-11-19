@@ -505,17 +505,20 @@ class TaxRulesService {
       final id = d.id;
       final double cost = (data['cost'] as num?)?.toDouble() ?? 0.0;
       final String? cat = data['category'] as String?;
+      final double? manualSellingPrice = (data['selling_price'] as num?)?.toDouble();
 
-      final price = await TaxService.calculateSellingPriceWithRule(
+      final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
         cost,
         productId: id,
         categoryName: cat,
       );
+      // Respect manual override if set
+      final actualPrice = manualSellingPrice ?? calculatedPrice;
 
       final ref = priceHistoryCol.doc();
       batch.set(ref, {
         'productId': id,
-        'price': price,
+        'price': actualPrice,
         'timestamp': FieldValue.serverTimestamp(),
       });
     }

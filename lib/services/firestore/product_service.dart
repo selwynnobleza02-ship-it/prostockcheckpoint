@@ -100,15 +100,16 @@ class ProductService {
 
       if (priceChanged) {
         final priceHistoryRef = priceHistory.doc();
-        final sellingPrice = await TaxService.calculateSellingPriceWithRule(
+        final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
           product.cost,
           productId: product.id,
           categoryName: product.category,
         );
+        final actualPrice = product.getPriceForSale(calculatedPrice);
         final priceHistoryData = PriceHistory(
           id: priceHistoryRef.id,
           productId: product.id!,
-          price: sellingPrice,
+          price: actualPrice,
           timestamp: DateTime.now(),
         ).toMap();
         batch.set(priceHistoryRef, priceHistoryData);
@@ -190,11 +191,13 @@ class ProductService {
     try {
       final doc = await products.doc(id).get();
 
-      if (doc.exists) {
+      if (doc.exists && doc.data() != null) {
         return _productFromDocument(doc);
       }
       return null;
     } catch (e) {
+      // Log the error but don't throw to allow graceful degradation
+      print('Error getting product by ID $id: $e');
       throw FirestoreException('Failed to get product by ID: $e');
     }
   }
@@ -258,14 +261,20 @@ class ProductService {
 
   Future<List<PriceHistory>> getPriceHistory(String productId) async {
     try {
+      // Fetch without orderBy to avoid composite index requirement
+      // Use server-side data to avoid stale cache
       final snapshot = await priceHistory
           .where('productId', isEqualTo: productId)
-          .orderBy('timestamp', descending: true)
-          .get();
+          .get(const GetOptions(source: Source.server));
 
-      return snapshot.docs.map((doc) {
+      // Sort in memory by timestamp descending
+      final historyList = snapshot.docs.map((doc) {
         return PriceHistory.fromFirestore(doc);
       }).toList();
+
+      historyList.sort((a, b) => b.timestamp.compareTo(a.timestamp));
+
+      return historyList;
     } catch (e) {
       throw FirestoreException('Failed to get price history: $e');
     }

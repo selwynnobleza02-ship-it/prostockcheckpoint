@@ -20,8 +20,14 @@ class PriceHistoryDialogState extends State<PriceHistoryDialog> {
   @override
   void initState() {
     super.initState();
+    _loadPriceHistory();
+  }
+
+  void _loadPriceHistory() {
     final productService = ProductService(FirebaseFirestore.instance);
-    _priceHistoryFuture = productService.getPriceHistory(widget.productId);
+    setState(() {
+      _priceHistoryFuture = productService.getPriceHistory(widget.productId);
+    });
   }
 
   String _getPriceChangeText(PriceHistory current, PriceHistory? previous) {
@@ -53,7 +59,17 @@ class PriceHistoryDialogState extends State<PriceHistoryDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Price History'),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          const Text('Price History'),
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: _loadPriceHistory,
+            tooltip: 'Refresh',
+          ),
+        ],
+      ),
       content: FutureBuilder<List<PriceHistory>>(
         future: _priceHistoryFuture,
         builder: (context, snapshot) {

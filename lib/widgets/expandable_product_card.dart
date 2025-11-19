@@ -137,6 +137,10 @@ class _ExpandableProductCardState extends State<ExpandableProductCard> {
                                       productId: widget.product.id,
                                       categoryName: widget.product.category,
                                     ),
+                              )
+                              .then(
+                                (calculatedPrice) => widget.product
+                                    .getPriceForSale(calculatedPrice),
                               ),
                           builder: (context, snapshot) {
                             if (snapshot.hasData) {

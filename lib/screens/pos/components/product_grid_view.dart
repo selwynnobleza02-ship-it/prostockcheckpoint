@@ -242,6 +242,10 @@ class ProductGridView extends StatelessWidget {
                                               productId: product.id,
                                               categoryName: product.category,
                                             ),
+                                      )
+                                      .then(
+                                        (calculatedPrice) => product
+                                            .getPriceForSale(calculatedPrice),
                                       ),
                                   builder: (context, snapshot) {
                                     final price = snapshot.data;

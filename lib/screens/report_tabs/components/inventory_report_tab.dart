@@ -83,9 +83,9 @@ class InventoryReportTab extends StatelessWidget {
                                         Icons.article,
                                         color: Colors.blue,
                                       ),
-                                      title: const Text('Single PDF (Limited)'),
+                                      title: const Text('Combined PDF'),
                                       subtitle: const Text(
-                                        'One PDF with limited entries per section',
+                                        'Selected sections in one or more PDFs (auto-split if needed)',
                                         style: TextStyle(fontSize: 12),
                                       ),
                                       onTap: () =>
@@ -547,8 +547,8 @@ class InventoryReportTab extends StatelessWidget {
                                 return;
                               }
 
-                              // Generate single PDF with limited data
-                              final file = await pdf.generatePdfInBackground(
+                              // Generate combined PDF - uses auto-splitting for large sections
+                              final files = await pdf.generatePdfPerSection(
                                 reportTitle:
                                     'Inventory Report - Sari-Sari Store',
                                 startDate: null,
@@ -563,7 +563,9 @@ class InventoryReportTab extends StatelessWidget {
                               if (!context.mounted) return;
                               scaffold.showSnackBar(
                                 SnackBar(
-                                  content: Text('PDF saved: ${file.path}'),
+                                  content: Text(
+                                    '${files.length} PDF file(s) saved to Downloads folder',
+                                  ),
                                   backgroundColor: Colors.green,
                                   duration: const Duration(seconds: 4),
                                 ),

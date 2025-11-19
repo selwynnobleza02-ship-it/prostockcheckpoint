@@ -493,9 +493,15 @@ class InventoryProvider with ChangeNotifier {
             originalProduct != null &&
             originalProduct.cost != productToUpdate.cost;
 
+        final bool sellingPriceChanged =
+            originalProduct != null &&
+            originalProduct.sellingPrice != productToUpdate.sellingPrice;
+
+        final bool priceChanged = costChanged || sellingPriceChanged;
+
         await productService.updateProductWithPriceHistory(
           productToUpdate,
-          costChanged,
+          priceChanged,
         );
 
         // Record cost history when cost changes in online mode
@@ -550,16 +556,23 @@ class InventoryProvider with ChangeNotifier {
           ),
         );
 
-        if (originalProduct != null &&
-            originalProduct.cost != updatedProduct.cost) {
+        final bool costChanged =
+            originalProduct != null &&
+            originalProduct.cost != updatedProduct.cost;
+        final bool sellingPriceChanged =
+            originalProduct != null &&
+            originalProduct.sellingPrice != updatedProduct.sellingPrice;
+
+        if (costChanged || sellingPriceChanged) {
           // Track price history
-          final sellingPrice = await TaxService.calculateSellingPrice(
+          final calculatedPrice = await TaxService.calculateSellingPrice(
             updatedProduct.cost,
           );
+          final actualPrice = updatedProduct.getPriceForSale(calculatedPrice);
           final priceHistory = PriceHistory(
             id: const Uuid().v4(),
             productId: updatedProduct.id!,
-            price: sellingPrice,
+            price: actualPrice,
             timestamp: DateTime.now(),
           );
           await _offlineManager.queueOperation(
@@ -918,81 +931,63 @@ class InventoryProvider with ChangeNotifier {
           // Record cost history with the batch cost
           await costHistoryService.insertCostHistory(productId, newCost);
 
-          // Smart price history recording: Calculate selling price from batch cost
-          // and record only if it differs from the last recorded price
-          final batchSellingPrice =
+          // Record price history for new batch to track price changes
+          final existingBatches = await _batchService.getBatchesByFIFO(
+            productId,
+          );
+
+          final calculatedPrice =
               await TaxService.calculateSellingPriceWithRule(
-                newCost, // Use batch-specific cost, not average
+                newCost,
                 productId: productId,
                 categoryName: product.category,
               );
+          final actualPrice = product.getPriceForSale(calculatedPrice);
 
-          ErrorLogger.logInfo(
-            'Batch ${batch.batchNumber}: cost=₱${newCost.toStringAsFixed(2)}, calculated selling price=₱${batchSellingPrice.toStringAsFixed(2)}',
-            context: 'InventoryProvider.receiveStockWithCost',
-          );
-
-          // Query price history for this product (without orderBy to avoid composite index requirement)
-          // We'll sort in memory instead
+          // Check if price changed from last recorded price
           final lastPriceQuery = await FirebaseFirestore.instance
               .collection(AppConstants.priceHistoryCollection)
               .where('productId', isEqualTo: productId)
               .get();
 
-          bool shouldRecordPrice = false;
+          bool shouldRecord = false;
+          String reason = '';
 
           if (lastPriceQuery.docs.isEmpty) {
-            // No price history exists - record first entry
-            shouldRecordPrice = true;
-            ErrorLogger.logInfo(
-              'No price history exists - will record first entry',
-              context: 'InventoryProvider.receiveStockWithCost',
-            );
+            shouldRecord = true;
+            reason = 'Initial price - first batch';
           } else {
-            // Sort by timestamp descending in memory and get the most recent
+            // Sort by timestamp descending in memory
             final sortedDocs = lastPriceQuery.docs.toList()
               ..sort((a, b) {
                 final aTimestamp = (a.data()['timestamp'] as Timestamp)
                     .toDate();
                 final bTimestamp = (b.data()['timestamp'] as Timestamp)
                     .toDate();
-                return bTimestamp.compareTo(aTimestamp); // Descending order
+                return bTimestamp.compareTo(aTimestamp);
               });
 
-            // Compare with last recorded price
             final lastPrice = PriceHistory.fromFirestore(sortedDocs.first);
-            final priceDifference = (batchSellingPrice - lastPrice.price).abs();
 
-            ErrorLogger.logInfo(
-              'Last recorded price: ₱${lastPrice.price.toStringAsFixed(2)} (batch ${lastPrice.batchNumber}), difference: ₱${priceDifference.toStringAsFixed(3)}',
-              context: 'InventoryProvider.receiveStockWithCost',
-            );
-
-            // Only record if price changed (with 0.01 tolerance for floating point)
-            if (priceDifference > 0.009) {
-              shouldRecordPrice = true;
-              ErrorLogger.logInfo(
-                'Price changed significantly - will record new entry',
-                context: 'InventoryProvider.receiveStockWithCost',
-              );
-            } else {
-              ErrorLogger.logInfo(
-                'Price unchanged (within tolerance) - skipping duplicate entry',
-                context: 'InventoryProvider.receiveStockWithCost',
-              );
+            // Record if price changed (tolerance 0.009 for floating point)
+            if ((actualPrice - lastPrice.price).abs() > 0.009) {
+              shouldRecord = true;
+              reason = existingBatches.length == 1
+                  ? 'Initial price - first batch'
+                  : 'New batch received with different price';
             }
           }
 
-          if (shouldRecordPrice) {
+          if (shouldRecord) {
             final priceHistory = PriceHistory(
               id: const Uuid().v4(),
               productId: productId,
-              price: batchSellingPrice,
+              price: actualPrice,
               timestamp: DateTime.now(),
               batchId: batch.id,
               batchNumber: batch.batchNumber,
               cost: newCost,
-              reason: 'New batch received',
+              reason: reason,
             );
             await FirebaseFirestore.instance
                 .collection(AppConstants.priceHistoryCollection)
@@ -1000,7 +995,12 @@ class InventoryProvider with ChangeNotifier {
                 .set(priceHistory.toMap());
 
             ErrorLogger.logInfo(
-              'Price history recorded: ₱${batchSellingPrice.toStringAsFixed(2)} for ${product.name}',
+              'Price history recorded: ₱${actualPrice.toStringAsFixed(2)} for ${product.name} - $reason',
+              context: 'InventoryProvider.receiveStockWithCost',
+            );
+          } else {
+            ErrorLogger.logInfo(
+              'Batch ${batch.batchNumber} added - no price change (current: ₱${actualPrice.toStringAsFixed(2)})',
               context: 'InventoryProvider.receiveStockWithCost',
             );
           }
@@ -1037,17 +1037,18 @@ class InventoryProvider with ChangeNotifier {
           );
 
           // Queue price history with batch-specific cost (fallback case)
-          final batchSellingPrice =
+          final calculatedPrice =
               await TaxService.calculateSellingPriceWithRule(
                 newCost,
                 productId: productId,
                 categoryName: product.category,
               );
+          final actualPrice = product.getPriceForSale(calculatedPrice);
 
           final priceHistory = PriceHistory(
             id: const Uuid().v4(),
             productId: productId,
-            price: batchSellingPrice,
+            price: actualPrice,
             timestamp: DateTime.now(),
             batchId: batch.id,
             batchNumber: batch.batchNumber,

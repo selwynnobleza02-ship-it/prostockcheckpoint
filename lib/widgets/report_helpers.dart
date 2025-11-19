@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:prostock/models/receipt.dart';
 import 'package:prostock/models/sale.dart';
 import 'package:prostock/models/sale_item.dart';
+import 'package:prostock/models/product.dart';
 import 'package:prostock/services/firestore/customer_service.dart';
 import 'package:prostock/services/firestore/product_service.dart';
 import 'package:prostock/services/firestore/sale_service.dart';
@@ -205,7 +206,14 @@ Future<void> showHistoricalReceipt(BuildContext context, Sale sale) async {
     List<ReceiptItem> receiptItems = [];
     for (final groupedItem in grouped.values) {
       final productId = groupedItem['productId'] as String;
-      final product = await productService.getProductById(productId);
+      Product? product;
+      try {
+        product = await productService.getProductById(productId);
+      } catch (e) {
+        // If product fails to load (e.g., negative stock), continue with null
+        print('Failed to load product $productId: $e');
+        product = null;
+      }
       final quantity = groupedItem['quantity'] as int;
       final totalPrice = groupedItem['totalPrice'] as double;
       final unitPrice = quantity > 0
@@ -214,7 +222,9 @@ Future<void> showHistoricalReceipt(BuildContext context, Sale sale) async {
 
       receiptItems.add(
         ReceiptItem(
-          productName: product?.name ?? 'Unknown Product',
+          productName:
+              product?.name ??
+              'Unknown Product (ID: ${productId.substring(0, 8)}...)',
           quantity: quantity,
           unitPrice: unitPrice,
           totalPrice: totalPrice,

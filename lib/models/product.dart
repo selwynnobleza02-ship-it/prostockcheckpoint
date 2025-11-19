@@ -46,9 +46,9 @@ class Product {
     if (sellingPrice != null && sellingPrice! < 0) {
       throw ArgumentError('Selling price cannot be negative');
     }
-    if (stock < 0) {
-      throw ArgumentError('Product stock cannot be negative');
-    }
+    // Note: Allowing negative stock to be sanitized in fromMap to prevent crashes
+    // when loading historical data. Negative stock should never be saved, but if it
+    // exists, we sanitize it to 0 to allow the app to function.
     if (minStock < 0) {
       throw ArgumentError('Minimum stock cannot be negative');
     }
@@ -94,15 +94,19 @@ class Product {
   }
 
   factory Product.fromMap(Map<String, dynamic> map) {
+    // Sanitize stock: if negative, set to 0 to prevent crashes
+    final rawStock = map['stock'] ?? 0;
+    final sanitizedStock = rawStock < 0 ? 0 : rawStock;
+
     return Product(
-      id: map['id']?.toString(),
+      id: map['id'],
       name: map['name'],
       barcode: map['barcode'],
-      cost: map['cost'].toDouble(),
+      cost: (map['cost'] ?? 0).toDouble(),
       sellingPrice: map['selling_price'] != null
-          ? (map['selling_price'] as num).toDouble()
+          ? (map['selling_price']).toDouble()
           : null,
-      stock: map['stock'],
+      stock: sanitizedStock,
       minStock: map['min_stock'] ?? 5,
       category: map['category'],
       createdAt: DateTime.parse(map['created_at']),

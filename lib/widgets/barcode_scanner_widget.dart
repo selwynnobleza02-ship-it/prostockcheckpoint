@@ -911,11 +911,15 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             FutureBuilder<double>(
-              future: TaxService.calculateSellingPriceWithRule(
-                product.cost,
-                productId: product.id,
-                categoryName: product.category,
-              ),
+              future:
+                  TaxService.calculateSellingPriceWithRule(
+                    product.cost,
+                    productId: product.id,
+                    categoryName: product.category,
+                  ).then(
+                    (calculatedPrice) =>
+                        product.getPriceForSale(calculatedPrice),
+                  ),
               builder: (context, snapshot) {
                 if (snapshot.hasData) {
                   return Text('Price: ₱${snapshot.data!.toStringAsFixed(2)}');

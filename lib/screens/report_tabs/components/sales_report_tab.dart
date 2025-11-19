@@ -90,9 +90,9 @@ class SalesReportTab extends StatelessWidget {
                                     Icons.article,
                                     color: Colors.blue,
                                   ),
-                                  title: const Text('Single PDF (Limited)'),
+                                  title: const Text('Combined PDF'),
                                   subtitle: const Text(
-                                    'One PDF with limited entries per section',
+                                    'Selected sections in one or more PDFs (auto-split if needed)',
                                     style: TextStyle(fontSize: 12),
                                   ),
                                   onTap: () => Navigator.pop(context, 'single'),
@@ -271,8 +271,10 @@ class SalesReportTab extends StatelessWidget {
                             },
                           );
 
-                          if (selectedSectionTitles == null || !context.mounted)
+                          if (selectedSectionTitles == null ||
+                              !context.mounted) {
                             return;
+                          }
                         }
 
                         final scaffold = ScaffoldMessenger.of(context);
@@ -423,6 +425,9 @@ class SalesReportTab extends StatelessWidget {
                             now.month,
                             now.day,
                           );
+                          final tomorrowStart = todayStart.add(
+                            const Duration(days: 1),
+                          );
 
                           final weekStart = todayStart.subtract(
                             Duration(days: todayStart.weekday - 1),
@@ -438,7 +443,13 @@ class SalesReportTab extends StatelessWidget {
                             1,
                           );
 
-                          // Removed todaySaleIds as we're only showing Weekly, Monthly, and Total breakdowns
+                          // Get today's sale IDs for daily breakdown
+                          final todaySaleIds = saleIdsWhere(
+                            (ts) =>
+                                (ts.isAtSameMomentAs(todayStart) ||
+                                    ts.isAfter(todayStart)) &&
+                                ts.isBefore(tomorrowStart),
+                          );
                           final weekSaleIds = saleIdsWhere(
                             (ts) =>
                                 (ts.isAtSameMomentAs(weekStart) ||
@@ -490,8 +501,16 @@ class SalesReportTab extends StatelessWidget {
                             ),
                           ];
 
-                          // Only include Weekly, Monthly, and Total Sales breakdowns
-                          // Removed Today's Sales breakdown as per requirement
+                          // Include Daily (Today's), Weekly, Monthly, and Total Sales breakdowns
+                          final todayRows = buildRowsForSaleIds(todaySaleIds);
+                          if (todayRows.isNotEmpty) {
+                            sections.add(
+                              PdfReportSection(
+                                title: 'Daily Sales Breakdown',
+                                rows: todayRows,
+                              ),
+                            );
+                          }
 
                           final weekRows = buildRowsForSaleIds(weekSaleIds);
                           if (weekRows.isNotEmpty) {
@@ -592,8 +611,8 @@ class SalesReportTab extends StatelessWidget {
                             return;
                           }
 
-                          // Generate single PDF with limited data
-                          final file = await pdf.generatePdfInBackground(
+                          // Generate combined PDF - uses auto-splitting for large sections
+                          final files = await pdf.generatePdfPerSection(
                             reportTitle: 'Sales Report - Sari-Sari Store',
                             startDate: null,
                             endDate: null,
@@ -607,7 +626,9 @@ class SalesReportTab extends StatelessWidget {
                           if (!context.mounted) return;
                           scaffold.showSnackBar(
                             SnackBar(
-                              content: Text('PDF saved: ${file.path}'),
+                              content: Text(
+                                '${files.length} PDF file(s) saved to Downloads folder',
+                              ),
                               backgroundColor: Colors.green,
                               duration: const Duration(seconds: 4),
                             ),

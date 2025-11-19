@@ -79,9 +79,9 @@ class CustomersReportTab extends StatelessWidget {
                                     Icons.article,
                                     color: Colors.blue,
                                   ),
-                                  title: const Text('Single PDF (Limited)'),
+                                  title: const Text('Combined PDF'),
                                   subtitle: const Text(
-                                    'One PDF with limited entries per section',
+                                    'Selected sections in one or more PDFs (auto-split if needed)',
                                     style: TextStyle(fontSize: 12),
                                   ),
                                   onTap: () => Navigator.pop(context, 'single'),
@@ -258,8 +258,10 @@ class CustomersReportTab extends StatelessWidget {
                             },
                           );
 
-                          if (selectedSectionTitles == null || !context.mounted)
+                          if (selectedSectionTitles == null ||
+                              !context.mounted) {
                             return;
+                          }
                         }
 
                         final scaffold = ScaffoldMessenger.of(context);
@@ -498,6 +500,18 @@ class CustomersReportTab extends StatelessWidget {
                         // For Separate PDFs, use original sections - system auto-splits large sections
                         List<PdfReportSection> filteredSections = sections;
 
+                        // For Single PDF, filter sections based on user selection
+                        if (exportMethod == 'single' &&
+                            selectedSectionTitles != null) {
+                          filteredSections = sections
+                              .where(
+                                (section) => selectedSectionTitles!.contains(
+                                  section.title,
+                                ),
+                              )
+                              .toList();
+                        }
+
                         try {
                           // Show progress dialog
                           showDialog(
@@ -548,8 +562,8 @@ class CustomersReportTab extends StatelessWidget {
                             return;
                           }
 
-                          // Generate single PDF with limited data
-                          final file = await pdf.generatePdfInBackground(
+                          // Generate combined PDF - uses auto-splitting for large sections
+                          final files = await pdf.generatePdfPerSection(
                             reportTitle:
                                 'Customer Activity Report - Sari-Sari Store',
                             startDate: null,
@@ -564,7 +578,9 @@ class CustomersReportTab extends StatelessWidget {
                           if (!context.mounted) return;
                           scaffold.showSnackBar(
                             SnackBar(
-                              content: Text('PDF saved: ${file.path}'),
+                              content: Text(
+                                '${files.length} PDF file(s) saved to Downloads folder',
+                              ),
                               backgroundColor: Colors.green,
                               duration: const Duration(seconds: 4),
                             ),

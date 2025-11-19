@@ -452,11 +452,15 @@ class _ManualStockAdjustmentDialogState
                         ),
                         Text('Current Stock: ${_selectedProduct!.stock}'),
                         FutureBuilder<double>(
-                          future: TaxService.calculateSellingPriceWithRule(
-                            _selectedProduct!.cost,
-                            productId: _selectedProduct!.id,
-                            categoryName: _selectedProduct!.category,
-                          ),
+                          future:
+                              TaxService.calculateSellingPriceWithRule(
+                                _selectedProduct!.cost,
+                                productId: _selectedProduct!.id,
+                                categoryName: _selectedProduct!.category,
+                              ).then(
+                                (calculatedPrice) => _selectedProduct!
+                                    .getPriceForSale(calculatedPrice),
+                              ),
                           builder: (context, snapshot) {
                             if (snapshot.hasData) {
                               return Text(

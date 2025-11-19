@@ -161,7 +161,8 @@ class BatchService {
   }
 
   /// Reduce batch quantity (called during sales)
-  Future<void> reduceBatchQuantity(String batchId, int quantity) async {
+  /// Returns true if the batch was fully depleted
+  Future<bool> reduceBatchQuantity(String batchId, int quantity) async {
     try {
       final db = await _db.database;
 
@@ -185,6 +186,7 @@ class BatchService {
       }
 
       final newQuantity = batch.quantityRemaining - quantity;
+      final wasDepleted = newQuantity == 0;
 
       await db.update(
         'inventory_batches',
@@ -195,6 +197,8 @@ class BatchService {
         where: 'id = ?',
         whereArgs: [batchId],
       );
+
+      return wasDepleted;
     } catch (e) {
       ErrorLogger.logError(
         'Error reducing batch quantity',

@@ -4,11 +4,14 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:prostock/models/offline_operation.dart';
 import 'package:prostock/models/batch_allocation.dart';
+import 'package:prostock/models/price_history.dart';
 import 'package:prostock/providers/auth_provider.dart';
 import 'package:prostock/services/batch_service.dart';
 import 'package:prostock/services/firestore/sale_service.dart';
 import 'package:prostock/services/local_database_service.dart';
 import 'package:prostock/services/offline_manager.dart';
+import 'package:prostock/services/tax_service.dart';
+import 'package:prostock/utils/constants.dart';
 import 'package:uuid/uuid.dart';
 import '../models/sale.dart';
 import '../models/sale_item.dart';
@@ -21,7 +24,6 @@ import 'inventory_provider.dart';
 import 'package:prostock/providers/credit_provider.dart';
 import 'package:prostock/services/demand_analysis_service.dart';
 import 'package:prostock/services/notification_service.dart';
-import 'package:prostock/services/tax_service.dart';
 
 class SalesProvider with ChangeNotifier {
   List<Sale> _sales = [];
@@ -503,11 +505,30 @@ class SalesProvider with ChangeNotifier {
         // Reduce batch quantities for each sale item
         for (final item in _currentSaleItems) {
           if (item.batchId != null) {
-            // Reduce from specific batch
-            await _batchService.reduceBatchQuantity(
+            ErrorLogger.logInfo(
+              'Processing sale item: ${item.productId}, batch: ${item.batchId}, quantity: ${item.quantity}',
+              context: 'SalesProvider.completeSale',
+            );
+
+            // Reduce from specific batch and check if it was depleted
+            final wasDepleted = await _batchService.reduceBatchQuantity(
               item.batchId!,
               item.quantity,
             );
+
+            ErrorLogger.logInfo(
+              'Batch ${item.batchId} depleted: $wasDepleted',
+              context: 'SalesProvider.completeSale',
+            );
+
+            // If batch was depleted, check if we need to record price history for next batch
+            if (wasDepleted) {
+              ErrorLogger.logInfo(
+                'Batch depleted! Checking for price history update...',
+                context: 'SalesProvider.completeSale',
+              );
+              await _recordPriceHistoryForNextBatch(item.productId);
+            }
           }
           // Also reduce product stock total
           await _inventoryProvider.reduceStock(
@@ -680,6 +701,111 @@ class SalesProvider with ChangeNotifier {
         context: 'SalesProvider.getSalesAnalytics',
       );
       return null;
+    }
+  }
+
+  /// Record price history when a batch is depleted and the next batch becomes active
+  Future<void> _recordPriceHistoryForNextBatch(String productId) async {
+    try {
+      // Get the next available batch (FIFO order)
+      final batches = await _batchService.getBatchesByFIFO(productId);
+
+      if (batches.isEmpty) {
+        // No more batches available - product is out of stock
+        ErrorLogger.logInfo(
+          'No remaining batches for product $productId - out of stock',
+          context: 'SalesProvider._recordPriceHistoryForNextBatch',
+        );
+        return;
+      }
+
+      final nextBatch = batches.first;
+      final product = _inventoryProvider.products.firstWhere(
+        (p) => p.id == productId,
+        orElse: () => throw Exception('Product not found'),
+      );
+
+      // Calculate selling price from next batch's cost
+      final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
+        nextBatch.unitCost,
+        productId: productId,
+        categoryName: product.category,
+      );
+
+      // Use the actual selling price (manual override if set, otherwise calculated)
+      final nextBatchSellingPrice = product.getPriceForSale(calculatedPrice);
+
+      // Query last recorded price (fetch all and sort in memory to avoid composite index)
+      final lastPriceQuery = await FirebaseFirestore.instance
+          .collection(AppConstants.priceHistoryCollection)
+          .where('productId', isEqualTo: productId)
+          .get();
+
+      double? lastRecordedPrice;
+      String? lastBatchNumber;
+
+      if (lastPriceQuery.docs.isNotEmpty) {
+        // Sort by timestamp descending in memory
+        final sortedDocs = lastPriceQuery.docs.toList()
+          ..sort((a, b) {
+            final aTimestamp = (a.data()['timestamp'] as Timestamp).toDate();
+            final bTimestamp = (b.data()['timestamp'] as Timestamp).toDate();
+            return bTimestamp.compareTo(aTimestamp);
+          });
+
+        final lastPrice = PriceHistory.fromFirestore(sortedDocs.first);
+        lastRecordedPrice = lastPrice.price;
+        lastBatchNumber = lastPrice.batchNumber;
+      }
+
+      ErrorLogger.logInfo(
+        'Price comparison - Last: ${lastRecordedPrice?.toStringAsFixed(2) ?? "none"}, Next: ${nextBatchSellingPrice.toStringAsFixed(2)}, Difference: ${lastRecordedPrice != null ? (nextBatchSellingPrice - lastRecordedPrice).abs().toStringAsFixed(3) : "N/A"}',
+        context: 'SalesProvider._recordPriceHistoryForNextBatch',
+      );
+
+      // Only record if price changed (with 0.01 tolerance)
+      if (lastRecordedPrice == null ||
+          (nextBatchSellingPrice - lastRecordedPrice).abs() > 0.009) {
+        final priceHistory = PriceHistory(
+          id: const Uuid().v4(),
+          productId: productId,
+          price: nextBatchSellingPrice,
+          timestamp: DateTime.now(),
+          batchId: nextBatch.id,
+          batchNumber: nextBatch.batchNumber,
+          cost: nextBatch.unitCost,
+          reason: lastBatchNumber != null
+              ? 'Batch $lastBatchNumber depleted, now using batch ${nextBatch.batchNumber}'
+              : 'Now using batch ${nextBatch.batchNumber}',
+        );
+
+        ErrorLogger.logInfo(
+          'Writing price history to Firestore: ${priceHistory.toMap()}',
+          context: 'SalesProvider._recordPriceHistoryForNextBatch',
+        );
+
+        await FirebaseFirestore.instance
+            .collection(AppConstants.priceHistoryCollection)
+            .doc(priceHistory.id)
+            .set(priceHistory.toMap());
+
+        ErrorLogger.logInfo(
+          'Price history recorded: ₱${nextBatchSellingPrice.toStringAsFixed(2)} for ${product.name} (batch ${nextBatch.batchNumber} now active)',
+          context: 'SalesProvider._recordPriceHistoryForNextBatch',
+        );
+      } else {
+        ErrorLogger.logInfo(
+          'Price unchanged for ${product.name} - batch ${nextBatch.batchNumber} has same price as previous batch',
+          context: 'SalesProvider._recordPriceHistoryForNextBatch',
+        );
+      }
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error recording price history for next batch',
+        error: e,
+        context: 'SalesProvider._recordPriceHistoryForNextBatch',
+      );
+      // Don't rethrow - this is not critical for sale completion
     }
   }
 

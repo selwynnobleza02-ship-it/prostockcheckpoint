@@ -273,8 +273,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               ),
                             );
 
-                            if (exportMethod == null || !context.mounted)
+                            if (exportMethod == null || !context.mounted) {
                               return;
+                            }
 
                             // Prompt user to select date range for export
                             if (!context.mounted) return;
@@ -381,8 +382,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               ),
                             );
 
-                            if (confirmDateRange != true || !context.mounted)
+                            if (confirmDateRange != true || !context.mounted) {
                               return;
+                            }
 
                             // For Single PDF, allow section selection
                             Set<String>? selectedSectionTitles;
@@ -597,8 +599,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               );
 
                               if (selectedSectionTitles == null ||
-                                  !context.mounted)
+                                  !context.mounted) {
                                 return;
+                              }
                             }
 
                             final scaffold = ScaffoldMessenger.of(context);
