@@ -276,6 +276,331 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                             if (exportMethod == null || !context.mounted)
                               return;
 
+                            // Prompt user to select date range for export
+                            if (!context.mounted) return;
+                            final confirmDateRange = await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Select Date Range'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Current date range for export:',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(8),
+                                        border: Border.all(
+                                          color: Colors.blue.shade200,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          const Icon(
+                                            Icons.calendar_today,
+                                            size: 20,
+                                            color: Colors.blue,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              _startDate == null
+                                                  ? 'All Time'
+                                                  : '${_startDate!.toLocal().toString().split(' ')[0]} to ${_endDate!.toLocal().toString().split(' ')[0]}',
+                                              style: const TextStyle(
+                                                fontSize: 14,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    const Text(
+                                      'Would you like to change the date range or proceed with the current selection?',
+                                      style: TextStyle(fontSize: 13),
+                                    ),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () async {
+                                      Navigator.pop(context);
+                                      await _selectDateRange(context);
+                                      if (context.mounted) {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                const SizedBox.shrink(),
+                                          ),
+                                        ).then((_) => Navigator.pop(context));
+                                        // Show the dialog again after date selection
+                                        showDialog<bool>(
+                                          context: context,
+                                          builder: (ctx) => AlertDialog(
+                                            title: const Text(
+                                              'Date Range Updated',
+                                            ),
+                                            content: Text(
+                                              'New range: ${_startDate == null ? 'All Time' : '${_startDate!.toLocal().toString().split(' ')[0]} to ${_endDate!.toLocal().toString().split(' ')[0]}'}',
+                                            ),
+                                            actions: [
+                                              TextButton(
+                                                onPressed: () =>
+                                                    Navigator.pop(ctx, true),
+                                                child: const Text('Proceed'),
+                                              ),
+                                            ],
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    child: const Text('Change Date'),
+                                  ),
+                                  FilledButton(
+                                    onPressed: () =>
+                                        Navigator.pop(context, true),
+                                    child: const Text('Proceed'),
+                                  ),
+                                ],
+                              ),
+                            );
+
+                            if (confirmDateRange != true || !context.mounted)
+                              return;
+
+                            // For Single PDF, allow section selection
+                            Set<String>? selectedSectionTitles;
+                            if (exportMethod == 'single') {
+                              if (!context.mounted) return;
+                              selectedSectionTitles = await showDialog<Set<String>>(
+                                context: context,
+                                builder: (context) {
+                                  // Define available sections
+                                  final availableSections = {
+                                    '1. Income': true,
+                                    '2. Cost of Goods Sold (COGS)': true,
+                                  };
+
+                                  // Define available calculations
+                                  final availableCalculations = {
+                                    '1. Total Revenue': true,
+                                    '2. Cost of Goods Sold': true,
+                                    '3. Total Losses': true,
+                                    '4. Gross Profit': true,
+                                    '5. Profit Margin': true,
+                                    '6. Markup Percentage': true,
+                                    '7. Return on Investment (ROI)': true,
+                                    '8. Inventory Turnover': true,
+                                  };
+
+                                  return StatefulBuilder(
+                                    builder: (context, setState) {
+                                      return AlertDialog(
+                                        title: const Text(
+                                          'Select Sections to Include',
+                                        ),
+                                        content: SizedBox(
+                                          width: double.maxFinite,
+                                          child: SingleChildScrollView(
+                                            child: Column(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                const Text(
+                                                  'Choose which sections to include in your PDF:',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: Colors.grey,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 16),
+                                                const Text(
+                                                  'Data Sections:',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                ...availableSections.keys.map(
+                                                  (title) => CheckboxListTile(
+                                                    dense: true,
+                                                    contentPadding:
+                                                        EdgeInsets.zero,
+                                                    title: Text(
+                                                      title,
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                    value:
+                                                        availableSections[title],
+                                                    onChanged: (value) {
+                                                      setState(() {
+                                                        availableSections[title] =
+                                                            value!;
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 16),
+                                                const Text(
+                                                  'Financial Calculations:',
+                                                  style: TextStyle(
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 14,
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 8),
+                                                ...availableCalculations.keys.map(
+                                                  (title) => CheckboxListTile(
+                                                    dense: true,
+                                                    contentPadding:
+                                                        EdgeInsets.zero,
+                                                    title: Text(
+                                                      title,
+                                                      style: const TextStyle(
+                                                        fontSize: 13,
+                                                      ),
+                                                    ),
+                                                    value:
+                                                        availableCalculations[title],
+                                                    onChanged: (value) {
+                                                      setState(() {
+                                                        availableCalculations[title] =
+                                                            value!;
+                                                      });
+                                                    },
+                                                  ),
+                                                ),
+                                                const SizedBox(height: 12),
+                                                Row(
+                                                  mainAxisAlignment:
+                                                      MainAxisAlignment
+                                                          .spaceBetween,
+                                                  children: [
+                                                    TextButton.icon(
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          availableSections
+                                                              .updateAll(
+                                                                (key, value) =>
+                                                                    true,
+                                                              );
+                                                          availableCalculations
+                                                              .updateAll(
+                                                                (key, value) =>
+                                                                    true,
+                                                              );
+                                                        });
+                                                      },
+                                                      icon: const Icon(
+                                                        Icons.select_all,
+                                                        size: 18,
+                                                      ),
+                                                      label: const Text(
+                                                        'Select All',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                    TextButton.icon(
+                                                      onPressed: () {
+                                                        setState(() {
+                                                          availableSections
+                                                              .updateAll(
+                                                                (key, value) =>
+                                                                    false,
+                                                              );
+                                                          availableCalculations
+                                                              .updateAll(
+                                                                (key, value) =>
+                                                                    false,
+                                                              );
+                                                        });
+                                                      },
+                                                      icon: const Icon(
+                                                        Icons.clear,
+                                                        size: 18,
+                                                      ),
+                                                      label: const Text(
+                                                        'Clear All',
+                                                        style: TextStyle(
+                                                          fontSize: 12,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          FilledButton(
+                                            onPressed: () {
+                                              final selected = {
+                                                ...availableSections.entries
+                                                    .where((e) => e.value)
+                                                    .map((e) => e.key),
+                                                ...availableCalculations.entries
+                                                    .where((e) => e.value)
+                                                    .map((e) => e.key),
+                                              };
+                                              if (selected.isEmpty) {
+                                                ScaffoldMessenger.of(
+                                                  context,
+                                                ).showSnackBar(
+                                                  const SnackBar(
+                                                    content: Text(
+                                                      'Please select at least one section',
+                                                    ),
+                                                    duration: Duration(
+                                                      seconds: 2,
+                                                    ),
+                                                  ),
+                                                );
+                                                return;
+                                              }
+                                              Navigator.pop(context, selected);
+                                            },
+                                            child: const Text('Generate PDF'),
+                                          ),
+                                        ],
+                                      );
+                                    },
+                                  );
+                                },
+                              );
+
+                              if (selectedSectionTitles == null ||
+                                  !context.mounted)
+                                return;
+                            }
+
                             final scaffold = ScaffoldMessenger.of(context);
 
                             // Use current date filters if set
@@ -712,6 +1037,35 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                   summaries: summaries,
                                 );
                               } else {
+                                // For Single PDF, filter sections and calculations based on user selection
+                                List<PdfReportSection> sectionsToInclude =
+                                    filteredSections;
+                                List<PdfCalculationSection>?
+                                calculationsToInclude = calculations;
+
+                                if (selectedSectionTitles != null) {
+                                  // Filter sections
+                                  sectionsToInclude = filteredSections
+                                      .where(
+                                        (section) => selectedSectionTitles!
+                                            .contains(section.title),
+                                      )
+                                      .toList();
+
+                                  // Filter calculations
+                                  calculationsToInclude = calculations
+                                      .where(
+                                        (calc) => selectedSectionTitles!
+                                            .contains(calc.title),
+                                      )
+                                      .toList();
+
+                                  // If no calculations selected, set to null
+                                  if (calculationsToInclude.isEmpty) {
+                                    calculationsToInclude = null;
+                                  }
+                                }
+
                                 // Generate single PDF with limited data
                                 files = await pdf
                                     .generatePdfInBackgroundWithAllFiles(
@@ -719,8 +1073,8 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                           'Financial Report - Sari-Sari Store',
                                       startDate: _startDate,
                                       endDate: _endDate,
-                                      sections: filteredSections,
-                                      calculations: calculations,
+                                      sections: sectionsToInclude,
+                                      calculations: calculationsToInclude,
                                       summaries: summaries,
                                     );
                               }

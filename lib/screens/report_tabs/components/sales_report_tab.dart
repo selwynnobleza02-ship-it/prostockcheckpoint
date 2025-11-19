@@ -125,6 +125,156 @@ class SalesReportTab extends StatelessWidget {
 
                         if (exportMethod == null || !context.mounted) return;
 
+                        // For Single PDF, allow section selection
+                        Set<String>? selectedSectionTitles;
+                        if (exportMethod == 'single') {
+                          if (!context.mounted) return;
+                          selectedSectionTitles = await showDialog<Set<String>>(
+                            context: context,
+                            builder: (context) {
+                              final availableSections = {
+                                'Sales Summary': true,
+                                'Daily Sales Breakdown': true,
+                                'Weekly Sales Breakdown': true,
+                                'Monthly Sales Breakdown': true,
+                                'Total Sales Breakdown': true,
+                              };
+
+                              return StatefulBuilder(
+                                builder: (context, setState) {
+                                  return AlertDialog(
+                                    title: const Text(
+                                      'Select Sections to Include',
+                                    ),
+                                    content: SizedBox(
+                                      width: double.maxFinite,
+                                      child: SingleChildScrollView(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Choose which sections to include in your PDF:',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                color: Colors.grey,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 16),
+                                            ...availableSections.keys.map(
+                                              (title) => CheckboxListTile(
+                                                dense: true,
+                                                contentPadding: EdgeInsets.zero,
+                                                title: Text(
+                                                  title,
+                                                  style: const TextStyle(
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                                value: availableSections[title],
+                                                onChanged: (value) {
+                                                  setState(() {
+                                                    availableSections[title] =
+                                                        value!;
+                                                  });
+                                                },
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                TextButton.icon(
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      availableSections
+                                                          .updateAll(
+                                                            (key, value) =>
+                                                                true,
+                                                          );
+                                                    });
+                                                  },
+                                                  icon: const Icon(
+                                                    Icons.select_all,
+                                                    size: 18,
+                                                  ),
+                                                  label: const Text(
+                                                    'Select All',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                                TextButton.icon(
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      availableSections
+                                                          .updateAll(
+                                                            (key, value) =>
+                                                                false,
+                                                          );
+                                                    });
+                                                  },
+                                                  icon: const Icon(
+                                                    Icons.clear,
+                                                    size: 18,
+                                                  ),
+                                                  label: const Text(
+                                                    'Clear All',
+                                                    style: TextStyle(
+                                                      fontSize: 12,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(context),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      FilledButton(
+                                        onPressed: () {
+                                          final selected = availableSections
+                                              .entries
+                                              .where((e) => e.value)
+                                              .map((e) => e.key)
+                                              .toSet();
+                                          if (selected.isEmpty) {
+                                            ScaffoldMessenger.of(
+                                              context,
+                                            ).showSnackBar(
+                                              const SnackBar(
+                                                content: Text(
+                                                  'Please select at least one section',
+                                                ),
+                                                duration: Duration(seconds: 2),
+                                              ),
+                                            );
+                                            return;
+                                          }
+                                          Navigator.pop(context, selected);
+                                        },
+                                        child: const Text('Generate PDF'),
+                                      ),
+                                    ],
+                                  );
+                                },
+                              );
+                            },
+                          );
+
+                          if (selectedSectionTitles == null || !context.mounted)
+                            return;
+                        }
+
                         final scaffold = ScaffoldMessenger.of(context);
 
                         // Validate we have data to export
@@ -380,6 +530,18 @@ class SalesReportTab extends StatelessWidget {
 
                         // For Separate PDFs, use original sections - system auto-splits large sections
                         List<PdfReportSection> filteredSections = sections;
+
+                        // For Single PDF, filter sections based on user selection
+                        if (exportMethod == 'single' &&
+                            selectedSectionTitles != null) {
+                          filteredSections = sections
+                              .where(
+                                (section) => selectedSectionTitles!.contains(
+                                  section.title,
+                                ),
+                              )
+                              .toList();
+                        }
 
                         try {
                           // Show progress dialog
