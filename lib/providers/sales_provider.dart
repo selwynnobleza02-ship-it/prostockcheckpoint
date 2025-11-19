@@ -449,19 +449,8 @@ class SalesProvider with ChangeNotifier {
 
     try {
       log('Completing sale...');
-      final List<Product> productsInSale = [];
-      for (final item in _currentSaleItems) {
-        final product = _inventoryProvider.getProductById(item.productId);
-        if (product == null) {
-          _error = 'Product not found: \${item.productId}';
-          return null;
-        }
-        if (product.stock < item.quantity) {
-          _error = 'Insufficient stock for product: \${product.name}';
-          return null;
-        }
-        productsInSale.add(product);
-      }
+      // Stock validation removed - already handled by FIFO allocation in addItemToCurrentSale()
+      // allocateStockFIFO() validates availability and throws InsufficientStockException if needed
 
       final currentUser = _authProvider.currentUser;
       if (currentUser == null || currentUser.id == null) {

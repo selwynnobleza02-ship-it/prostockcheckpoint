@@ -244,7 +244,8 @@ class PdfReportService {
           : 'all_time';
 
       // Maximum rows per PDF to avoid TooManyPagesException
-      const int maxRowsPerPdf = 200;
+      // Reduced from 200 to 100 to create smaller, more manageable PDFs
+      const int maxRowsPerPdf = 100;
 
       debugPrint('[PDF] Starting generation for ${sections.length} sections');
 
@@ -319,12 +320,60 @@ class PdfReportService {
                 await Future.delayed(const Duration(milliseconds: 200));
               }
             } catch (e, stack) {
-              ErrorLogger.logError(
-                'Failed to generate PDF part ${partIndex + 1}/$totalParts for section: ${section.title}',
-                error: e,
-                stackTrace: stack,
-                context: 'PdfReportService.generatePdfPerSection',
-              );
+              // If TooManyPagesException occurs even with split, try smaller splits
+              if (e.toString().contains('TooManyPagesException')) {
+                debugPrint(
+                  '[PDF] TooManyPagesException in part ${partIndex + 1}: Further splitting needed',
+                );
+
+                // Further split this part into even smaller chunks (25 rows each)
+                final microParts = (partRows.length / 25).ceil();
+
+                for (
+                  int microIndex = 0;
+                  microIndex < microParts;
+                  microIndex++
+                ) {
+                  final microStart = microIndex * 25;
+                  final microEnd = math.min(microStart + 25, partRows.length);
+                  final microRows = partRows.sublist(microStart, microEnd);
+
+                  final microFileName =
+                      '${sectionFileName}_p${partIndex + 1}_s${microIndex + 1}_${dateRangeStr}_$timestamp.pdf';
+                  final microFilePath = p.join(outputDir.path, microFileName);
+
+                  try {
+                    final microSection = PdfReportSection(
+                      title:
+                          '${section.title} (P${partIndex + 1}.${microIndex + 1})',
+                      rows: microRows,
+                    );
+
+                    final file = await _generateFinancialReportToPath(
+                      reportTitle: '${microSection.title} - $reportTitle',
+                      startDate: startDate,
+                      endDate: endDate,
+                      sections: [microSection],
+                      calculations: null,
+                      summaries: null,
+                      outputPath: microFilePath,
+                    );
+
+                    generatedFiles.add(file);
+                  } catch (microError) {
+                    debugPrint(
+                      '[PDF] Even micro-split failed: ${microError.toString()}',
+                    );
+                  }
+                }
+              } else {
+                ErrorLogger.logError(
+                  'Failed to generate PDF part ${partIndex + 1}/$totalParts for section: ${section.title}',
+                  error: e,
+                  stackTrace: stack,
+                  context: 'PdfReportService.generatePdfPerSection',
+                );
+              }
               continue;
             }
           }
@@ -360,16 +409,73 @@ class PdfReportService {
               await Future.delayed(const Duration(milliseconds: 200));
             }
           } catch (e, stack) {
-            final errorMsg =
-                'Failed to generate PDF for section "${section.title}": $e';
-            errors.add(errorMsg);
-            ErrorLogger.logError(
-              errorMsg,
-              error: e,
-              stackTrace: stack,
-              context: 'PdfReportService.generatePdfPerSection',
-            );
-            debugPrint('[PDF] ERROR: $errorMsg');
+            // If TooManyPagesException, try splitting the section
+            if (e.toString().contains('TooManyPagesException')) {
+              debugPrint(
+                '[PDF] TooManyPagesException: Retrying with section split for "${section.title}"',
+              );
+
+              // Split into smaller parts (50 rows per part)
+              final totalParts = (rowCount / 50).ceil();
+
+              for (int partIndex = 0; partIndex < totalParts; partIndex++) {
+                final startRow = partIndex * 50;
+                final endRow = math.min(startRow + 50, rowCount);
+                final partRows = section.rows.sublist(startRow, endRow);
+
+                final retryFileName =
+                    '${sectionFileName}_part${partIndex + 1}of${totalParts}_${dateRangeStr}_$timestamp.pdf';
+                final retryFilePath = p.join(outputDir.path, retryFileName);
+
+                try {
+                  final partSection = PdfReportSection(
+                    title:
+                        '${section.title} (Part ${partIndex + 1} of $totalParts)',
+                    rows: partRows,
+                  );
+
+                  final file = await _generateFinancialReportToPath(
+                    reportTitle: '${partSection.title} - $reportTitle',
+                    startDate: startDate,
+                    endDate: endDate,
+                    sections: [partSection],
+                    calculations: null,
+                    summaries: null,
+                    outputPath: retryFilePath,
+                  );
+
+                  generatedFiles.add(file);
+
+                  ErrorLogger.logInfo(
+                    'Generated retry part ${partIndex + 1}/$totalParts for: ${section.title}',
+                    context: 'PdfReportService.generatePdfPerSection',
+                  );
+
+                  if (partIndex < totalParts - 1) {
+                    await Future.delayed(const Duration(milliseconds: 200));
+                  }
+                } catch (retryError, retryStack) {
+                  ErrorLogger.logError(
+                    'Failed retry part ${partIndex + 1}/$totalParts for: ${section.title}',
+                    error: retryError,
+                    stackTrace: retryStack,
+                    context: 'PdfReportService.generatePdfPerSection',
+                  );
+                  continue;
+                }
+              }
+            } else {
+              final errorMsg =
+                  'Failed to generate PDF for section "${section.title}": $e';
+              errors.add(errorMsg);
+              ErrorLogger.logError(
+                errorMsg,
+                error: e,
+                stackTrace: stack,
+                context: 'PdfReportService.generatePdfPerSection',
+              );
+              debugPrint('[PDF] ERROR: $errorMsg');
+            }
             continue;
           }
         }
@@ -1107,7 +1213,8 @@ class PdfReportService {
         pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
           // Set maxPages high enough to handle reasonable content
-          maxPages: 100,
+          // Increased from 100 to 500 to accommodate large sections like COGS
+          maxPages: 500,
           footer: (context) => pw.Align(
             alignment: pw.Alignment.centerRight,
             child: pw.Text(

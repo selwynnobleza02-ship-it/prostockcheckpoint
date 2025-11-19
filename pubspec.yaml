@@ -83,6 +83,7 @@ dev_dependencies:
   fake_cloud_firestore: any
   firebase_auth_mocks: any
   flutter_launcher_icons: ^0.14.4
+  dart_jsonwebtoken: ^3.3.1
 
 flutter_icons:
   android: true

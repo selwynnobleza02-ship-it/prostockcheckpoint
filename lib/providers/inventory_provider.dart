@@ -927,12 +927,16 @@ class InventoryProvider with ChangeNotifier {
                 categoryName: product.category,
               );
 
-          // Query the last recorded price for this product
+          ErrorLogger.logInfo(
+            'Batch ${batch.batchNumber}: cost=₱${newCost.toStringAsFixed(2)}, calculated selling price=₱${batchSellingPrice.toStringAsFixed(2)}',
+            context: 'InventoryProvider.receiveStockWithCost',
+          );
+
+          // Query price history for this product (without orderBy to avoid composite index requirement)
+          // We'll sort in memory instead
           final lastPriceQuery = await FirebaseFirestore.instance
               .collection(AppConstants.priceHistoryCollection)
               .where('productId', isEqualTo: productId)
-              .orderBy('timestamp', descending: true)
-              .limit(1)
               .get();
 
           bool shouldRecordPrice = false;
@@ -940,14 +944,42 @@ class InventoryProvider with ChangeNotifier {
           if (lastPriceQuery.docs.isEmpty) {
             // No price history exists - record first entry
             shouldRecordPrice = true;
-          } else {
-            // Compare with last recorded price
-            final lastPrice = PriceHistory.fromFirestore(
-              lastPriceQuery.docs.first,
+            ErrorLogger.logInfo(
+              'No price history exists - will record first entry',
+              context: 'InventoryProvider.receiveStockWithCost',
             );
+          } else {
+            // Sort by timestamp descending in memory and get the most recent
+            final sortedDocs = lastPriceQuery.docs.toList()
+              ..sort((a, b) {
+                final aTimestamp = (a.data()['timestamp'] as Timestamp)
+                    .toDate();
+                final bTimestamp = (b.data()['timestamp'] as Timestamp)
+                    .toDate();
+                return bTimestamp.compareTo(aTimestamp); // Descending order
+              });
+
+            // Compare with last recorded price
+            final lastPrice = PriceHistory.fromFirestore(sortedDocs.first);
+            final priceDifference = (batchSellingPrice - lastPrice.price).abs();
+
+            ErrorLogger.logInfo(
+              'Last recorded price: ₱${lastPrice.price.toStringAsFixed(2)} (batch ${lastPrice.batchNumber}), difference: ₱${priceDifference.toStringAsFixed(3)}',
+              context: 'InventoryProvider.receiveStockWithCost',
+            );
+
             // Only record if price changed (with 0.01 tolerance for floating point)
-            if ((batchSellingPrice - lastPrice.price).abs() > 0.009) {
+            if (priceDifference > 0.009) {
               shouldRecordPrice = true;
+              ErrorLogger.logInfo(
+                'Price changed significantly - will record new entry',
+                context: 'InventoryProvider.receiveStockWithCost',
+              );
+            } else {
+              ErrorLogger.logInfo(
+                'Price unchanged (within tolerance) - skipping duplicate entry',
+                context: 'InventoryProvider.receiveStockWithCost',
+              );
             }
           }
 
