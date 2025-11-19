@@ -4,7 +4,6 @@ import 'package:prostock/providers/auth_provider.dart';
 import 'package:prostock/services/firestore/activity_service.dart';
 import 'package:prostock/models/user_activity.dart';
 import 'package:prostock/services/pdf_report_service.dart';
-import 'package:prostock/widgets/export_filter_dialog.dart';
 import 'dart:io';
 
 class StaffReportTab extends StatefulWidget {
@@ -37,28 +36,61 @@ class _StaffReportTabState extends State<StaffReportTab> {
               label: const Text('Export PDF'),
               onPressed: () async {
                 try {
-                  // Show filter options
-                  final exportOptions = ExportFilterOptions(
-                    useDataRangeFilter: false,
-                    startDate: null,
-                    endDate: null,
-                  );
-
-                  // Show the filter dialog
-                  final result = await showDialog<ExportFilterOptions>(
+                  // First, ask user which export method they prefer
+                  if (!context.mounted) return;
+                  final exportMethod = await showDialog<String>(
                     context: context,
-                    builder: (context) => ExportFilterDialog(
-                      initialOptions: exportOptions,
-                      onApply: (options) {
-                        Navigator.of(context).pop(options);
-                      },
+                    builder: (context) => AlertDialog(
+                      title: const Text('Choose Export Method'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'How would you like to export your staff report?',
+                            style: TextStyle(fontSize: 14),
+                          ),
+                          const SizedBox(height: 16),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(
+                              Icons.article,
+                              color: Colors.blue,
+                            ),
+                            title: const Text('Single PDF (Limited)'),
+                            subtitle: const Text(
+                              'One PDF with limited entries per section',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            onTap: () => Navigator.pop(context, 'single'),
+                          ),
+                          const Divider(),
+                          ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: const Icon(
+                              Icons.library_books,
+                              color: Colors.green,
+                            ),
+                            title: const Text('Separate PDFs (Complete)'),
+                            subtitle: const Text(
+                              'One PDF per section with ALL entries',
+                              style: TextStyle(fontSize: 12),
+                            ),
+                            onTap: () => Navigator.pop(context, 'separate'),
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('Cancel'),
+                        ),
+                      ],
                     ),
                   );
 
-                  // If user cancelled the dialog
-                  if (result == null || !context.mounted) return;
+                  if (exportMethod == null || !context.mounted) return;
 
-                  final options = result;
                   final scaffold = ScaffoldMessenger.of(context);
 
                   // Show loading indicator
@@ -112,15 +144,8 @@ class _StaffReportTabState extends State<StaffReportTab> {
 
                   final pdf = PdfReportService();
 
-                  // Apply filter options to limit data
+                  // For Separate PDFs, use original sections - system auto-splits large sections
                   List<PdfReportSection> filteredSections = sections;
-                  if (options.limitItemCount || options.summaryOnly) {
-                    filteredSections = pdf.applyDataLimits(
-                      sections,
-                      maxRowsPerSection: options.maxItemCount,
-                      summaryOnly: options.summaryOnly,
-                    );
-                  }
 
                   try {
                     // Show progress dialog
@@ -128,19 +153,52 @@ class _StaffReportTabState extends State<StaffReportTab> {
                     showDialog(
                       context: context,
                       barrierDismissible: false,
-                      builder: (context) => const AlertDialog(
+                      builder: (context) => AlertDialog(
                         content: Column(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            CircularProgressIndicator(),
-                            SizedBox(height: 16),
-                            Text('Generating PDF...\nPlease wait.'),
+                            const CircularProgressIndicator(),
+                            const SizedBox(height: 16),
+                            Text(
+                              exportMethod == 'separate'
+                                  ? 'Generating ${sections.length} PDF files...\nPlease wait.'
+                                  : 'Generating PDF...\nPlease wait.',
+                            ),
                           ],
                         ),
                       ),
                     );
 
-                    // Generate the PDF with filtered sections in background
+                    // Generate PDFs based on chosen method
+                    if (exportMethod == 'separate') {
+                      // Generate one PDF per section with ALL data
+                      final files = await pdf.generatePdfPerSection(
+                        reportTitle:
+                            'Staff Performance Report - Sari-Sari Store',
+                        startDate: null,
+                        endDate: null,
+                        sections:
+                            sections, // Use original sections without limits
+                      );
+
+                      // Close progress dialog
+                      if (!context.mounted) return;
+                      Navigator.of(context).pop();
+
+                      if (!context.mounted) return;
+                      scaffold.showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            '${files.length} PDF files saved to Downloads folder',
+                          ),
+                          backgroundColor: Colors.green,
+                          duration: const Duration(seconds: 4),
+                        ),
+                      );
+                      return;
+                    }
+
+                    // Generate single PDF with limited data
                     final file = await pdf.generatePdfInBackground(
                       reportTitle: 'Staff Performance Report - Sari-Sari Store',
                       startDate: null,

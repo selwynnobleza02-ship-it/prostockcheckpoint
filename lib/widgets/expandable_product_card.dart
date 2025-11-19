@@ -128,11 +128,16 @@ class _ExpandableProductCardState extends State<ExpandableProductCard> {
 
                         // Price
                         FutureBuilder<double>(
-                          future: TaxService.calculateSellingPriceWithRule(
-                            widget.product.cost,
-                            productId: widget.product.id,
-                            categoryName: widget.product.category,
-                          ),
+                          future: widget.provider
+                              .getNextBatchCost(widget.product.id!)
+                              .then(
+                                (cost) =>
+                                    TaxService.calculateSellingPriceWithRule(
+                                      cost,
+                                      productId: widget.product.id,
+                                      categoryName: widget.product.category,
+                                    ),
+                              ),
                           builder: (context, snapshot) {
                             if (snapshot.hasData) {
                               return Text(

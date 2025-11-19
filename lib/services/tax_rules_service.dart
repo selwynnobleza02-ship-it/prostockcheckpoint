@@ -161,6 +161,11 @@ class TaxRulesService {
       await _replaceConflictingRules(rule, pricing);
 
       await pricing.upsertRule(rule.id, rule.toMap());
+
+      // Invalidate cache to force refresh on next read
+      _cachedRules = null;
+      _cacheTimestamp = null;
+
       // Record price history for affected products (best-effort)
       try {
         await _recordPriceHistoryForRuleChange(
@@ -191,6 +196,11 @@ class TaxRulesService {
 
       existing.add(rule);
       await _writeLocal(existing);
+
+      // Invalidate cache to force refresh on next read
+      _cachedRules = null;
+      _cacheTimestamp = null;
+
       return true;
     }
   }
@@ -318,6 +328,11 @@ class TaxRulesService {
     try {
       final pricing = PricingService(FirebaseFirestore.instance);
       await pricing.upsertRule(rule.id, rule.toMap());
+
+      // Invalidate cache to force refresh on next read
+      _cachedRules = null;
+      _cacheTimestamp = null;
+
       // Record price history for affected products (best-effort)
       try {
         await _recordPriceHistoryForRuleChange(
@@ -332,6 +347,11 @@ class TaxRulesService {
       final idx = existing.indexWhere((r) => r.id == rule.id);
       if (idx != -1) existing[idx] = rule;
       await _writeLocal(existing);
+
+      // Invalidate cache to force refresh on next read
+      _cachedRules = null;
+      _cacheTimestamp = null;
+
       return true;
     }
   }
@@ -357,6 +377,11 @@ class TaxRulesService {
         if (toDelete.id.isEmpty) toDelete = null;
       } catch (_) {}
       await pricing.deleteRule(ruleId);
+
+      // Invalidate cache to force refresh on next read
+      _cachedRules = null;
+      _cacheTimestamp = null;
+
       // Record price history for affected products after deletion (best-effort)
       if (toDelete != null) {
         try {
@@ -372,6 +397,11 @@ class TaxRulesService {
       final existing = await getAllRules();
       existing.removeWhere((r) => r.id == ruleId);
       await _writeLocal(existing);
+
+      // Invalidate cache to force refresh on next read
+      _cachedRules = null;
+      _cacheTimestamp = null;
+
       return true;
     }
   }

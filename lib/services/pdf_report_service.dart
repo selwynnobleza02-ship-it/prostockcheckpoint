@@ -17,7 +17,8 @@ class PdfReportSection {
 
   // Create a copy with limited rows
   PdfReportSection copyWithLimitedRows(int maxRows) {
-    if (rows.length <= maxRows) {
+    // Handle empty or small sections
+    if (rows.isEmpty || rows.length <= maxRows) {
       return this;
     }
 
@@ -30,7 +31,7 @@ class PdfReportSection {
 
     // Add a summary row in the middle with the same number of columns as the other rows
     List<String> summaryRow = [];
-    if (rows.isNotEmpty) {
+    if (rows.isNotEmpty && rows.first.isNotEmpty) {
       int columnCount = rows.first.length;
       summaryRow = List.filled(columnCount, '');
       summaryRow[0] =
@@ -39,7 +40,11 @@ class PdfReportSection {
 
     return PdfReportSection(
       title: title,
-      rows: [...firstHalf, summaryRow, ...secondHalf],
+      rows: [
+        ...firstHalf,
+        if (summaryRow.isNotEmpty) summaryRow,
+        ...secondHalf,
+      ],
     );
   }
 }
@@ -194,8 +199,296 @@ class PdfReportService {
     }
   }
 
+  /// Generate one PDF per section - ideal for financial reports with many entries
+  /// This ensures ALL data is included without truncation
+  Future<List<File>> generatePdfPerSection({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+  }) async {
+    await _semaphore.acquire();
+
+    try {
+      ErrorLogger.logInfo(
+        'Starting PDF generation (one per section)',
+        context: 'PdfReportService.generatePdfPerSection',
+        metadata: {
+          'reportTitle': reportTitle,
+          'sectionsCount': sections.length,
+        },
+      );
+
+      // Determine output directory
+      Directory outputDir;
+      try {
+        outputDir = await _testStorage();
+        debugPrint('[PDF] All PDFs will be saved to: ${outputDir.path}');
+      } catch (e) {
+        ErrorLogger.logError(
+          'Failed to determine output directory',
+          error: e,
+          context: 'PdfReportService.generatePdfPerSection',
+        );
+        rethrow;
+      }
+
+      final List<File> generatedFiles = [];
+      final List<String> errors = []; // Track errors for reporting
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final df = DateFormat('yyyy-MM-dd');
+      String dateRangeStr = startDate != null && endDate != null
+          ? '${df.format(startDate)}_to_${df.format(endDate)}'
+          : 'all_time';
+
+      // Maximum rows per PDF to avoid TooManyPagesException
+      const int maxRowsPerPdf = 200;
+
+      debugPrint('[PDF] Starting generation for ${sections.length} sections');
+
+      // Generate PDFs for each section, splitting large sections into multiple parts
+      for (int i = 0; i < sections.length; i++) {
+        final section = sections[i];
+        final rowCount = section.rows.length;
+
+        debugPrint(
+          '[PDF] Processing section ${i + 1}/${sections.length}: "${section.title}" with $rowCount rows',
+        );
+
+        // Create a clean filename from section title
+        String sectionFileName = section.title
+            .replaceAll(
+              RegExp(r'^\d+\.\s*'),
+              '',
+            ) // Remove leading numbers like "1. "
+            .replaceAll(RegExp(r'[^a-zA-Z0-9\s]'), '') // Remove special chars
+            .replaceAll(RegExp(r'\s+'), '_') // Replace spaces with underscore
+            .toLowerCase();
+
+        // Check if section needs to be split
+        if (rowCount > maxRowsPerPdf) {
+          // Split large section into multiple PDFs
+          final totalParts = (rowCount / maxRowsPerPdf).ceil();
+
+          debugPrint(
+            '[PDF] Section "${section.title}" has $rowCount rows, splitting into $totalParts parts',
+          );
+
+          for (int partIndex = 0; partIndex < totalParts; partIndex++) {
+            final startRow = partIndex * maxRowsPerPdf;
+            final endRow = math.min(startRow + maxRowsPerPdf, rowCount);
+            final partRows = section.rows.sublist(startRow, endRow);
+
+            final fileName =
+                '${sectionFileName}_part${partIndex + 1}of${totalParts}_${dateRangeStr}_$timestamp.pdf';
+            final filePath = p.join(outputDir.path, fileName);
+
+            debugPrint(
+              '[PDF] Generating ${section.title} - Part ${partIndex + 1}/$totalParts (rows $startRow-${endRow - 1})',
+            );
+
+            try {
+              // Create a subsection with partial data
+              final partSection = PdfReportSection(
+                title:
+                    '${section.title} (Part ${partIndex + 1} of $totalParts)',
+                rows: partRows,
+              );
+
+              final file = await _generateFinancialReportToPath(
+                reportTitle: '${partSection.title} - $reportTitle',
+                startDate: startDate,
+                endDate: endDate,
+                sections: [partSection],
+                calculations: null, // Calculations only in summary PDF
+                summaries: null, // Summaries only in summary PDF
+                outputPath: filePath,
+              );
+
+              generatedFiles.add(file);
+
+              ErrorLogger.logInfo(
+                'Generated PDF part ${partIndex + 1}/$totalParts for: ${section.title}',
+                context: 'PdfReportService.generatePdfPerSection',
+              );
+
+              // Small delay between parts
+              if (partIndex < totalParts - 1) {
+                await Future.delayed(const Duration(milliseconds: 200));
+              }
+            } catch (e, stack) {
+              ErrorLogger.logError(
+                'Failed to generate PDF part ${partIndex + 1}/$totalParts for section: ${section.title}',
+                error: e,
+                stackTrace: stack,
+                context: 'PdfReportService.generatePdfPerSection',
+              );
+              continue;
+            }
+          }
+        } else {
+          // Section is small enough, generate single PDF
+          final fileName = '${sectionFileName}_${dateRangeStr}_$timestamp.pdf';
+          final filePath = p.join(outputDir.path, fileName);
+
+          debugPrint(
+            '[PDF] Generating section ${i + 1}/${sections.length}: ${section.title} ($rowCount rows)',
+          );
+
+          try {
+            final file = await _generateFinancialReportToPath(
+              reportTitle: '${section.title} - $reportTitle',
+              startDate: startDate,
+              endDate: endDate,
+              sections: [section],
+              calculations: null, // Calculations only in summary PDF
+              summaries: null, // Summaries only in summary PDF
+              outputPath: filePath,
+            );
+
+            generatedFiles.add(file);
+
+            ErrorLogger.logInfo(
+              'Generated PDF ${i + 1}/${sections.length}: ${section.title}',
+              context: 'PdfReportService.generatePdfPerSection',
+            );
+
+            // Small delay between sections
+            if (i < sections.length - 1) {
+              await Future.delayed(const Duration(milliseconds: 200));
+            }
+          } catch (e, stack) {
+            final errorMsg =
+                'Failed to generate PDF for section "${section.title}": $e';
+            errors.add(errorMsg);
+            ErrorLogger.logError(
+              errorMsg,
+              error: e,
+              stackTrace: stack,
+              context: 'PdfReportService.generatePdfPerSection',
+            );
+            debugPrint('[PDF] ERROR: $errorMsg');
+            continue;
+          }
+        }
+      }
+
+      // Generate a summary PDF with calculations and summaries if they exist
+      if ((calculations != null && calculations.isNotEmpty) ||
+          (summaries != null && summaries.isNotEmpty)) {
+        debugPrint(
+          '[PDF] Generating summary PDF with ${calculations?.length ?? 0} calculations and ${summaries?.length ?? 0} summaries',
+        );
+
+        final summaryFileName =
+            'financial_summary_${dateRangeStr}_$timestamp.pdf';
+        final summaryFilePath = p.join(outputDir.path, summaryFileName);
+
+        try {
+          final summaryFile = await _generateFinancialReportToPath(
+            reportTitle: 'Financial Summary - $reportTitle',
+            startDate: startDate,
+            endDate: endDate,
+            sections: [], // No sections, just summary
+            calculations: calculations,
+            summaries: summaries,
+            outputPath: summaryFilePath,
+          );
+
+          generatedFiles.add(summaryFile);
+
+          ErrorLogger.logInfo(
+            'Generated summary PDF',
+            context: 'PdfReportService.generatePdfPerSection',
+          );
+          debugPrint(
+            '[PDF] Successfully generated summary PDF: $summaryFilePath',
+          );
+        } catch (e, stack) {
+          final errorMsg = 'Failed to generate summary PDF: $e';
+          errors.add(errorMsg);
+          ErrorLogger.logError(
+            errorMsg,
+            error: e,
+            stackTrace: stack,
+            context: 'PdfReportService.generatePdfPerSection',
+          );
+          debugPrint('[PDF] ERROR: $errorMsg');
+        }
+      }
+
+      if (generatedFiles.isEmpty) {
+        final errorDetail = errors.isNotEmpty
+            ? '\n\nErrors:\n${errors.join('\n')}'
+            : '';
+        throw Exception(
+          'Failed to generate any PDF files. Please check your data and try again.$errorDetail',
+        );
+      }
+
+      // Log success with details
+      final expectedCount =
+          sections.length +
+          ((calculations != null && calculations.isNotEmpty) ||
+                  (summaries != null && summaries.isNotEmpty)
+              ? 1
+              : 0);
+      final successMsg =
+          'Successfully generated ${generatedFiles.length} of $expectedCount expected PDF files';
+
+      debugPrint('[PDF] $successMsg');
+      ErrorLogger.logInfo(
+        successMsg,
+        context: 'PdfReportService.generatePdfPerSection',
+        metadata: {
+          'generatedCount': generatedFiles.length,
+          'expectedCount': expectedCount,
+          'errorCount': errors.length,
+        },
+      );
+
+      // If some files failed, log warning
+      if (errors.isNotEmpty) {
+        final warningMsg =
+            'Some PDF files failed to generate: ${errors.length} errors';
+        debugPrint('[PDF] WARNING: $warningMsg');
+        ErrorLogger.logWarning(
+          warningMsg,
+          context: 'PdfReportService.generatePdfPerSection',
+          metadata: {'errors': errors},
+        );
+      }
+
+      return generatedFiles;
+    } finally {
+      _semaphore.release();
+    }
+  }
+
   /// Generate PDF in the background using Flutter's compute function
   Future<File> generatePdfInBackground({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+  }) async {
+    final result = await generatePdfInBackgroundWithAllFiles(
+      reportTitle: reportTitle,
+      startDate: startDate,
+      endDate: endDate,
+      sections: sections,
+      calculations: calculations,
+      summaries: summaries,
+    );
+    return result.first; // Return first file for backward compatibility
+  }
+
+  /// Generate PDF and return ALL files (for paginated reports)
+  Future<List<File>> generatePdfInBackgroundWithAllFiles({
     required String reportTitle,
     required DateTime? startDate,
     required DateTime? endDate,
@@ -220,9 +513,9 @@ class PdfReportService {
 
       // Apply stricter limits to avoid TooManyPagesException
       // For large reports, automatically use paginated PDFs
-      if (sections.length > 5 ||
-          sections.any((s) => s.rows.length > 50) ||
-          (calculations?.length ?? 0) > 5) {
+      if (sections.length > 3 ||
+          sections.any((s) => s.rows.length > 30) ||
+          (calculations?.length ?? 0) > 3) {
         try {
           final files = await generatePaginatedPDFsInBackground(
             reportTitle: reportTitle,
@@ -230,13 +523,22 @@ class PdfReportService {
             endDate: endDate,
             sections: applyDataLimits(
               sections,
-              maxRowsPerSection: 50,
+              maxRowsPerSection: 30,
             ), // Stricter limit
             calculations: calculations,
             summaries: summaries,
-            sectionsPerPdf: 3, // Fewer sections per PDF
+            sectionsPerPdf: 2, // Fewer sections per PDF
           );
-          return files.first; // Return the first file as a fallback
+
+          // CRITICAL: Check if list is empty before accessing first
+          if (files.isEmpty) {
+            throw Exception(
+              'Paginated PDF generation returned no files. '
+              'The report may be too complex or exceed size limits.',
+            );
+          }
+
+          return [files.first]; // Return the first file as a fallback
         } catch (e, stack) {
           ErrorLogger.logError(
             'Paginated PDF generation fallback failed',
@@ -255,14 +557,15 @@ class PdfReportService {
         endDate: endDate,
         sections: applyDataLimits(
           sections,
-          maxRowsPerSection: 50,
+          maxRowsPerSection: 30,
         ), // Apply stricter limit
         calculations: calculations,
         summaries: summaries,
       );
 
       try {
-        return await compute(_generatePdfInIsolate, params);
+        final file = await compute(_generatePdfInIsolate, params);
+        return [file]; // Wrap single file in list
       } catch (e, stack) {
         ErrorLogger.logError(
           'PDF generation in background failed',
@@ -289,15 +592,27 @@ class PdfReportService {
               endDate: endDate,
               sections: applyDataLimits(
                 sections,
-                maxRowsPerSection: 20,
+                maxRowsPerSection: 15,
               ), // Much stricter limit
               calculations: calculations
-                  ?.take(3)
-                  .toList(), // Limit calculations too
+                  ?.take(2)
+                  .toList(), // Limit calculations even more
               summaries: summaries,
-              sectionsPerPdf: 2, // Even fewer sections per PDF
+              sectionsPerPdf: 1, // Only 1 section per PDF for maximum safety
             );
-            return files.first; // Return the first file
+
+            // CRITICAL: Check if list is empty
+            if (files.isEmpty) {
+              throw Exception(
+                'Final PDF generation attempt produced no files. '
+                'The report is too large. Please try: '
+                '1) A shorter date range, '
+                '2) Fewer data sections, '
+                '3) Applying filters to reduce data volume.',
+              );
+            }
+
+            return files; // Return all files
           } catch (e2, stack2) {
             ErrorLogger.logError(
               'Final PDF generation attempt failed',
@@ -325,8 +640,8 @@ class PdfReportService {
     required List<PdfReportSection> sections,
     List<PdfCalculationSection>? calculations,
     List<PdfSummarySection>? summaries,
-    int sectionsPerPdf = 5,
-    int maxRowsPerSection = 50, // New parameter to control rows per section
+    int sectionsPerPdf = 2, // Reduced from 5 to 2 for safer pagination
+    int maxRowsPerSection = 30, // Reduced from 50 to 30 for safer pagination
   }) async {
     // Acquire semaphore to limit concurrent operations
     await _semaphore.acquire();
@@ -343,25 +658,51 @@ class PdfReportService {
         },
       );
 
+      // FIX #4: Determine output directory ONCE at the start
+      Directory outputDir;
+      try {
+        outputDir = await _testStorage();
+        debugPrint('[PDF] All PDFs will be saved to: ${outputDir.path}');
+      } catch (e) {
+        debugPrint('[PDF] Failed to find writable directory: $e');
+        rethrow;
+      }
+
+      // FIX #1: Generate unique base timestamp for this batch
+      final batchTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+      // Generate base filename from report title
+      String baseFileName = 'financial_report';
+      if (reportTitle.toLowerCase().contains('sales')) {
+        baseFileName = 'sales_report';
+      } else if (reportTitle.toLowerCase().contains('inventory')) {
+        baseFileName = 'inventory_report';
+      } else if (reportTitle.toLowerCase().contains('customer')) {
+        baseFileName = 'customer_report';
+      } else if (reportTitle.toLowerCase().contains('staff')) {
+        baseFileName = 'staff_report';
+      }
+
       // Apply row limits to all sections first to avoid TooManyPagesException
       final limitedSections = applyDataLimits(
         sections,
         maxRowsPerSection: maxRowsPerSection,
       );
 
-      // For very large reports, split large sections into multiple sections
-      if (limitedSections.any((section) => section.rows.length > 100)) {
+      // For very large reports, split large sections into multiple smaller sections
+      // More aggressive splitting to prevent TooManyPagesException
+      if (limitedSections.any((section) => section.rows.length > 50)) {
         List<PdfReportSection> splitSections = [];
 
         for (var section in limitedSections) {
-          if (section.rows.length > 100) {
-            // Split this section into multiple smaller sections
-            final totalSplits = (section.rows.length / 50).ceil();
+          if (section.rows.length > 50) {
+            // Split this section into multiple smaller sections (25 rows each)
+            final totalSplits = (section.rows.length / 25).ceil();
 
             for (int i = 0; i < totalSplits; i++) {
-              final start = i * 50;
-              final end = (start + 50 < section.rows.length)
-                  ? start + 50
+              final start = i * 25;
+              final end = (start + 25 < section.rows.length)
+                  ? start + 25
                   : section.rows.length;
 
               splitSections.add(
@@ -382,9 +723,19 @@ class PdfReportService {
         limitedSections.addAll(splitSections);
       }
 
+      // Check if we have any sections after processing
+      if (limitedSections.isEmpty) {
+        throw Exception(
+          'No sections available for PDF generation after applying limits. '
+          'Original sections: ${sections.length}, '
+          'Sections after limits: ${limitedSections.length}',
+        );
+      }
+
       // Calculate how many PDFs we'll need
       int totalPdfs = (limitedSections.length / sectionsPerPdf).ceil();
       List<File> pdfFiles = [];
+      List<Exception> errors = []; // Track all errors
 
       // Generate PDFs sequentially instead of in parallel to avoid resource contention
       for (int i = 0; i < limitedSections.length; i += sectionsPerPdf) {
@@ -425,6 +776,11 @@ class PdfReportService {
           }
         }
 
+        // FIX #1 & #5: Create unique filename with part number
+        final fileName =
+            '${baseFileName}_part${pageNumber}of${totalPdfs}_$batchTimestamp.pdf';
+        final filePath = p.join(outputDir.path, fileName);
+
         final params = PdfGenerationParams(
           reportTitle: '$reportTitle - Part $pageNumber of $totalPdfs',
           startDate: startDate,
@@ -442,12 +798,13 @@ class PdfReportService {
         }
 
         try {
-          File pdfFile = await compute(_generatePdfInIsolate, params);
+          // Generate PDF with specific output path
+          File pdfFile = await _generatePdfInIsolateWithPath(params, filePath);
           pdfFiles.add(pdfFile);
 
           // Log success
           ErrorLogger.logInfo(
-            'PDF $pageNumber of $totalPdfs generated successfully',
+            'PDF $pageNumber of $totalPdfs generated successfully: ${pdfFile.path}',
             context: 'PdfReportService.generatePaginatedPDFsInBackground',
           );
         } catch (e, stack) {
@@ -458,15 +815,90 @@ class PdfReportService {
             context: 'PdfReportService.generatePaginatedPDFsInBackground',
           );
 
+          errors.add(Exception('PDF $pageNumber failed: $e'));
+
+          // CRITICAL: Don't silently continue if this is the only/first PDF
+          if (pageNumber == 1 && totalPdfs == 1) {
+            // This is the only PDF and it failed - rethrow immediately
+            throw Exception(
+              'Failed to generate PDF: $e. '
+              'The report may be too large or complex. '
+              'Try reducing the date range or applying filters.',
+            );
+          }
           // Continue with other PDFs instead of failing completely
           continue;
         }
       }
 
-      return pdfFiles;
+      // CRITICAL: Check if we generated at least one PDF
+      if (pdfFiles.isEmpty) {
+        throw Exception(
+          'Failed to generate any PDFs. All $totalPdfs attempts failed. '
+          'Errors: ${errors.map((e) => e.toString()).join("; ")}. '
+          'The report may be too large. Try: '
+          '1) Reducing the date range, '
+          '2) Applying filters to reduce data, '
+          '3) Exporting smaller sections separately.',
+        );
+      }
+
+      // Log warning if some PDFs failed but not all
+      if (errors.isNotEmpty) {
+        ErrorLogger.logWarning(
+          'Some PDFs failed to generate: ${errors.length}/$totalPdfs failed',
+          context: 'PdfReportService.generatePaginatedPDFsInBackground',
+          metadata: {
+            'successfulPdfs': pdfFiles.length,
+            'failedPdfs': errors.length,
+            'totalAttempted': totalPdfs,
+          },
+        );
+      }
+
+      // FIX #2 & #3: Log all generated files
+      debugPrint('[PDF] ═══════════════════════════════════════');
+      debugPrint('[PDF] Successfully generated ${pdfFiles.length} PDF files:');
+      for (int i = 0; i < pdfFiles.length; i++) {
+        debugPrint('[PDF] Part ${i + 1}: ${pdfFiles[i].path}');
+      }
+      debugPrint('[PDF] ═══════════════════════════════════════');
+
+      return pdfFiles; // Return ALL files, not just first
     } finally {
       // Always release the semaphore when done
       _semaphore.release();
+    }
+  }
+
+  /// New helper method to generate PDF with specific output path
+  static Future<File> _generatePdfInIsolateWithPath(
+    PdfGenerationParams params,
+    String outputPath,
+  ) async {
+    try {
+      debugPrint('[PDF ISOLATE] Generating PDF: ${params.reportTitle}');
+      debugPrint('[PDF ISOLATE] Output path: $outputPath');
+
+      final service = PdfReportService();
+
+      // Generate PDF with specific path
+      final file = await service._generateFinancialReportToPath(
+        reportTitle: params.reportTitle,
+        startDate: params.startDate,
+        endDate: params.endDate,
+        sections: params.sections,
+        calculations: params.calculations,
+        summaries: params.summaries,
+        outputPath: outputPath,
+      );
+
+      debugPrint('[PDF ISOLATE] Completed: ${params.reportTitle}');
+      return file;
+    } catch (e, stack) {
+      debugPrint('[CRITICAL ERROR] PDF generation failed: $e');
+      debugPrint('[CRITICAL ERROR] Stack trace: $stack');
+      rethrow;
     }
   }
 
@@ -520,37 +952,61 @@ class PdfReportService {
       (sum, section) => sum + section.rows.length,
     );
 
-    // For extremely large data sets (>1000 rows), automatically apply summary mode
-    if (totalRows > 1000 && !summaryOnly) {
+    // Apply more aggressive limits to prevent TooManyPagesException
+    // For extremely large data sets (>500 rows), automatically apply summary mode
+    if (totalRows > 500 && !summaryOnly) {
       ErrorLogger.logInfo(
         'Applying summary-only mode due to large dataset ($totalRows rows)',
         context: 'PdfReportService.applyDataLimits',
       );
       summaryOnly = true;
       // Also reduce max rows per section for very large datasets
-      if (maxRowsPerSection > 50) {
-        maxRowsPerSection = 50;
+      if (maxRowsPerSection > 30) {
+        maxRowsPerSection = 30;
       }
     }
-    // For large data sets (>500 rows), further reduce rows per section
-    else if (totalRows > 500 && maxRowsPerSection > 75) {
-      maxRowsPerSection = 75;
+    // For large data sets (>300 rows), further reduce rows per section
+    else if (totalRows > 300 && maxRowsPerSection > 50) {
+      maxRowsPerSection = 50;
       ErrorLogger.logInfo(
         'Reducing max rows per section to $maxRowsPerSection due to large dataset',
+        context: 'PdfReportService.applyDataLimits',
+      );
+    }
+    // For medium data sets (>150 rows), apply moderate limits
+    else if (totalRows > 150 && maxRowsPerSection > 75) {
+      maxRowsPerSection = 75;
+      ErrorLogger.logInfo(
+        'Reducing max rows per section to $maxRowsPerSection due to medium dataset',
         context: 'PdfReportService.applyDataLimits',
       );
     }
 
     // If summary only is enabled, only include sections with "Summary" in the title
     if (summaryOnly) {
-      sections = sections
-          .where(
-            (s) =>
-                s.title.toLowerCase().contains('summary') ||
-                s.title.toLowerCase().contains('total') ||
-                s.rows.length <= 10, // Keep small sections
-          )
-          .toList();
+      sections = sections.where((s) {
+        final lowerTitle = s.title.toLowerCase();
+        // Always keep essential financial sections
+        if (lowerTitle.contains('income') ||
+            lowerTitle.contains('cogs') ||
+            lowerTitle.contains('cost of goods sold') ||
+            lowerTitle.contains('revenue') ||
+            lowerTitle.contains('expense') ||
+            lowerTitle.contains('profit') ||
+            lowerTitle.contains('loss')) {
+          return true;
+        }
+        // Keep summary/total sections
+        if (lowerTitle.contains('summary') || lowerTitle.contains('total')) {
+          return true;
+        }
+        // Keep sections that start with numbers (e.g., "1. Income", "2. COGS")
+        if (RegExp(r'^\d+\.').hasMatch(s.title.trim())) {
+          return true;
+        }
+        // Keep small sections
+        return s.rows.length <= 10;
+      }).toList();
     }
 
     // For large sections, apply stricter limits
@@ -561,10 +1017,28 @@ class PdfReportService {
 
       // For very large sections, apply even stricter limits
       if (section.rows.length > 200) {
-        sectionLimit = math.min(maxRowsPerSection, 40); // Stricter limit
+        sectionLimit = math.min(maxRowsPerSection, 25); // Much stricter limit
+      } else if (section.rows.length > 100) {
+        sectionLimit = math.min(
+          maxRowsPerSection,
+          35,
+        ); // Stricter limit for medium sections
       }
 
       limitedSections.add(section.copyWithLimitedRows(sectionLimit));
+    }
+
+    // Safety check: If no sections remain after filtering, log warning
+    if (limitedSections.isEmpty) {
+      ErrorLogger.logWarning(
+        'No sections remaining after applying data limits',
+        context: 'PdfReportService.applyDataLimits',
+        metadata: {
+          'originalSectionCount': sections.length,
+          'summaryOnly': summaryOnly,
+          'maxRowsPerSection': maxRowsPerSection,
+        },
+      );
     }
 
     return limitedSections;
@@ -854,6 +1328,105 @@ class PdfReportService {
     } catch (e, stack) {
       debugPrint('[PDF] Error generating PDF: $e');
       debugPrint('[PDF] Stack trace: $stack');
+      rethrow;
+    }
+  }
+
+  /// Modified version that accepts specific output path
+  Future<File> _generateFinancialReportToPath({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+    required String outputPath,
+  }) async {
+    try {
+      debugPrint('[PDF] Generating PDF to: $outputPath');
+      debugPrint(
+        '[PDF]   Sections: ${sections.length} (total ${sections.fold(0, (sum, s) => sum + s.rows.length)} rows)',
+      );
+      debugPrint('[PDF]   Calculations: ${calculations?.length ?? 0}');
+      debugPrint('[PDF]   Summaries: ${summaries?.length ?? 0}');
+
+      final doc = pw.Document();
+      final df = DateFormat('yyyy-MM-dd');
+
+      doc.addPage(
+        pw.MultiPage(
+          pageFormat: PdfPageFormat.a4,
+          maxPages: 500, // Increased from 100 to handle large reports
+          footer: (context) => pw.Align(
+            alignment: pw.Alignment.centerRight,
+            child: pw.Text(
+              'Page ${context.pageNumber} of ${context.pagesCount}',
+              style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+            ),
+          ),
+          build: (context) => [
+            pw.Header(
+              level: 0,
+              child: pw.Row(
+                mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+                children: [
+                  pw.Expanded(
+                    child: pw.Text(
+                      reportTitle,
+                      style: pw.TextStyle(
+                        fontSize: 18,
+                        fontWeight: pw.FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                  pw.Text(
+                    startDate != null && endDate != null
+                        ? '${df.format(startDate)} - ${df.format(endDate)}'
+                        : 'All Time',
+                    style: const pw.TextStyle(fontSize: 10),
+                  ),
+                ],
+              ),
+            ),
+            ...sections.map((s) => _buildSection(s)),
+            if (calculations != null)
+              ...calculations.map((c) => _buildCalculation(c)),
+            if (summaries != null) ...summaries.map((s) => _buildSummary(s)),
+            pw.SizedBox(height: 16),
+            pw.Align(
+              alignment: pw.Alignment.centerRight,
+              child: pw.Text(
+                'Generated on ${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.now())}',
+                style: const pw.TextStyle(
+                  fontSize: 9,
+                  color: PdfColors.grey700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+
+      final pdfBytes = await doc.save();
+      final file = File(outputPath);
+
+      // Ensure parent directory exists
+      final parentDir = file.parent;
+      if (!await parentDir.exists()) {
+        await parentDir.create(recursive: true);
+      }
+
+      await file.writeAsBytes(pdfBytes);
+
+      final exists = await file.exists();
+      final fileSize = exists ? await file.length() : 0;
+
+      debugPrint('[PDF] Saved: ${file.path}, size: $fileSize bytes');
+
+      return file;
+    } catch (e, stack) {
+      debugPrint('[PDF] Error: $e');
+      debugPrint('[PDF] Stack: $stack');
       rethrow;
     }
   }
@@ -1278,5 +1851,59 @@ class PdfReportService {
         value.contains('%') ||
         value.contains('x') ||
         RegExp(r'^\d+\.?\d*$').hasMatch(value.replaceAll(',', ''));
+  }
+
+  /// Check if report is too complex before generation
+  bool isReportTooComplex(
+    List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+  ) {
+    final totalRows = sections.fold<int>(
+      0,
+      (sum, section) => sum + section.rows.length,
+    );
+
+    final totalSections = sections.length;
+    final totalCalculations = calculations?.length ?? 0;
+
+    // Heuristic: Estimate page count
+    // Rough estimate: 30 rows per page, 1 section header = 1 row
+    final estimatedPages =
+        ((totalRows + totalSections) / 30).ceil() +
+        (totalCalculations * 0.5).ceil();
+
+    return estimatedPages > 90; // PDF library limit is typically 100 pages
+  }
+
+  /// Generate report with pre-check for complexity
+  Future<File> generateReportWithPreCheck({
+    required String reportTitle,
+    required DateTime? startDate,
+    required DateTime? endDate,
+    required List<PdfReportSection> sections,
+    List<PdfCalculationSection>? calculations,
+    List<PdfSummarySection>? summaries,
+  }) async {
+    // Check complexity before attempting generation
+    if (isReportTooComplex(sections, calculations)) {
+      throw Exception(
+        'Report is too complex to generate as a single PDF. '
+        'Please try one of the following:\n'
+        '1. Reduce the date range\n'
+        '2. Filter data to show fewer items\n'
+        '3. Export sections separately\n'
+        '4. Use CSV export instead for large datasets',
+      );
+    }
+
+    // Proceed with generation
+    return await generatePdfInBackground(
+      reportTitle: reportTitle,
+      startDate: startDate,
+      endDate: endDate,
+      sections: sections,
+      calculations: calculations,
+      summaries: summaries,
+    );
   }
 }

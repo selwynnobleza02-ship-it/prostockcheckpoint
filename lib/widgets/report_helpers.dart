@@ -142,9 +142,13 @@ String _formatLargeNumber(String value) {
   if (numValue == null) return value;
 
   if (numValue >= 1000000) {
-    return '₱${(numValue / 1000000).toStringAsFixed(1)}M';
+    double millions = (numValue / 1000000).floorToDouble();
+    double remainder = (numValue % 1000000) / 100000;
+    return '₱${(millions + remainder.floorToDouble() / 10).toStringAsFixed(1)}M';
   } else if (numValue >= 1000) {
-    return '₱${(numValue / 1000).toStringAsFixed(1)}K';
+    double thousands = (numValue / 1000).floorToDouble();
+    double remainder = (numValue % 1000) / 100;
+    return '₱${(thousands + remainder.floorToDouble() / 10).toStringAsFixed(1)}K';
   } else {
     return value;
   }

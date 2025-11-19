@@ -37,6 +37,7 @@ class _TaxRulesScreenState extends State<TaxRulesScreen> {
   Future<void> _loadRules() async {
     setState(() => _isLoading = true);
     try {
+      // Force refresh to get latest data and bypass cache
       final rules = await TaxService.getAllTaxRules();
 
       // Load product names for product-specific rules

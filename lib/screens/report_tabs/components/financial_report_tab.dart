@@ -19,9 +19,7 @@ import 'package:prostock/utils/error_logger.dart';
 import 'package:prostock/widgets/top_selling_products_list.dart';
 import 'package:prostock/services/pdf_report_service.dart';
 import 'package:prostock/services/historical_cost_service.dart';
-import 'dart:math';
 import 'package:flutter/foundation.dart';
-import 'package:prostock/widgets/export_filter_dialog.dart';
 import 'dart:io';
 import 'package:prostock/services/cost_history_service.dart';
 import 'package:prostock/services/local_database_service.dart';
@@ -218,35 +216,76 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                         label: const Text('Export PDF'),
                         onPressed: () async {
                           try {
-                            // Show filter options
-                            final exportOptions = ExportFilterOptions(
-                              useDataRangeFilter:
-                                  _startDate != null && _endDate != null,
-                              startDate: _startDate,
-                              endDate: _endDate,
+                            // First, ask user which export method they prefer
+                            if (!context.mounted) return;
+                            final exportMethod = await showDialog<String>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Choose Export Method'),
+                                content: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'How would you like to export your financial report?',
+                                      style: TextStyle(fontSize: 14),
+                                    ),
+                                    const SizedBox(height: 16),
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(
+                                        Icons.article,
+                                        color: Colors.blue,
+                                      ),
+                                      title: const Text('Single PDF (Limited)'),
+                                      subtitle: const Text(
+                                        'One PDF with limited entries per section',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      onTap: () =>
+                                          Navigator.pop(context, 'single'),
+                                    ),
+                                    const Divider(),
+                                    ListTile(
+                                      contentPadding: EdgeInsets.zero,
+                                      leading: const Icon(
+                                        Icons.library_books,
+                                        color: Colors.green,
+                                      ),
+                                      title: const Text(
+                                        'Separate PDFs (Complete)',
+                                      ),
+                                      subtitle: const Text(
+                                        'One PDF per section with ALL entries',
+                                        style: TextStyle(fontSize: 12),
+                                      ),
+                                      onTap: () =>
+                                          Navigator.pop(context, 'separate'),
+                                    ),
+                                  ],
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () => Navigator.pop(context),
+                                    child: const Text('Cancel'),
+                                  ),
+                                ],
+                              ),
                             );
 
-                            // Show the filter dialog
-                            if (!context.mounted) return;
-                            final result =
-                                await showDialog<ExportFilterOptions>(
-                                  context: context,
-                                  builder: (context) => ExportFilterDialog(
-                                    initialOptions: exportOptions,
-                                    onApply: (options) async {
-                                      Navigator.of(context).pop(options);
-                                    },
-                                  ),
-                                );
+                            if (exportMethod == null || !context.mounted)
+                              return;
 
-                            // If user cancelled the dialog
-                            if (result == null || !context.mounted) return;
-
-                            final options = result;
                             final scaffold = ScaffoldMessenger.of(context);
 
+                            // Use current date filters if set
+                            List<Sale> exportFilteredSales = filteredSales;
+                            List<SaleItem> exportFilteredSaleItems =
+                                filteredSaleItems;
+                            List<Loss> exportFilteredLosses = filteredLosses;
+
                             // Validate we have data to export
-                            if (filteredSales.isEmpty) {
+                            if (exportFilteredSales.isEmpty) {
                               scaffold.showSnackBar(
                                 const SnackBar(
                                   content: Text(
@@ -259,7 +298,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               return;
                             }
 
-                            if (filteredSaleItems.isEmpty) {
+                            if (exportFilteredSaleItems.isEmpty) {
                               scaffold.showSnackBar(
                                 const SnackBar(
                                   content: Text(
@@ -282,6 +321,46 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
                             final pdf = PdfReportService();
 
+                            // Recalculate totals based on export-filtered data
+                            final exportTotalRevenue = reportService
+                                .calculateTotalSales(exportFilteredSales);
+                            final exportTotalCost = reportService
+                                .calculateTotalCost(
+                                  exportFilteredSaleItems,
+                                  inventory.products,
+                                );
+                            final exportTotalLoss = reportService
+                                .calculateTotalLoss(exportFilteredLosses);
+                            final exportTotalProfit = reportService
+                                .calculateGrossProfit(
+                                  exportTotalRevenue,
+                                  exportTotalCost,
+                                  exportTotalLoss,
+                                );
+                            final exportProfitMargin = reportService
+                                .calculateProfitMargin(
+                                  exportTotalProfit,
+                                  exportTotalRevenue,
+                                );
+                            final exportRoi = reportService.calculateRoi(
+                              exportTotalProfit,
+                              exportTotalCost,
+                            );
+                            final exportMarkupPercentage = reportService
+                                .calculateMarkupPercentage(
+                                  exportTotalRevenue,
+                                  exportTotalCost,
+                                );
+                            final exportAverageOrderValue = reportService
+                                .calculateAverageOrderValue(
+                                  exportFilteredSales,
+                                );
+                            final exportInventoryTurnover = reportService
+                                .calculateInventoryTurnover(
+                                  exportTotalCost,
+                                  averageInventoryValue,
+                                );
+
                             // Category breakdown no longer needed for product-level export
 
                             // Build income section by product with quantity and price
@@ -297,7 +376,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                             revenueByProductPrice = {};
                             // Also track total quantity per product for COGS computation
                             final Map<String, double> qtyByProduct = {};
-                            for (final item in filteredSaleItems) {
+                            for (final item in exportFilteredSaleItems) {
                               // Round unit price to 2 decimals to avoid floating noise
                               final roundedUnitPrice =
                                   (item.unitPrice * 100).round() / 100.0;
@@ -382,19 +461,19 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                             );
 
                             // Get the earliest sale date for batch query
-                            final saleDate = filteredSales.isNotEmpty
-                                ? filteredSales.first.createdAt
+                            final saleDate = exportFilteredSales.isNotEmpty
+                                ? exportFilteredSales.first.createdAt
                                 : DateTime.now();
 
                             // BATCH QUERY: Get all historical costs at once
                             final itemCosts = await historicalCostService
                                 .getHistoricalCostsForSaleItems(
-                                  filteredSaleItems,
+                                  exportFilteredSaleItems,
                                   saleDate,
                                 );
 
                             // Group by product and cost using the batch results
-                            for (final item in filteredSaleItems) {
+                            for (final item in exportFilteredSaleItems) {
                               final productId = item.productId;
                               final historicalCost = itemCosts[item.id] ?? 0.0;
 
@@ -454,13 +533,13 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               'Total Sales',
                               totalSalesQty.toStringAsFixed(0),
                               '-',
-                              CurrencyUtils.formatCurrency(totalRevenue),
+                              CurrencyUtils.formatCurrency(exportTotalRevenue),
                             ]);
                             cogsRows.add([
                               'Total COGS',
                               totalCogsQty.toStringAsFixed(0),
                               '-',
-                              CurrencyUtils.formatCurrency(totalCost),
+                              CurrencyUtils.formatCurrency(exportTotalCost),
                             ]);
 
                             final sections = <PdfReportSection>[
@@ -483,9 +562,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 title: '1. Total Revenue',
                                 formula: 'Sum of all sales transactions',
                                 calculation:
-                                    'Sum of ${filteredSaleItems.length} sale items = ${totalRevenue.toStringAsFixed(2)}',
+                                    'Sum of ${exportFilteredSaleItems.length} sale items = ${exportTotalRevenue.toStringAsFixed(2)}',
                                 result: CurrencyUtils.formatCurrency(
-                                  totalRevenue,
+                                  exportTotalRevenue,
                                 ),
                               ),
 
@@ -495,8 +574,10 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 formula:
                                     'Sum of product costs × quantities sold',
                                 calculation:
-                                    'Sum of (product cost × quantity sold) for each item = ${totalCost.toStringAsFixed(2)}',
-                                result: CurrencyUtils.formatCurrency(totalCost),
+                                    'Sum of (product cost × quantity sold) for each item = ${exportTotalCost.toStringAsFixed(2)}',
+                                result: CurrencyUtils.formatCurrency(
+                                  exportTotalCost,
+                                ),
                               ),
 
                               // 3. Total Losses
@@ -504,8 +585,10 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 title: '3. Total Losses',
                                 formula: 'Sum of damaged/expired items',
                                 calculation:
-                                    'Sum of ${filteredLosses.length} loss items = ${totalLoss.toStringAsFixed(2)}',
-                                result: CurrencyUtils.formatCurrency(totalLoss),
+                                    'Sum of ${exportFilteredLosses.length} loss items = ${exportTotalLoss.toStringAsFixed(2)}',
+                                result: CurrencyUtils.formatCurrency(
+                                  exportTotalLoss,
+                                ),
                               ),
 
                               // 4. Gross Profit
@@ -514,9 +597,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 formula:
                                     'Total Revenue - Cost of Goods Sold - Total Losses',
                                 calculation:
-                                    '${totalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${totalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${totalLoss.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ${totalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
+                                    '${exportTotalRevenue.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${exportTotalCost.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} - ${exportTotalLoss.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')} = ${exportTotalProfit.toStringAsFixed(0).replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (Match m) => '${m[1]},')}',
                                 result: CurrencyUtils.formatCurrency(
-                                  totalProfit,
+                                  exportTotalProfit,
                                 ),
                               ),
 
@@ -525,8 +608,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 title: '5. Profit Margin',
                                 formula: '(Gross Profit ÷ Total Revenue) × 100',
                                 calculation:
-                                    '(${totalProfit.toStringAsFixed(2)} ÷ ${totalRevenue.toStringAsFixed(2)}) × 100 = ${profitMargin.toStringAsFixed(1)}%',
-                                result: '${profitMargin.toStringAsFixed(1)}%',
+                                    '(${exportTotalProfit.toStringAsFixed(2)} ÷ ${exportTotalRevenue.toStringAsFixed(2)}) × 100 = ${exportProfitMargin.toStringAsFixed(1)}%',
+                                result:
+                                    '${exportProfitMargin.toStringAsFixed(1)}%',
                               ),
 
                               // 6. Markup Percentage
@@ -534,9 +618,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 title: '6. Markup Percentage',
                                 formula: '((Revenue - Cost) ÷ Cost) × 100',
                                 calculation:
-                                    '((${totalRevenue.toStringAsFixed(2)} - ${totalCost.toStringAsFixed(2)}) ÷ ${totalCost.toStringAsFixed(2)}) × 100 = ${markupPercentage.toStringAsFixed(1)}%',
+                                    '((${exportTotalRevenue.toStringAsFixed(2)} - ${exportTotalCost.toStringAsFixed(2)}) ÷ ${exportTotalCost.toStringAsFixed(2)}) × 100 = ${exportMarkupPercentage.toStringAsFixed(1)}%',
                                 result:
-                                    '${markupPercentage.toStringAsFixed(1)}%',
+                                    '${exportMarkupPercentage.toStringAsFixed(1)}%',
                               ),
 
                               // 7. Return on Investment (ROI)
@@ -544,8 +628,8 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 title: '7. Return on Investment (ROI)',
                                 formula: '(Total Profit ÷ Total Cost) × 100',
                                 calculation:
-                                    '(${totalProfit.toStringAsFixed(2)} ÷ ${totalCost.toStringAsFixed(2)}) × 100 = ${roi.toStringAsFixed(1)}%',
-                                result: '${roi.toStringAsFixed(1)}%',
+                                    '(${exportTotalProfit.toStringAsFixed(2)} ÷ ${exportTotalCost.toStringAsFixed(2)}) × 100 = ${exportRoi.toStringAsFixed(1)}%',
+                                result: '${exportRoi.toStringAsFixed(1)}%',
                               ),
 
                               // 8. Inventory Turnover
@@ -553,27 +637,30 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 title: '8. Inventory Turnover',
                                 formula: 'COGS ÷ Average Inventory Value',
                                 calculation:
-                                    '${totalCost.toStringAsFixed(2)} ÷ ${averageInventoryValue.toStringAsFixed(2)} = ${inventoryTurnover.toStringAsFixed(1)}x',
+                                    '${exportTotalCost.toStringAsFixed(2)} ÷ ${averageInventoryValue.toStringAsFixed(2)} = ${exportInventoryTurnover.toStringAsFixed(1)}x',
                                 result:
-                                    '${inventoryTurnover.toStringAsFixed(1)}x',
+                                    '${exportInventoryTurnover.toStringAsFixed(1)}x',
                               ),
                             ];
 
                             final summaries = <PdfSummarySection>[];
 
-                            // Apply filter options to limit data
+                            // Note: For Separate PDFs mode, we use original sections without limits
+                            // The system will automatically split large sections into multiple PDFs
                             List<PdfReportSection> filteredSections = sections;
-                            if (options.useDataRangeFilter) {
-                              // Date filtering is already applied via _startDate and _endDate
-                            }
 
-                            // Apply item count limit and summary-only filter
-                            if (options.limitItemCount || options.summaryOnly) {
-                              filteredSections = pdf.applyDataLimits(
-                                sections,
-                                maxRowsPerSection: options.maxItemCount,
-                                summaryOnly: options.summaryOnly,
+                            // Validate that we have sections to export
+                            if (filteredSections.isEmpty) {
+                              scaffold.showSnackBar(
+                                const SnackBar(
+                                  content: Text(
+                                    'No data available to export after applying filters. Try increasing the item limit or disabling "Summary Only" mode.',
+                                  ),
+                                  backgroundColor: Colors.orange,
+                                  duration: Duration(seconds: 5),
+                                ),
                               );
+                              return;
                             }
 
                             try {
@@ -582,13 +669,17 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                               showDialog(
                                 context: context,
                                 barrierDismissible: false,
-                                builder: (context) => const AlertDialog(
+                                builder: (context) => AlertDialog(
                                   content: Column(
                                     mainAxisSize: MainAxisSize.min,
                                     children: [
-                                      CircularProgressIndicator(),
-                                      SizedBox(height: 16),
-                                      Text('Generating PDF...\nPlease wait.'),
+                                      const CircularProgressIndicator(),
+                                      const SizedBox(height: 16),
+                                      Text(
+                                        exportMethod == 'separate'
+                                            ? 'Generating ${filteredSections.length + 1} PDF files...\nPlease wait.'
+                                            : 'Generating PDF...\nPlease wait.',
+                                      ),
                                     ],
                                   ),
                                 ),
@@ -598,50 +689,125 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 'Starting financial report PDF generation',
                                 context: 'FinancialReportTab',
                                 metadata: {
+                                  'exportMethod': exportMethod,
                                   'filteredSections': filteredSections.length,
                                   'calculations': calculations.length,
                                   'summaries': summaries.length,
                                 },
                               );
 
-                              // Generate the PDF with filtered sections in background
-                              final file = await pdf.generatePdfInBackground(
-                                reportTitle:
-                                    'Financial Report - Sari-Sari Store',
-                                startDate: options.useDataRangeFilter
-                                    ? options.startDate
-                                    : _startDate,
-                                endDate: options.useDataRangeFilter
-                                    ? options.endDate
-                                    : _endDate,
-                                sections: filteredSections,
-                                calculations: calculations,
-                                summaries: summaries,
-                              );
+                              // Generate PDFs based on chosen method
+                              final List<File> files;
+
+                              if (exportMethod == 'separate') {
+                                // Generate one PDF per section with ALL data
+                                files = await pdf.generatePdfPerSection(
+                                  reportTitle:
+                                      'Financial Report - Sari-Sari Store',
+                                  startDate: _startDate,
+                                  endDate: _endDate,
+                                  sections:
+                                      sections, // Use original sections without limits
+                                  calculations: calculations,
+                                  summaries: summaries,
+                                );
+                              } else {
+                                // Generate single PDF with limited data
+                                files = await pdf
+                                    .generatePdfInBackgroundWithAllFiles(
+                                      reportTitle:
+                                          'Financial Report - Sari-Sari Store',
+                                      startDate: _startDate,
+                                      endDate: _endDate,
+                                      sections: filteredSections,
+                                      calculations: calculations,
+                                      summaries: summaries,
+                                    );
+                              }
 
                               // Close progress dialog
                               if (!context.mounted) return;
                               Navigator.of(context).pop();
 
-                              // Make sure the file exists and has content
-                              final fileExists = await file.exists();
-                              final fileSize = fileExists
-                                  ? await file.length()
-                                  : 0;
+                              // Validate all files
+                              final validFiles = <File>[];
+                              for (final file in files) {
+                                final fileExists = await file.exists();
+                                final fileSize = fileExists
+                                    ? await file.length()
+                                    : 0;
+                                if (fileExists && fileSize > 0) {
+                                  validFiles.add(file);
+                                }
+                              }
 
                               ErrorLogger.logInfo(
                                 'PDF file generation successful',
                                 context: 'FinancialReportTab',
                                 metadata: {
-                                  'filePath': file.path,
-                                  'fileExists': fileExists,
-                                  'fileSize': fileSize,
+                                  'filesGenerated': files.length,
+                                  'validFiles': validFiles.length,
+                                  'exportMethod': exportMethod,
                                 },
                               );
 
                               if (!context.mounted) return;
 
-                              if (fileExists && fileSize > 0) {
+                              // Calculate expected file count based on export method
+                              final expectedFileCount =
+                                  exportMethod == 'separate'
+                                  ? filteredSections.length +
+                                        1 // sections + summary
+                                  : 1; // single combined PDF
+
+                              if (validFiles.isEmpty) {
+                                scaffold.showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      'Error: PDF files were not created properly. Please check storage permissions and try again.',
+                                    ),
+                                    backgroundColor: Colors.red,
+                                    duration: Duration(seconds: 6),
+                                  ),
+                                );
+                                return;
+                              }
+
+                              // Check if some files failed to generate
+                              if (exportMethod == 'separate' &&
+                                  validFiles.length < expectedFileCount) {
+                                final missingCount =
+                                    expectedFileCount - validFiles.length;
+                                ErrorLogger.logWarning(
+                                  'Not all PDF files were generated',
+                                  context: 'FinancialReportTab',
+                                  metadata: {
+                                    'expected': expectedFileCount,
+                                    'actual': validFiles.length,
+                                    'missing': missingCount,
+                                  },
+                                );
+
+                                // Show warning to user
+                                scaffold.showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'Warning: Only ${validFiles.length} of $expectedFileCount PDF files were created. Some sections may have failed. Check the console/logs for details.',
+                                    ),
+                                    backgroundColor: Colors.orange,
+                                    duration: const Duration(seconds: 8),
+                                    action: SnackBarAction(
+                                      label: 'OK',
+                                      textColor: Colors.white,
+                                      onPressed: () {},
+                                    ),
+                                  ),
+                                );
+                              }
+
+                              // Single file - show simple SnackBar
+                              if (validFiles.length == 1) {
+                                final file = validFiles.first;
                                 // Extract user-friendly location from the path
                                 String userFriendlyPath = file.path;
                                 if (file.path.contains(
@@ -675,13 +841,186 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                   ),
                                 );
                               } else {
-                                scaffold.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Error: PDF file was not created properly. Please check storage permissions.',
+                                // Multiple files - show detailed dialog
+                                String locationText = 'Downloads folder';
+                                if (validFiles.isNotEmpty) {
+                                  final firstPath = validFiles.first.path;
+                                  if (firstPath.contains('/Download')) {
+                                    locationText = 'Downloads folder';
+                                  } else {
+                                    final pathParts = firstPath.split('/');
+                                    if (pathParts.length >= 2) {
+                                      locationText =
+                                          pathParts[pathParts.length - 2];
+                                    }
+                                  }
+                                }
+
+                                showDialog(
+                                  context: context,
+                                  builder: (dialogContext) => AlertDialog(
+                                    title: Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.check_circle,
+                                          color: Colors.green,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          exportMethod == 'separate'
+                                              ? 'PDF Files Created'
+                                              : 'Multiple PDF Files Generated',
+                                        ),
+                                      ],
                                     ),
-                                    backgroundColor: Colors.red,
-                                    duration: const Duration(seconds: 6),
+                                    content: SingleChildScrollView(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          if (exportMethod == 'separate') ...[
+                                            Text(
+                                              'Generated ${validFiles.length} separate PDF files:',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 15,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 8),
+                                            Text(
+                                              '✓ Income report\n'
+                                              '✓ Cost of Goods Sold report\n'
+                                              '✓ Financial Summary with calculations',
+                                              style: TextStyle(
+                                                color: Colors.grey[700],
+                                              ),
+                                            ),
+                                            const SizedBox(height: 12),
+                                            Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue[50],
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.info_outline,
+                                                    size: 20,
+                                                    color: Colors.blue[700],
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      'Each file contains ALL entries without truncation',
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        color: Colors.blue[900],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ] else ...[
+                                            Text(
+                                              'Your report was split into ${validFiles.length} parts:',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                              ),
+                                            ),
+                                          ],
+                                          const SizedBox(height: 12),
+                                          Container(
+                                            padding: const EdgeInsets.all(10),
+                                            decoration: BoxDecoration(
+                                              color: Colors.green[50],
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              border: Border.all(
+                                                color: Colors.green[200]!,
+                                              ),
+                                            ),
+                                            child: Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.folder,
+                                                  color: Colors.green[700],
+                                                ),
+                                                const SizedBox(width: 8),
+                                                Expanded(
+                                                  child: Text(
+                                                    'Location: $locationText',
+                                                    style: TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      color: Colors.green[900],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          const SizedBox(height: 12),
+                                          ...validFiles.asMap().entries.map((
+                                            entry,
+                                          ) {
+                                            final index = entry.key + 1;
+                                            final file = entry.value;
+
+                                            // Extract file name
+                                            String fileName = file.path
+                                                .split('/')
+                                                .last;
+
+                                            return Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 8.0,
+                                              ),
+                                              child: Row(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    '$index. ',
+                                                    style: const TextStyle(
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  Expanded(
+                                                    child: Text(
+                                                      fileName,
+                                                      style: const TextStyle(
+                                                        fontSize: 12,
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            );
+                                          }).toList(),
+                                          const SizedBox(height: 12),
+                                          const Text(
+                                            '💡 All files are in your Downloads folder.',
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              fontStyle: FontStyle.italic,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(dialogContext).pop(),
+                                        child: const Text('OK'),
+                                      ),
+                                    ],
                                   ),
                                 );
                               }
@@ -771,17 +1110,15 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                     .generatePaginatedPDFsInBackground(
                                       reportTitle:
                                           'Financial Report - Sari-Sari Store',
-                                      startDate: options.useDataRangeFilter
-                                          ? options.startDate
-                                          : _startDate,
-                                      endDate: options.useDataRangeFilter
-                                          ? options.endDate
-                                          : _endDate,
+                                      startDate: _startDate,
+                                      endDate: _endDate,
                                       sections: filteredSections,
                                       calculations: calculations,
                                       summaries: summaries,
                                       sectionsPerPdf:
-                                          3, // Fewer sections per PDF
+                                          2, // Safer: 2 sections per PDF
+                                      maxRowsPerSection:
+                                          25, // Safer: 25 rows per section
                                     );
 
                                 // Close progress dialog

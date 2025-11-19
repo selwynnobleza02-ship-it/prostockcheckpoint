@@ -225,11 +225,16 @@ class ProductGridView extends StatelessWidget {
 
                             // Price
                             FutureBuilder<double>(
-                              future: TaxService.calculateSellingPriceWithRule(
-                                product.cost,
-                                productId: product.id,
-                                categoryName: product.category,
-                              ),
+                              future: provider
+                                  .getNextBatchCost(product.id!)
+                                  .then(
+                                    (cost) =>
+                                        TaxService.calculateSellingPriceWithRule(
+                                          cost,
+                                          productId: product.id,
+                                          categoryName: product.category,
+                                        ),
+                                  ),
                               builder: (context, snapshot) {
                                 final price = snapshot.data;
                                 return Text(

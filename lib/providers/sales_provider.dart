@@ -242,14 +242,6 @@ class SalesProvider with ChangeNotifier {
     }
 
     try {
-      // Use fixed selling price if set, otherwise calculate
-      final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
-        product.cost,
-        productId: product.id,
-        categoryName: product.category,
-      );
-      final price = product.getPriceForSale(calculatedPrice);
-
       // Check if this product already exists in cart
       final existingItems = _currentSaleItems
           .where((item) => item.productId == product.id)
@@ -270,18 +262,27 @@ class SalesProvider with ChangeNotifier {
       // Remove existing items for this product
       _currentSaleItems.removeWhere((item) => item.productId == product.id);
 
-      // Add new items based on FIFO allocations
+      // Add new items based on FIFO allocations with batch-specific pricing
       for (final allocation in allocations) {
+        // Calculate selling price based on THIS batch's unit cost
+        final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
+          allocation.unitCost, // Use batch-specific cost, not average
+          productId: product.id,
+          categoryName: product.category,
+        );
+        // Check for manual price override
+        final batchPrice = product.getPriceForSale(calculatedPrice);
+
         _currentSaleItems.add(
           SaleItem(
             saleId: '',
             productId: product.id!,
             batchId: allocation.batchId,
             quantity: allocation.quantity,
-            unitPrice: price,
+            unitPrice: batchPrice, // Batch-specific price
             unitCost: allocation.unitCost,
             batchCost: allocation.unitCost,
-            totalPrice: price * allocation.quantity,
+            totalPrice: batchPrice * allocation.quantity,
           ),
         );
       }
@@ -382,29 +383,31 @@ class SalesProvider with ChangeNotifier {
           newTotalQty,
         );
 
-        // Use fixed price if set
-        final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
-          product.cost,
-          productId: product.id,
-          categoryName: product.category,
-        );
-        final price = product.getPriceForSale(calculatedPrice);
-
         // Remove all items for this product
         _currentSaleItems.removeWhere((item) => item.productId == product.id);
 
-        // Add re-allocated items
+        // Add re-allocated items with batch-specific pricing
         for (final allocation in allocations) {
+          // Calculate selling price based on THIS batch's unit cost
+          final calculatedPrice =
+              await TaxService.calculateSellingPriceWithRule(
+                allocation.unitCost, // Use batch-specific cost, not average
+                productId: product.id,
+                categoryName: product.category,
+              );
+          // Check for manual price override
+          final batchPrice = product.getPriceForSale(calculatedPrice);
+
           _currentSaleItems.add(
             SaleItem(
               saleId: '',
               productId: product.id!,
               batchId: allocation.batchId,
               quantity: allocation.quantity,
-              unitPrice: price,
+              unitPrice: batchPrice, // Batch-specific price
               unitCost: allocation.unitCost,
               batchCost: allocation.unitCost,
-              totalPrice: price * allocation.quantity,
+              totalPrice: batchPrice * allocation.quantity,
             ),
           );
         }

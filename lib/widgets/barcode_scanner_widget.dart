@@ -11,9 +11,11 @@ import '../providers/sales_provider.dart';
 import '../services/tax_service.dart';
 import '../models/product.dart';
 import '../models/loss_reason.dart';
+import '../models/inventory_batch.dart';
 import 'add_product_dialog.dart';
 import 'barcode_product_dialog.dart';
 import 'receive_stock_dialog.dart';
+import 'batch_selection_dialog.dart';
 
 enum ScannerMode {
   normal, // Default mode for sales/finding products
@@ -539,54 +541,48 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
       product: product,
     );
 
-    if (result != null && result.quantity > 0) {
+    // For Damage/Expired, batch selection and confirmation already handled in dialog
+    // Result will be null because we handle everything there
+    if (result == null) {
+      // Either user cancelled or it was Damage/Expired (already processed)
+      return;
+    }
+
+    // For other reasons (like "Miss stock"), process using FIFO
+    if (result.quantity > 0) {
       if (!mounted) return;
       final inventoryProvider = Provider.of<InventoryProvider>(
         context,
         listen: false,
       );
 
-      bool success = false;
-
-      // If the reason is "Damage", use addLoss to properly record the loss
-      if (result.reason == 'Damage') {
-        success = await inventoryProvider.addLoss(
-          productId: product.id!,
-          quantity: result.quantity,
-          reason: LossReason.damaged,
-        );
-      } else {
-        // For other reasons like "Miss stock", just reduce stock
-        success = await inventoryProvider.reduceStock(
-          product.id!,
-          result.quantity,
-          reason: result.reason,
-        );
-      }
+      final success = await inventoryProvider.reduceStock(
+        product.id!,
+        result.quantity,
+        reason: result.reason,
+      );
 
       if (mounted) {
         if (success) {
           Navigator.pop(context);
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(
-                'Removed ${result.quantity} units of ${product.name}',
-              ),
+              content: Text('Removed stock from ${product.name}'),
               backgroundColor: Colors.orange,
             ),
           );
         } else {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Insufficient stock to remove'),
+            SnackBar(
+              content: Text(
+                inventoryProvider.error ?? 'Failed to remove stock',
+              ),
               backgroundColor: Colors.red,
             ),
           );
           await cameraController.start();
         }
       }
-    } else {
-      await cameraController.start();
     }
   }
 
@@ -642,7 +638,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                       labelText: 'Reason for Removal',
                       border: OutlineInputBorder(),
                     ),
-                    items: ['Damage', 'Miss stock']
+                    items: ['Damage', 'Expired', 'Miss stock']
                         .map(
                           (label) => DropdownMenuItem(
                             value: label,
@@ -666,7 +662,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
+                  onPressed: () async {
                     final qty = int.tryParse(quantityController.text);
 
                     if (qty == null || qty <= 0) {
@@ -684,13 +680,60 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                       return;
                     }
 
-                    // Show confirmation dialog
-                    _showConfirmationDialog(
-                      context: context,
-                      product: product,
-                      quantity: qty,
-                      reason: reason,
-                    );
+                    // For Damage/Expired, show batch selection FIRST
+                    Map<String, int>? selectedBatches;
+                    if (reason == 'Damage' || reason == 'Expired') {
+                      final inventoryProvider = Provider.of<InventoryProvider>(
+                        context,
+                        listen: false,
+                      );
+                      final batches = await inventoryProvider
+                          .getBatchesForProduct(product.id!);
+
+                      if (batches.isEmpty) {
+                        if (!context.mounted) return;
+                        setState(() {
+                          errorMessage = 'No batches found for this product';
+                        });
+                        return;
+                      }
+
+                      // Close this dialog first
+                      if (!context.mounted) return;
+                      Navigator.pop(context);
+
+                      // Show batch selection dialog
+                      if (!context.mounted) return;
+                      selectedBatches = await showDialog<Map<String, int>>(
+                        context: context,
+                        builder: (context) => BatchSelectionDialog(
+                          batches: batches,
+                          productName: product.name,
+                          maxQuantity: product.stock,
+                        ),
+                      );
+
+                      if (selectedBatches == null || selectedBatches.isEmpty) {
+                        return;
+                      }
+
+                      // Show confirmation with selected batches
+                      if (!context.mounted) return;
+                      await _showConfirmationDialogWithBatches(
+                        context: context,
+                        product: product,
+                        selectedBatches: selectedBatches,
+                        reason: reason,
+                      );
+                    } else {
+                      // Show regular confirmation dialog
+                      _showConfirmationDialog(
+                        context: context,
+                        product: product,
+                        quantity: qty,
+                        reason: reason,
+                      );
+                    }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('Remove'),
@@ -749,6 +792,105 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     if (confirmed == true) {
       if (!navigator.mounted) return;
       navigator.pop(StockUpdateResult(quantity: quantity, reason: reason));
+    }
+  }
+
+  Future<void> _showConfirmationDialogWithBatches({
+    required BuildContext context,
+    required Product product,
+    required Map<String, int> selectedBatches,
+    required String reason,
+  }) async {
+    final inventoryProvider = Provider.of<InventoryProvider>(
+      context,
+      listen: false,
+    );
+    final batches = await inventoryProvider.getBatchesForProduct(product.id!);
+    final totalQty = selectedBatches.values.fold<int>(
+      0,
+      (sum, qty) => sum + qty,
+    );
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Stock Removal'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Product: ${product.name}'),
+            const SizedBox(height: 8),
+            const Text(
+              'Selected batches:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            ...selectedBatches.entries.map((entry) {
+              final batch = batches.firstWhere((b) => b.id == entry.key);
+              return Text('  • ${batch.batchNumber}: ${entry.value} units');
+            }),
+            const SizedBox(height: 8),
+            Text('Total to remove: $totalQty units'),
+            const SizedBox(height: 8),
+            Text('Reason: $reason'),
+            const SizedBox(height: 8),
+            Text('Remaining stock: ${product.stock - totalQty}'),
+            const SizedBox(height: 16),
+            const Text(
+              'Are you sure you want to remove this stock?',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Confirm Remove'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      if (!context.mounted) return;
+
+      // Process the batch removal
+      final lossReason = reason == 'Damage'
+          ? LossReason.damaged
+          : LossReason.expired;
+
+      final success = await inventoryProvider.addLossFromBatches(
+        productId: product.id!,
+        batchQuantities: selectedBatches,
+        reason: lossReason,
+      );
+
+      if (!context.mounted) return;
+
+      if (success) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Removed stock from ${product.name}'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(inventoryProvider.error ?? 'Failed to remove stock'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      await cameraController.start();
+    } else {
+      await cameraController.start();
     }
   }
 

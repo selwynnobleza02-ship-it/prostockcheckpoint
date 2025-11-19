@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/product.dart';
 import '../models/loss_reason.dart';
+import '../models/inventory_batch.dart';
 import '../providers/inventory_provider.dart';
 import '../utils/currency_utils.dart';
 import '../services/tax_service.dart';
+import 'batch_selection_dialog.dart';
 
 enum StockAdjustmentType { receive, remove }
 
@@ -130,6 +132,38 @@ class _ManualStockAdjustmentDialogState
       }
     }
 
+    // For Damage/Expired, show batch selection FIRST before confirmation
+    Map<String, int>? selectedBatches;
+    if (widget.type == StockAdjustmentType.remove &&
+        (_selectedReason == 'Damage' || _selectedReason == 'Expired')) {
+      final inventoryProvider = context.read<InventoryProvider>();
+      final batches = await inventoryProvider.getBatchesForProduct(
+        _selectedProduct!.id!,
+      );
+
+      if (batches.isEmpty) {
+        if (!mounted) return;
+        _showErrorSnackBar('No batches found for this product');
+        return;
+      }
+
+      // Show batch selection dialog FIRST
+      if (!mounted) return;
+      selectedBatches = await showDialog<Map<String, int>>(
+        context: context,
+        builder: (context) => BatchSelectionDialog(
+          batches: batches,
+          productName: _selectedProduct!.name,
+          maxQuantity: _selectedProduct!.stock,
+        ),
+      );
+
+      // User cancelled batch selection
+      if (selectedBatches == null || selectedBatches.isEmpty) {
+        return;
+      }
+    }
+
     // Show confirmation dialog
     final confirmed = await showDialog<bool>(
       context: context,
@@ -145,11 +179,40 @@ class _ManualStockAdjustmentDialogState
           children: [
             Text('Product: ${_selectedProduct!.name}'),
             const SizedBox(height: 8),
-            Text(
-              widget.type == StockAdjustmentType.receive
-                  ? 'Quantity to receive: $quantity'
-                  : 'Quantity to remove: $quantity',
-            ),
+            if (selectedBatches != null) ...[
+              const Text(
+                'Selected batches:',
+                style: TextStyle(fontWeight: FontWeight.bold),
+              ),
+              ...selectedBatches.entries.map((entry) {
+                final batch = context
+                    .read<InventoryProvider>()
+                    .getBatchesForProduct(_selectedProduct!.id!)
+                    .then(
+                      (batches) => batches.firstWhere((b) => b.id == entry.key),
+                    );
+                return FutureBuilder(
+                  future: batch,
+                  builder: (context, snapshot) {
+                    if (snapshot.hasData) {
+                      return Text(
+                        '  • ${snapshot.data!.batchNumber}: ${entry.value} units',
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
+                );
+              }),
+              const SizedBox(height: 8),
+              Text(
+                'Total to remove: ${selectedBatches.values.fold<int>(0, (sum, qty) => sum + qty)} units',
+              ),
+            ] else
+              Text(
+                widget.type == StockAdjustmentType.receive
+                    ? 'Quantity to receive: $quantity'
+                    : 'Quantity to remove: $quantity',
+              ),
             const SizedBox(height: 8),
             if (widget.type == StockAdjustmentType.receive &&
                 costPrice != null) ...[
@@ -161,7 +224,7 @@ class _ManualStockAdjustmentDialogState
             Text(
               widget.type == StockAdjustmentType.receive
                   ? 'Resulting stock: ${_selectedProduct!.stock + quantity}'
-                  : 'Resulting stock: ${_selectedProduct!.stock - quantity}',
+                  : 'Resulting stock: ${_selectedProduct!.stock - (selectedBatches?.values.fold<int>(0, (sum, qty) => sum + qty) ?? quantity)}',
             ),
             if (widget.type == StockAdjustmentType.remove) ...[
               const SizedBox(height: 8),
@@ -211,28 +274,29 @@ class _ManualStockAdjustmentDialogState
       bool success;
 
       if (widget.type == StockAdjustmentType.receive) {
-        // For receive stock, we need to update the product with new cost price first
-        if (costPrice != null && costPrice != _selectedProduct!.cost) {
-          final updatedProduct = _selectedProduct!.copyWith(cost: costPrice);
-          await inventoryProvider.updateProduct(updatedProduct);
-        }
-
-        // Then receive the stock
-        success = await inventoryProvider.receiveStock(
+        // Use receiveStockWithCost to properly create batches with specific costs
+        final effectiveCost = costPrice ?? _selectedProduct!.cost;
+        success = await inventoryProvider.receiveStockWithCost(
           _selectedProduct!.id!,
           quantity,
+          effectiveCost,
+          notes: 'Manual stock receipt',
         );
       } else {
-        // Handle different removal reasons properly (mirroring barcode scanner logic)
-        if (_selectedReason == 'Damage') {
-          // Use addLoss for damage to create proper loss records
-          success = await inventoryProvider.addLoss(
+        // Handle different removal reasons
+        if (selectedBatches != null) {
+          // Use the already-selected batches from earlier dialog
+          final lossReason = _selectedReason == 'Damage'
+              ? LossReason.damaged
+              : LossReason.expired;
+
+          success = await inventoryProvider.addLossFromBatches(
             productId: _selectedProduct!.id!,
-            quantity: quantity,
-            reason: LossReason.damaged,
+            batchQuantities: selectedBatches,
+            reason: lossReason,
           );
         } else {
-          // For "Miss stock" and other reasons, just reduce stock
+          // For "Miss stock" and other reasons, just reduce stock using FIFO
           success = await inventoryProvider.reduceStock(
             _selectedProduct!.id!,
             quantity,
@@ -472,6 +536,10 @@ class _ManualStockAdjustmentDialogState
                     ),
                     items: const [
                       DropdownMenuItem(value: 'Damage', child: Text('Damage')),
+                      DropdownMenuItem(
+                        value: 'Expired',
+                        child: Text('Expired'),
+                      ),
                       DropdownMenuItem(
                         value: 'Miss stock',
                         child: Text('Miss stock'),

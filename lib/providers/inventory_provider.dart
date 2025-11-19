@@ -252,6 +252,16 @@ class InventoryProvider with ChangeNotifier {
         50,
       );
 
+      // Create initial batch for the product's starting stock
+      if (newProduct.stock > 0) {
+        await _batchService.createBatch(
+          productId: newProduct.id!,
+          quantity: newProduct.stock,
+          unitCost: newProduct.cost,
+          notes: 'Initial stock batch',
+        );
+      }
+
       if (_offlineManager.isOnline) {
         try {
           final productService = ProductService(FirebaseFirestore.instance);
@@ -865,23 +875,59 @@ class InventoryProvider with ChangeNotifier {
           // Record cost history with the batch cost
           await costHistoryService.insertCostHistory(productId, newCost);
 
-          // Record price history if needed
-          if (product.sellingPrice == null) {
-            final sellingPrice = await TaxService.calculateSellingPriceWithRule(
-              averageCost,
-              productId: productId,
-              categoryName: product.category,
+          // Smart price history recording: Calculate selling price from batch cost
+          // and record only if it differs from the last recorded price
+          final batchSellingPrice =
+              await TaxService.calculateSellingPriceWithRule(
+                newCost, // Use batch-specific cost, not average
+                productId: productId,
+                categoryName: product.category,
+              );
+
+          // Query the last recorded price for this product
+          final lastPriceQuery = await FirebaseFirestore.instance
+              .collection(AppConstants.priceHistoryCollection)
+              .where('productId', isEqualTo: productId)
+              .orderBy('timestamp', descending: true)
+              .limit(1)
+              .get();
+
+          bool shouldRecordPrice = false;
+
+          if (lastPriceQuery.docs.isEmpty) {
+            // No price history exists - record first entry
+            shouldRecordPrice = true;
+          } else {
+            // Compare with last recorded price
+            final lastPrice = PriceHistory.fromFirestore(
+              lastPriceQuery.docs.first,
             );
+            // Only record if price changed (with 0.01 tolerance for floating point)
+            if ((batchSellingPrice - lastPrice.price).abs() > 0.009) {
+              shouldRecordPrice = true;
+            }
+          }
+
+          if (shouldRecordPrice) {
             final priceHistory = PriceHistory(
               id: const Uuid().v4(),
               productId: productId,
-              price: sellingPrice,
+              price: batchSellingPrice,
               timestamp: DateTime.now(),
+              batchId: batch.id,
+              batchNumber: batch.batchNumber,
+              cost: newCost,
+              reason: 'New batch received',
             );
             await FirebaseFirestore.instance
                 .collection(AppConstants.priceHistoryCollection)
                 .doc(priceHistory.id)
                 .set(priceHistory.toMap());
+
+            ErrorLogger.logInfo(
+              'Price history recorded: ₱${batchSellingPrice.toStringAsFixed(2)} for ${product.name}',
+              context: 'InventoryProvider.receiveStockWithCost',
+            );
           }
         } catch (e) {
           // Fallback to offline queue
@@ -914,6 +960,35 @@ class InventoryProvider with ChangeNotifier {
               timestamp: DateTime.now(),
             ),
           );
+
+          // Queue price history with batch-specific cost (fallback case)
+          final batchSellingPrice =
+              await TaxService.calculateSellingPriceWithRule(
+                newCost,
+                productId: productId,
+                categoryName: product.category,
+              );
+
+          final priceHistory = PriceHistory(
+            id: const Uuid().v4(),
+            productId: productId,
+            price: batchSellingPrice,
+            timestamp: DateTime.now(),
+            batchId: batch.id,
+            batchNumber: batch.batchNumber,
+            cost: newCost,
+            reason: 'New batch received',
+          );
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              id: priceHistory.id,
+              type: OperationType.insertPriceHistory,
+              collectionName: AppConstants.priceHistoryCollection,
+              documentId: priceHistory.id,
+              data: priceHistory.toMap(),
+              timestamp: DateTime.now(),
+            ),
+          );
         }
       } else {
         // Offline mode - queue all operations
@@ -943,6 +1018,37 @@ class InventoryProvider with ChangeNotifier {
             collectionName: 'costHistory',
             documentId: costHistory.id,
             data: costHistory.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+
+        // Queue price history with batch-specific cost
+        // Note: Offline mode will queue the price, and when syncing online,
+        // duplicate check will happen on the server side
+        final batchSellingPrice =
+            await TaxService.calculateSellingPriceWithRule(
+              newCost, // Use batch-specific cost
+              productId: productId,
+              categoryName: product.category,
+            );
+
+        final priceHistory = PriceHistory(
+          id: const Uuid().v4(),
+          productId: productId,
+          price: batchSellingPrice,
+          timestamp: DateTime.now(),
+          batchId: batch.id,
+          batchNumber: batch.batchNumber,
+          cost: newCost,
+          reason: 'New batch received',
+        );
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: priceHistory.id,
+            type: OperationType.insertPriceHistory,
+            collectionName: AppConstants.priceHistoryCollection,
+            documentId: priceHistory.id,
+            data: priceHistory.toMap(),
             timestamp: DateTime.now(),
           ),
         );
@@ -981,6 +1087,30 @@ class InventoryProvider with ChangeNotifier {
         context: 'InventoryProvider.getBatchesForProduct',
       );
       return [];
+    }
+  }
+
+  /// Get the cost of the next available batch (FIFO) for UI display
+  /// This ensures the displayed price reflects the actual cost of items that will be sold next
+  Future<double> getNextBatchCost(String productId) async {
+    try {
+      final batches = await _batchService.getBatchesByFIFO(productId);
+      if (batches.isEmpty) {
+        // Fallback to product's average cost if no batches
+        final product = _products.firstWhere((p) => p.id == productId);
+        return product.cost;
+      }
+      // Return the cost of the first available batch (FIFO - oldest first)
+      return batches.first.unitCost;
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error getting next batch cost',
+        error: e,
+        context: 'InventoryProvider.getNextBatchCost',
+      );
+      // Fallback to product's average cost
+      final product = _products.firstWhere((p) => p.id == productId);
+      return product.cost;
     }
   }
 
@@ -1238,6 +1368,222 @@ class InventoryProvider with ChangeNotifier {
         'Error adding loss',
         error: e,
         context: 'InventoryProvider.addLoss',
+      );
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Reduce stock from a specific batch
+  Future<bool> reduceStockFromBatch({
+    required String productId,
+    required String batchId,
+    required int quantity,
+    String? reason,
+  }) async {
+    try {
+      final product = getProductById(productId);
+      if (product == null) {
+        _error = 'Product not found';
+        notifyListeners();
+        return false;
+      }
+
+      // Get the batch
+      final batch = await _batchService.getBatchById(batchId);
+      if (batch == null) {
+        _error = 'Batch not found';
+        notifyListeners();
+        return false;
+      }
+
+      if (batch.quantityRemaining < quantity) {
+        _error =
+            'Insufficient quantity in batch. Available: ${batch.quantityRemaining}';
+        notifyListeners();
+        return false;
+      }
+
+      // Reduce batch quantity
+      await _batchService.reduceBatchQuantity(batchId, quantity);
+
+      // Update product total stock
+      await reduceStock(productId, quantity, reason: reason);
+
+      return true;
+    } catch (e) {
+      _error = 'Error reducing stock from batch: ${e.toString()}';
+      ErrorLogger.logError(
+        'Error reducing stock from batch',
+        error: e,
+        context: 'InventoryProvider.reduceStockFromBatch',
+      );
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Add loss from specific batches
+  Future<bool> addLossFromBatches({
+    required String productId,
+    required Map<String, int> batchQuantities, // batchId -> quantity
+    required LossReason reason,
+  }) async {
+    try {
+      final product = getProductById(productId);
+      if (product == null) {
+        _error = 'Product not found';
+        notifyListeners();
+        return false;
+      }
+
+      int totalQuantity = 0;
+      double totalCost = 0.0;
+
+      // Validate all batches first
+      for (final entry in batchQuantities.entries) {
+        final batch = await _batchService.getBatchById(entry.key);
+        if (batch == null) {
+          _error = 'Batch not found: ${entry.key}';
+          notifyListeners();
+          return false;
+        }
+
+        if (batch.quantityRemaining < entry.value) {
+          _error =
+              'Insufficient quantity in batch ${batch.batchNumber}. Available: ${batch.quantityRemaining}';
+          notifyListeners();
+          return false;
+        }
+
+        totalQuantity += entry.value;
+        totalCost += batch.unitCost * entry.value;
+      }
+
+      if (product.stock < totalQuantity) {
+        _error = 'Insufficient stock for ${product.name}';
+        notifyListeners();
+        return false;
+      }
+
+      // Reduce quantities from each batch
+      for (final entry in batchQuantities.entries) {
+        await _batchService.reduceBatchQuantity(entry.key, entry.value);
+      }
+
+      // Update product stock
+      final newStock = product.stock - totalQuantity;
+      final updatedProduct = product.copyWith(
+        stock: newStock,
+        updatedAt: DateTime.now(),
+      );
+
+      final db = await _localDatabaseService.database;
+      await db.update(
+        'products',
+        updatedProduct.toMap(),
+        where: 'id = ?',
+        whereArgs: [productId],
+      );
+
+      // Record the loss
+      final lossId = const Uuid().v4();
+      final currentUserId = _authProvider.currentUser?.id;
+
+      final newLoss = Loss(
+        id: lossId,
+        productId: productId,
+        quantity: totalQuantity,
+        totalCost: totalCost,
+        reason: reason,
+        timestamp: DateTime.now(),
+        recordedBy: currentUserId,
+      );
+
+      await db.insert(
+        'losses',
+        newLoss.toMap(),
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+
+      // Sync to Firestore
+      if (_offlineManager.isOnline) {
+        try {
+          final productService = ProductService(FirebaseFirestore.instance);
+          final inventoryService = InventoryService(FirebaseFirestore.instance);
+
+          await productService.updateProduct(updatedProduct);
+          await inventoryService.insertLoss(newLoss);
+          await inventoryService.insertStockMovement(
+            productId,
+            product.name,
+            'stock_out',
+            totalQuantity,
+            reason.toDisplayString(),
+          );
+        } catch (e) {
+          // Queue for offline sync
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              id: updatedProduct.id!,
+              type: OperationType.updateProduct,
+              collectionName: 'products',
+              documentId: updatedProduct.id,
+              data: updatedProduct.toMap(),
+              timestamp: DateTime.now(),
+            ),
+          );
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              id: newLoss.id!,
+              type: OperationType.insertLoss,
+              collectionName: 'losses',
+              documentId: newLoss.id,
+              data: newLoss.toMap(),
+              timestamp: DateTime.now(),
+            ),
+          );
+        }
+      } else {
+        // Queue operations
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: updatedProduct.id!,
+            type: OperationType.updateProduct,
+            collectionName: 'products',
+            documentId: updatedProduct.id,
+            data: updatedProduct.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+        await _offlineManager.queueOperation(
+          OfflineOperation(
+            id: newLoss.id!,
+            type: OperationType.insertLoss,
+            collectionName: 'losses',
+            documentId: newLoss.id,
+            data: newLoss.toMap(),
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+
+      // Update local state
+      final index = _products.indexWhere((p) => p.id == productId);
+      if (index != -1) {
+        _products[index] = updatedProduct;
+      }
+      initializeVisualStock();
+      _checkStockAlerts(updatedProduct);
+      notifyListeners();
+
+      return true;
+    } catch (e) {
+      _error = 'Error adding loss from batches: ${e.toString()}';
+      ErrorLogger.logError(
+        'Error adding loss from batches',
+        error: e,
+        context: 'InventoryProvider.addLossFromBatches',
       );
       notifyListeners();
       return false;
