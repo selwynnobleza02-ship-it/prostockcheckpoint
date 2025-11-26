@@ -127,4 +127,59 @@ class NotificationService {
       androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
     );
   }
+
+  Future<void> showExpirationWarning(
+    String productName,
+    int daysUntilExpiration,
+  ) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+          'prostock_expiration_channel_id',
+          'ProStock Expiration Alerts',
+          channelDescription: 'Notifications for products nearing expiration',
+          importance: Importance.max,
+          priority: Priority.high,
+          showWhen: true,
+          enableVibration: true,
+          playSound: true,
+          styleInformation: BigTextStyleInformation(''),
+        );
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      productName.hashCode, // Use product name hash as unique ID
+      '⚠️ Product Expiring Soon',
+      '$productName will expire in $daysUntilExpiration day${daysUntilExpiration != 1 ? 's' : ''}',
+      platformChannelSpecifics,
+      payload: 'expiration:$productName',
+    );
+  }
+
+  Future<void> showExpiredProductNotification(String productName) async {
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+          'prostock_expiration_channel_id',
+          'ProStock Expiration Alerts',
+          channelDescription: 'Notifications for products nearing expiration',
+          importance: Importance.max,
+          priority: Priority.high,
+          showWhen: true,
+          enableVibration: true,
+          playSound: true,
+          styleInformation: BigTextStyleInformation(''),
+        );
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+    );
+
+    await flutterLocalNotificationsPlugin.show(
+      productName.hashCode,
+      '🚨 Product Expired',
+      '$productName has expired and should be removed from inventory',
+      platformChannelSpecifics,
+      payload: 'expired:$productName',
+    );
+  }
 }

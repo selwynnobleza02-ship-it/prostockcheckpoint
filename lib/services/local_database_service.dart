@@ -23,7 +23,7 @@ class LocalDatabaseService {
 
     return await openDatabase(
       path,
-      version: 10, // Increment version to backfill unitCost for old sales
+      version: 12, // Increment version to force price_history table creation
       onCreate: _createDB,
       onUpgrade: _onUpgrade,
     );
@@ -184,6 +184,30 @@ CREATE TABLE IF NOT EXISTS dead_letter_operations (
   timestamp TEXT NOT NULL,
   error TEXT NOT NULL
 )
+''');
+
+    await db.execute('''
+CREATE TABLE IF NOT EXISTS price_history (
+  id TEXT PRIMARY KEY,
+  productId TEXT NOT NULL,
+  price REAL NOT NULL,
+  timestamp TEXT NOT NULL,
+  batchId TEXT,
+  batchNumber TEXT,
+  cost REAL,
+  reason TEXT,
+  FOREIGN KEY (productId) REFERENCES products (id) ON DELETE CASCADE
+)
+''');
+
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_price_history_product 
+ON price_history(productId)
+''');
+
+    await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_price_history_timestamp 
+ON price_history(timestamp)
 ''');
   }
 
@@ -380,6 +404,60 @@ ON inventory_batches(quantity_remaining)
         }
       }
     }
+
+    // Add price_history table for offline price history tracking
+    if (oldVersion < 11) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS price_history (
+  id TEXT PRIMARY KEY,
+  productId TEXT NOT NULL,
+  price REAL NOT NULL,
+  timestamp TEXT NOT NULL,
+  batchId TEXT,
+  batchNumber TEXT,
+  cost REAL,
+  reason TEXT,
+  FOREIGN KEY (productId) REFERENCES products (id) ON DELETE CASCADE
+)
+''');
+
+      await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_price_history_product 
+ON price_history(productId)
+''');
+
+      await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_price_history_timestamp 
+ON price_history(timestamp)
+''');
+    }
+
+    // Ensure price_history table exists for version 12 (redundant but safe)
+    if (oldVersion < 12) {
+      await db.execute('''
+CREATE TABLE IF NOT EXISTS price_history (
+  id TEXT PRIMARY KEY,
+  productId TEXT NOT NULL,
+  price REAL NOT NULL,
+  timestamp TEXT NOT NULL,
+  batchId TEXT,
+  batchNumber TEXT,
+  cost REAL,
+  reason TEXT,
+  FOREIGN KEY (productId) REFERENCES products (id) ON DELETE CASCADE
+)
+''');
+
+      await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_price_history_product 
+ON price_history(productId)
+''');
+
+      await db.execute('''
+CREATE INDEX IF NOT EXISTS idx_price_history_timestamp 
+ON price_history(timestamp)
+''');
+    }
   }
 
   Future<List<Map<String, dynamic>>> getSales() async {
@@ -500,6 +578,31 @@ ON inventory_batches(quantity_remaining)
   Future<List<Map<String, dynamic>>> getLosses() async {
     final db = await instance.database;
     return await db.query('losses', orderBy: 'timestamp DESC');
+  }
+
+  // Price History Methods
+  Future<void> insertPriceHistory(Map<String, dynamic> priceHistory) async {
+    final db = await instance.database;
+    await db.insert(
+      'price_history',
+      priceHistory,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<List<Map<String, dynamic>>> getPriceHistory(String productId) async {
+    final db = await instance.database;
+    return await db.query(
+      'price_history',
+      where: 'productId = ?',
+      whereArgs: [productId],
+      orderBy: 'timestamp DESC',
+    );
+  }
+
+  Future<void> deletePriceHistory(String id) async {
+    final db = await instance.database;
+    await db.delete('price_history', where: 'id = ?', whereArgs: [id]);
   }
 
   Future close() async {

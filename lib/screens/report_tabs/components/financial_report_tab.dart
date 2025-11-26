@@ -237,9 +237,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                         Icons.article,
                                         color: Colors.blue,
                                       ),
-                                      title: const Text('Single PDF (Limited)'),
+                                      title: const Text('Combined PDF'),
                                       subtitle: const Text(
-                                        'One PDF with limited entries per section',
+                                        'Auto-splits large sections into multiple PDFs',
                                         style: TextStyle(fontSize: 12),
                                       ),
                                       onTap: () =>
@@ -1006,7 +1006,7 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                       Text(
                                         exportMethod == 'separate'
                                             ? 'Generating ${filteredSections.length + 1} PDF files...\nPlease wait.'
-                                            : 'Generating PDF...\nPlease wait.',
+                                            : 'Generating PDF(s)...\nPlease wait.',
                                       ),
                                     ],
                                   ),
@@ -1069,20 +1069,17 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                   }
                                 }
 
-                                // Generate single PDF with limited data
-                                files = await pdf
-                                    .generatePdfInBackgroundWithAllFiles(
-                                      reportTitle:
-                                          'Financial Report - Sari-Sari Store',
-                                      startDate: _startDate,
-                                      endDate: _endDate,
-                                      sections: sectionsToInclude,
-                                      calculations: calculationsToInclude,
-                                      summaries: summaries,
-                                    );
-                              }
-
-                              // Close progress dialog
+                                // Generate combined PDF - uses auto-splitting for large sections
+                                files = await pdf.generatePdfPerSection(
+                                  reportTitle:
+                                      'Financial Report - Sari-Sari Store',
+                                  startDate: _startDate,
+                                  endDate: _endDate,
+                                  sections: sectionsToInclude,
+                                  calculations: calculationsToInclude,
+                                  summaries: summaries,
+                                );
+                              } // Close progress dialog
                               if (!context.mounted) return;
                               Navigator.of(context).pop();
 
@@ -1110,13 +1107,6 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
 
                               if (!context.mounted) return;
 
-                              // Calculate expected file count based on export method
-                              final expectedFileCount =
-                                  exportMethod == 'separate'
-                                  ? filteredSections.length +
-                                        1 // sections + summary
-                                  : 1; // single combined PDF
-
                               if (validFiles.isEmpty) {
                                 scaffold.showSnackBar(
                                   const SnackBar(
@@ -1130,36 +1120,40 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                 return;
                               }
 
-                              // Check if some files failed to generate
-                              if (exportMethod == 'separate' &&
-                                  validFiles.length < expectedFileCount) {
-                                final missingCount =
-                                    expectedFileCount - validFiles.length;
-                                ErrorLogger.logWarning(
-                                  'Not all PDF files were generated',
-                                  context: 'FinancialReportTab',
-                                  metadata: {
-                                    'expected': expectedFileCount,
-                                    'actual': validFiles.length,
-                                    'missing': missingCount,
-                                  },
-                                );
+                              // Check if some files failed to generate (only for 'separate' method)
+                              if (exportMethod == 'separate') {
+                                final expectedFileCount =
+                                    filteredSections.length +
+                                    1; // sections + summary
+                                if (validFiles.length < expectedFileCount) {
+                                  final missingCount =
+                                      expectedFileCount - validFiles.length;
+                                  ErrorLogger.logWarning(
+                                    'Not all PDF files were generated',
+                                    context: 'FinancialReportTab',
+                                    metadata: {
+                                      'expected': expectedFileCount,
+                                      'actual': validFiles.length,
+                                      'missing': missingCount,
+                                    },
+                                  );
 
-                                // Show warning to user
-                                scaffold.showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'Warning: Only ${validFiles.length} of $expectedFileCount PDF files were created. Some sections may have failed. Check the console/logs for details.',
+                                  // Show warning to user
+                                  scaffold.showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Warning: Only ${validFiles.length} of $expectedFileCount PDF files were created. Some sections may have failed. Check the console/logs for details.',
+                                      ),
+                                      backgroundColor: Colors.orange,
+                                      duration: const Duration(seconds: 8),
+                                      action: SnackBarAction(
+                                        label: 'OK',
+                                        textColor: Colors.white,
+                                        onPressed: () {},
+                                      ),
                                     ),
-                                    backgroundColor: Colors.orange,
-                                    duration: const Duration(seconds: 8),
-                                    action: SnackBarAction(
-                                      label: 'OK',
-                                      textColor: Colors.white,
-                                      onPressed: () {},
-                                    ),
-                                  ),
-                                );
+                                  );
+                                }
                               }
 
                               // Single file - show simple SnackBar
@@ -1224,9 +1218,9 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                         ),
                                         const SizedBox(width: 8),
                                         Text(
-                                          exportMethod == 'separate'
+                                          validFiles.length > 1
                                               ? 'PDF Files Created'
-                                              : 'Multiple PDF Files Generated',
+                                              : 'PDF File Created',
                                         ),
                                       ],
                                     ),
@@ -1236,14 +1230,17 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                             CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          if (exportMethod == 'separate') ...[
-                                            Text(
-                                              'Generated ${validFiles.length} separate PDF files:',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 15,
-                                              ),
+                                          Text(
+                                            validFiles.length > 1
+                                                ? 'Generated ${validFiles.length} PDF file(s):'
+                                                : 'PDF file generated successfully',
+                                            style: const TextStyle(
+                                              fontWeight: FontWeight.bold,
+                                              fontSize: 15,
                                             ),
+                                          ),
+                                          if (exportMethod == 'separate' &&
+                                              validFiles.length > 1) ...[
                                             const SizedBox(height: 8),
                                             Text(
                                               '✓ Income report\n'
@@ -1281,11 +1278,33 @@ class _FinancialReportTabState extends State<FinancialReportTab> {
                                                 ],
                                               ),
                                             ),
-                                          ] else ...[
-                                            Text(
-                                              'Your report was split into ${validFiles.length} parts:',
-                                              style: const TextStyle(
-                                                fontWeight: FontWeight.bold,
+                                          ] else if (validFiles.length > 1) ...[
+                                            const SizedBox(height: 8),
+                                            Container(
+                                              padding: const EdgeInsets.all(12),
+                                              decoration: BoxDecoration(
+                                                color: Colors.blue[50],
+                                                borderRadius:
+                                                    BorderRadius.circular(8),
+                                              ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons.info_outline,
+                                                    size: 20,
+                                                    color: Colors.blue[700],
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      'Large sections were automatically split to handle the data size',
+                                                      style: TextStyle(
+                                                        fontSize: 13,
+                                                        color: Colors.blue[900],
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
                                             ),
                                           ],

@@ -22,6 +22,7 @@ import 'package:prostock/providers/auth_provider.dart'; // New import
 import 'package:prostock/services/notification_service.dart';
 import 'package:prostock/services/tax_service.dart';
 import 'package:prostock/utils/constants.dart';
+import 'package:prostock/services/expiration_checker_service.dart';
 
 class InventoryProvider with ChangeNotifier {
   List<Product> _products = [];
@@ -39,6 +40,8 @@ class InventoryProvider with ChangeNotifier {
   final LocalDatabaseService _localDatabaseService =
       LocalDatabaseService.instance;
   final BatchService _batchService = BatchService();
+  final ExpirationCheckerService _expirationChecker =
+      ExpirationCheckerService();
   final OfflineManager _offlineManager;
   final AuthProvider _authProvider; // New field
   StreamSubscription<QuerySnapshot>? _productsSubscription;
@@ -239,6 +242,9 @@ class InventoryProvider with ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+
+      // Check for expiring products after loading
+      _checkExpiringProducts();
     }
   }
 
@@ -523,9 +529,17 @@ class InventoryProvider with ChangeNotifier {
           _products[index] = productToUpdate;
           // Update product cache as well
           _productCache[productToUpdate.id!] = productToUpdate;
-          initializeVisualStock();
-          notifyListeners();
         }
+
+        // Always check displayed price (based on FIFO batch, not product cost)
+        // The displayed price can change even if product cost/sellingPrice didn't change
+        await recordPriceHistoryIfChanged(
+          productToUpdate.id!,
+          'Product updated',
+        );
+
+        initializeVisualStock();
+        notifyListeners();
       } else {
         final updatedProduct = product.copyWith(version: product.version + 1);
         await db.update(
@@ -563,29 +577,13 @@ class InventoryProvider with ChangeNotifier {
             originalProduct != null &&
             originalProduct.sellingPrice != updatedProduct.sellingPrice;
 
-        if (costChanged || sellingPriceChanged) {
-          // Track price history
-          final calculatedPrice = await TaxService.calculateSellingPrice(
-            updatedProduct.cost,
-          );
-          final actualPrice = updatedProduct.getPriceForSale(calculatedPrice);
-          final priceHistory = PriceHistory(
-            id: const Uuid().v4(),
-            productId: updatedProduct.id!,
-            price: actualPrice,
-            timestamp: DateTime.now(),
-          );
-          await _offlineManager.queueOperation(
-            OfflineOperation(
-              id: priceHistory.id,
-              type: OperationType.insertPriceHistory,
-              collectionName: 'priceHistory',
-              documentId: priceHistory.id,
-              data: priceHistory.toMap(),
-              timestamp: DateTime.now(),
-            ),
-          );
+        // Always check displayed price (based on FIFO batch, not product cost)
+        await recordPriceHistoryIfChanged(
+          updatedProduct.id!,
+          'Product updated',
+        );
 
+        if (costChanged || sellingPriceChanged) {
           // Track cost history
           final costHistory = CostHistory(
             id: const Uuid().v4(),
@@ -931,79 +929,21 @@ class InventoryProvider with ChangeNotifier {
           // Record cost history with the batch cost
           await costHistoryService.insertCostHistory(productId, newCost);
 
-          // Record price history for new batch to track price changes
+          // Record price history if displayed price changed
           final existingBatches = await _batchService.getBatchesByFIFO(
             productId,
           );
+          final reason = existingBatches.length == 1
+              ? 'Initial price - first batch'
+              : 'New batch received';
 
-          final calculatedPrice =
-              await TaxService.calculateSellingPriceWithRule(
-                newCost,
-                productId: productId,
-                categoryName: product.category,
-              );
-          final actualPrice = product.getPriceForSale(calculatedPrice);
-
-          // Check if price changed from last recorded price
-          final lastPriceQuery = await FirebaseFirestore.instance
-              .collection(AppConstants.priceHistoryCollection)
-              .where('productId', isEqualTo: productId)
-              .get();
-
-          bool shouldRecord = false;
-          String reason = '';
-
-          if (lastPriceQuery.docs.isEmpty) {
-            shouldRecord = true;
-            reason = 'Initial price - first batch';
-          } else {
-            // Sort by timestamp descending in memory
-            final sortedDocs = lastPriceQuery.docs.toList()
-              ..sort((a, b) {
-                final aTimestamp = (a.data()['timestamp'] as Timestamp)
-                    .toDate();
-                final bTimestamp = (b.data()['timestamp'] as Timestamp)
-                    .toDate();
-                return bTimestamp.compareTo(aTimestamp);
-              });
-
-            final lastPrice = PriceHistory.fromFirestore(sortedDocs.first);
-
-            // Record if price changed (tolerance 0.009 for floating point)
-            if ((actualPrice - lastPrice.price).abs() > 0.009) {
-              shouldRecord = true;
-              reason = existingBatches.length == 1
-                  ? 'Initial price - first batch'
-                  : 'New batch received with different price';
-            }
-          }
-
-          if (shouldRecord) {
-            final priceHistory = PriceHistory(
-              id: const Uuid().v4(),
-              productId: productId,
-              price: actualPrice,
-              timestamp: DateTime.now(),
-              batchId: batch.id,
-              batchNumber: batch.batchNumber,
-              cost: newCost,
-              reason: reason,
-            );
-            await FirebaseFirestore.instance
-                .collection(AppConstants.priceHistoryCollection)
-                .doc(priceHistory.id)
-                .set(priceHistory.toMap());
-
-            ErrorLogger.logInfo(
-              'Price history recorded: ₱${actualPrice.toStringAsFixed(2)} for ${product.name} - $reason',
-              context: 'InventoryProvider.receiveStockWithCost',
-            );
-          } else {
-            ErrorLogger.logInfo(
-              'Batch ${batch.batchNumber} added - no price change (current: ₱${actualPrice.toStringAsFixed(2)})',
-              context: 'InventoryProvider.receiveStockWithCost',
-            );
-          }
+          await recordPriceHistoryIfChanged(
+            productId,
+            reason,
+            batchId: batch.id,
+            batchNumber: batch.batchNumber,
+            cost: newCost,
+          );
         } catch (e) {
           // Fallback to offline queue
           await _offlineManager.queueOperation(
@@ -1036,34 +976,13 @@ class InventoryProvider with ChangeNotifier {
             ),
           );
 
-          // Queue price history with batch-specific cost (fallback case)
-          final calculatedPrice =
-              await TaxService.calculateSellingPriceWithRule(
-                newCost,
-                productId: productId,
-                categoryName: product.category,
-              );
-          final actualPrice = product.getPriceForSale(calculatedPrice);
-
-          final priceHistory = PriceHistory(
-            id: const Uuid().v4(),
-            productId: productId,
-            price: actualPrice,
-            timestamp: DateTime.now(),
+          // Record price history if displayed price changed (fallback case)
+          await recordPriceHistoryIfChanged(
+            productId,
+            'New batch received',
             batchId: batch.id,
             batchNumber: batch.batchNumber,
             cost: newCost,
-            reason: 'New batch received',
-          );
-          await _offlineManager.queueOperation(
-            OfflineOperation(
-              id: priceHistory.id,
-              type: OperationType.insertPriceHistory,
-              collectionName: AppConstants.priceHistoryCollection,
-              documentId: priceHistory.id,
-              data: priceHistory.toMap(),
-              timestamp: DateTime.now(),
-            ),
           );
         }
       } else {
@@ -1098,35 +1017,18 @@ class InventoryProvider with ChangeNotifier {
           ),
         );
 
-        // Queue price history with batch-specific cost
-        // Note: Offline mode will queue the price, and when syncing online,
-        // duplicate check will happen on the server side
-        final batchSellingPrice =
-            await TaxService.calculateSellingPriceWithRule(
-              newCost, // Use batch-specific cost
-              productId: productId,
-              categoryName: product.category,
-            );
+        // Record price history if displayed price changed (handles offline mode)
+        final existingBatches = await _batchService.getBatchesByFIFO(productId);
+        final reason = existingBatches.length == 1
+            ? 'Initial price - first batch'
+            : 'New batch received';
 
-        final priceHistory = PriceHistory(
-          id: const Uuid().v4(),
-          productId: productId,
-          price: batchSellingPrice,
-          timestamp: DateTime.now(),
+        await recordPriceHistoryIfChanged(
+          productId,
+          reason,
           batchId: batch.id,
           batchNumber: batch.batchNumber,
           cost: newCost,
-          reason: 'New batch received',
-        );
-        await _offlineManager.queueOperation(
-          OfflineOperation(
-            id: priceHistory.id,
-            type: OperationType.insertPriceHistory,
-            collectionName: AppConstants.priceHistoryCollection,
-            documentId: priceHistory.id,
-            data: priceHistory.toMap(),
-            timestamp: DateTime.now(),
-          ),
         );
       }
 
@@ -1187,6 +1089,208 @@ class InventoryProvider with ChangeNotifier {
       // Fallback to product's average cost
       final product = _products.firstWhere((p) => p.id == productId);
       return product.cost;
+    }
+  }
+
+  /// Calculate the displayed price for a product (FIFO-based)
+  /// This matches the price shown on product cards
+  Future<double> calculateDisplayedPrice(String productId) async {
+    try {
+      final product = getProductById(productId);
+      if (product == null) {
+        throw Exception('Product not found: $productId');
+      }
+
+      // Get FIFO batch cost (the cost that will be used for next sale)
+      final batchCost = await getNextBatchCost(productId);
+
+      // Calculate selling price using tax rules
+      final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
+        batchCost,
+        productId: productId,
+        categoryName: product.category,
+      );
+
+      // Apply manual selling price override if set, otherwise use calculated price
+      final displayedPrice = product.getPriceForSale(calculatedPrice);
+
+      return displayedPrice;
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error calculating displayed price',
+        error: e,
+        context: 'InventoryProvider.calculateDisplayedPrice',
+      );
+      rethrow;
+    }
+  }
+
+  /// Record price history if the displayed price has changed
+  /// This ensures price history reflects the actual price shown to customers
+  Future<void> recordPriceHistoryIfChanged(
+    String productId,
+    String reason, {
+    String? batchId,
+    String? batchNumber,
+    double? cost,
+  }) async {
+    try {
+      // Calculate current displayed price
+      final displayedPrice = await calculateDisplayedPrice(productId);
+
+      ErrorLogger.logInfo(
+        'Checking price history for product $productId - Displayed price: ₱${displayedPrice.toStringAsFixed(2)}',
+        context: 'InventoryProvider.recordPriceHistoryIfChanged',
+      );
+
+      // Get last recorded price from Firestore
+      final lastPriceQuery = await FirebaseFirestore.instance
+          .collection(AppConstants.priceHistoryCollection)
+          .where('productId', isEqualTo: productId)
+          .get();
+
+      bool shouldRecord = false;
+      double? lastPrice;
+
+      if (lastPriceQuery.docs.isEmpty) {
+        // No previous price history - record initial price
+        shouldRecord = true;
+        ErrorLogger.logInfo(
+          'No previous price history found - will record initial price',
+          context: 'InventoryProvider.recordPriceHistoryIfChanged',
+        );
+      } else {
+        // Sort by timestamp descending in memory
+        final sortedDocs = lastPriceQuery.docs.toList()
+          ..sort((a, b) {
+            final aTimestamp = (a.data()['timestamp'] as Timestamp).toDate();
+            final bTimestamp = (b.data()['timestamp'] as Timestamp).toDate();
+            return bTimestamp.compareTo(aTimestamp);
+          });
+
+        final lastPriceHistory = PriceHistory.fromFirestore(sortedDocs.first);
+        lastPrice = lastPriceHistory.price;
+        final difference = (displayedPrice - lastPrice).abs();
+
+        ErrorLogger.logInfo(
+          'Last recorded price: ₱${lastPrice.toStringAsFixed(2)}, Difference: ₱${difference.toStringAsFixed(3)}',
+          context: 'InventoryProvider.recordPriceHistoryIfChanged',
+        );
+
+        // Record if price changed (tolerance 0.009 for floating point)
+        if (difference > 0.009) {
+          shouldRecord = true;
+          ErrorLogger.logInfo(
+            'Price changed - will record new price history',
+            context: 'InventoryProvider.recordPriceHistoryIfChanged',
+          );
+        } else {
+          ErrorLogger.logInfo(
+            'Price unchanged (within tolerance) - skipping record',
+            context: 'InventoryProvider.recordPriceHistoryIfChanged',
+          );
+        }
+      }
+
+      if (shouldRecord) {
+        final product = getProductById(productId);
+        if (product == null) {
+          ErrorLogger.logError(
+            'Product not found for price history',
+            error: 'ProductId: $productId',
+            context: 'InventoryProvider.recordPriceHistoryIfChanged',
+          );
+          return;
+        }
+
+        // Get batch info if not provided
+        String? finalBatchId = batchId;
+        String? finalBatchNumber = batchNumber;
+        double? finalCost = cost;
+
+        if (finalBatchId == null || finalBatchNumber == null) {
+          final batches = await _batchService.getBatchesByFIFO(productId);
+          if (batches.isNotEmpty) {
+            finalBatchId = batches.first.id;
+            finalBatchNumber = batches.first.batchNumber;
+            finalCost = batches.first.unitCost;
+          }
+        }
+
+        final priceHistory = PriceHistory(
+          id: const Uuid().v4(),
+          productId: productId,
+          price: displayedPrice,
+          timestamp: DateTime.now(),
+          batchId: finalBatchId,
+          batchNumber: finalBatchNumber,
+          cost: finalCost,
+          reason: reason,
+        );
+
+        if (_offlineManager.isOnline) {
+          await FirebaseFirestore.instance
+              .collection(AppConstants.priceHistoryCollection)
+              .doc(priceHistory.id)
+              .set(priceHistory.toMap());
+
+          ErrorLogger.logInfo(
+            'Price history recorded: ₱${displayedPrice.toStringAsFixed(2)} for ${product.name} - $reason',
+            context: 'InventoryProvider.recordPriceHistoryIfChanged',
+          );
+        } else {
+          // Queue for offline sync
+          await _offlineManager.queueOperation(
+            OfflineOperation(
+              id: priceHistory.id,
+              type: OperationType.insertPriceHistory,
+              collectionName: AppConstants.priceHistoryCollection,
+              documentId: priceHistory.id,
+              data: priceHistory.toMap(),
+              timestamp: DateTime.now(),
+            ),
+          );
+
+          ErrorLogger.logInfo(
+            'Price history queued for sync: ₱${displayedPrice.toStringAsFixed(2)} for ${product.name} - $reason',
+            context: 'InventoryProvider.recordPriceHistoryIfChanged',
+          );
+        }
+
+        // Always save to local database for offline access
+        await _localDatabaseService.insertPriceHistory({
+          'id': priceHistory.id,
+          'productId': priceHistory.productId,
+          'price': priceHistory.price,
+          'timestamp': priceHistory.timestamp.toIso8601String(),
+          'batchId': priceHistory.batchId,
+          'batchNumber': priceHistory.batchNumber,
+          'cost': priceHistory.cost,
+          'reason': priceHistory.reason,
+        });
+
+        ErrorLogger.logInfo(
+          'Price history saved to local database: ₱${displayedPrice.toStringAsFixed(2)}',
+          context: 'InventoryProvider.recordPriceHistoryIfChanged',
+        );
+      } else {
+        ErrorLogger.logInfo(
+          'Price unchanged for product $productId (current: ₱${displayedPrice.toStringAsFixed(2)})',
+          context: 'InventoryProvider.recordPriceHistoryIfChanged',
+        );
+      }
+    } catch (e) {
+      ErrorLogger.logError(
+        'Error recording price history',
+        error: e,
+        context: 'InventoryProvider.recordPriceHistoryIfChanged',
+      );
+      // Don't throw - price history recording is best-effort
+      // Log the error details for debugging
+      ErrorLogger.logInfo(
+        'Price history recording failed for product $productId: ${e.toString()}',
+        context: 'InventoryProvider.recordPriceHistoryIfChanged',
+      );
     }
   }
 
@@ -1944,6 +2048,35 @@ class InventoryProvider with ChangeNotifier {
         'restocked:$productId',
       );
     }
+  }
+
+  /// Check for expiring products and send notifications
+  Future<void> _checkExpiringProducts() async {
+    try {
+      // Check all products for expiration
+      await _expirationChecker.checkExpiringProducts(_products);
+    } catch (e, s) {
+      ErrorLogger.logError(
+        'Error checking expiring products',
+        error: e,
+        stackTrace: s,
+      );
+    }
+  }
+
+  /// Get expiring products (within 7 days)
+  List<Product> getExpiringProducts() {
+    return _expirationChecker.getExpiringProducts(_products);
+  }
+
+  /// Get expired products
+  List<Product> getExpiredProducts() {
+    return _expirationChecker.getExpiredProducts(_products);
+  }
+
+  /// Get expiration counts
+  Map<String, int> getExpirationCounts() {
+    return _expirationChecker.getExpirationCounts(_products);
   }
 }
 

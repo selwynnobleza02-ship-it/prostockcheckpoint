@@ -720,85 +720,37 @@ class SalesProvider with ChangeNotifier {
       }
 
       final nextBatch = batches.first;
-      final product = _inventoryProvider.products.firstWhere(
-        (p) => p.id == productId,
-        orElse: () => throw Exception('Product not found'),
-      );
 
-      // Calculate selling price from next batch's cost
-      final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
-        nextBatch.unitCost,
-        productId: productId,
-        categoryName: product.category,
-      );
-
-      // Use the actual selling price (manual override if set, otherwise calculated)
-      final nextBatchSellingPrice = product.getPriceForSale(calculatedPrice);
-
-      // Query last recorded price (fetch all and sort in memory to avoid composite index)
+      // Get last batch number for reason message
       final lastPriceQuery = await FirebaseFirestore.instance
           .collection(AppConstants.priceHistoryCollection)
           .where('productId', isEqualTo: productId)
           .get();
 
-      double? lastRecordedPrice;
       String? lastBatchNumber;
-
       if (lastPriceQuery.docs.isNotEmpty) {
-        // Sort by timestamp descending in memory
         final sortedDocs = lastPriceQuery.docs.toList()
           ..sort((a, b) {
             final aTimestamp = (a.data()['timestamp'] as Timestamp).toDate();
             final bTimestamp = (b.data()['timestamp'] as Timestamp).toDate();
             return bTimestamp.compareTo(aTimestamp);
           });
-
         final lastPrice = PriceHistory.fromFirestore(sortedDocs.first);
-        lastRecordedPrice = lastPrice.price;
         lastBatchNumber = lastPrice.batchNumber;
       }
 
-      ErrorLogger.logInfo(
-        'Price comparison - Last: ${lastRecordedPrice?.toStringAsFixed(2) ?? "none"}, Next: ${nextBatchSellingPrice.toStringAsFixed(2)}, Difference: ${lastRecordedPrice != null ? (nextBatchSellingPrice - lastRecordedPrice).abs().toStringAsFixed(3) : "N/A"}',
-        context: 'SalesProvider._recordPriceHistoryForNextBatch',
+      final reason = lastBatchNumber != null
+          ? 'Batch $lastBatchNumber depleted, now using batch ${nextBatch.batchNumber}'
+          : 'Now using batch ${nextBatch.batchNumber}';
+
+      // Use inventory provider's helper to record price history with displayed price
+      await _inventoryProvider.recordPriceHistoryIfChanged(
+        productId,
+        reason,
+        batchId: nextBatch.id,
+        batchNumber: nextBatch.batchNumber,
+        cost: nextBatch.unitCost,
       );
-
-      // Only record if price changed (with 0.01 tolerance)
-      if (lastRecordedPrice == null ||
-          (nextBatchSellingPrice - lastRecordedPrice).abs() > 0.009) {
-        final priceHistory = PriceHistory(
-          id: const Uuid().v4(),
-          productId: productId,
-          price: nextBatchSellingPrice,
-          timestamp: DateTime.now(),
-          batchId: nextBatch.id,
-          batchNumber: nextBatch.batchNumber,
-          cost: nextBatch.unitCost,
-          reason: lastBatchNumber != null
-              ? 'Batch $lastBatchNumber depleted, now using batch ${nextBatch.batchNumber}'
-              : 'Now using batch ${nextBatch.batchNumber}',
-        );
-
-        ErrorLogger.logInfo(
-          'Writing price history to Firestore: ${priceHistory.toMap()}',
-          context: 'SalesProvider._recordPriceHistoryForNextBatch',
-        );
-
-        await FirebaseFirestore.instance
-            .collection(AppConstants.priceHistoryCollection)
-            .doc(priceHistory.id)
-            .set(priceHistory.toMap());
-
-        ErrorLogger.logInfo(
-          'Price history recorded: ₱${nextBatchSellingPrice.toStringAsFixed(2)} for ${product.name} (batch ${nextBatch.batchNumber} now active)',
-          context: 'SalesProvider._recordPriceHistoryForNextBatch',
-        );
-      } else {
-        ErrorLogger.logInfo(
-          'Price unchanged for ${product.name} - batch ${nextBatch.batchNumber} has same price as previous batch',
-          context: 'SalesProvider._recordPriceHistoryForNextBatch',
-        );
-      }
     } catch (e) {
       ErrorLogger.logError(
         'Error recording price history for next batch',

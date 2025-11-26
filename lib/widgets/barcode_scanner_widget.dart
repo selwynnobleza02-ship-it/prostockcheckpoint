@@ -542,9 +542,12 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     );
 
     // For Damage/Expired, batch selection and confirmation already handled in dialog
-    // Result will be null because we handle everything there
+    // Result will be null because we handle everything in the batch dialog
+    // Also null if user cancelled at any step
     if (result == null) {
       // Either user cancelled or it was Damage/Expired (already processed)
+      // Camera restart is already handled in _showConfirmationDialogWithBatches
+      // but we need to handle cancellation before that point
       return;
     }
 
@@ -658,7 +661,11 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    // Restart camera when user cancels
+                    cameraController.start();
+                  },
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
@@ -698,14 +705,18 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                         return;
                       }
 
+                      // Save the navigator and widget context before closing dialog
+                      final navigator = Navigator.of(context);
+                      final widgetContext = this.context;
+
                       // Close this dialog first
                       if (!context.mounted) return;
-                      Navigator.pop(context);
+                      navigator.pop();
 
                       // Show batch selection dialog
-                      if (!context.mounted) return;
+                      if (!widgetContext.mounted) return;
                       selectedBatches = await showDialog<Map<String, int>>(
-                        context: context,
+                        context: widgetContext,
                         builder: (context) => BatchSelectionDialog(
                           batches: batches,
                           productName: product.name,
@@ -714,25 +725,37 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
                       );
 
                       if (selectedBatches == null || selectedBatches.isEmpty) {
+                        // User cancelled batch selection - restart camera
+                        await cameraController.start();
                         return;
                       }
 
                       // Show confirmation with selected batches
-                      if (!context.mounted) return;
+                      if (!widgetContext.mounted) return;
                       await _showConfirmationDialogWithBatches(
-                        context: context,
+                        context: widgetContext,
                         product: product,
                         selectedBatches: selectedBatches,
                         reason: reason,
                       );
                     } else {
-                      // Show regular confirmation dialog
-                      _showConfirmationDialog(
+                      // Show regular confirmation dialog for Miss stock
+                      final shouldProceed = await _showConfirmationDialog(
                         context: context,
                         product: product,
                         quantity: qty,
                         reason: reason,
                       );
+
+                      if (shouldProceed == true) {
+                        // User confirmed, close the initial dialog and return result
+                        if (!context.mounted) return;
+                        Navigator.pop(
+                          context,
+                          StockUpdateResult(quantity: qty, reason: reason),
+                        );
+                      }
+                      // If cancelled, just stay in the dialog
                     }
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
@@ -746,13 +769,12 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
     );
   }
 
-  Future<void> _showConfirmationDialog({
+  Future<bool?> _showConfirmationDialog({
     required BuildContext context,
     required Product product,
     required int quantity,
     required String reason,
   }) async {
-    final navigator = Navigator.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -789,10 +811,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
       ),
     );
 
-    if (confirmed == true) {
-      if (!navigator.mounted) return;
-      navigator.pop(StockUpdateResult(quantity: quantity, reason: reason));
-    }
+    return confirmed;
   }
 
   Future<void> _showConfirmationDialogWithBatches({
@@ -873,6 +892,7 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
       if (!context.mounted) return;
 
       if (success) {
+        // Close the scanner screen on success
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -881,15 +901,17 @@ class _BarcodeScannerWidgetState extends State<BarcodeScannerWidget> {
           ),
         );
       } else {
+        // Show error and restart camera to allow retry
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(inventoryProvider.error ?? 'Failed to remove stock'),
             backgroundColor: Colors.red,
           ),
         );
+        await cameraController.start();
       }
-      await cameraController.start();
     } else {
+      // User cancelled - restart camera
       await cameraController.start();
     }
   }

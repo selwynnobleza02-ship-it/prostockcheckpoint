@@ -6,6 +6,8 @@ import 'package:prostock/services/firestore/firestore_exception.dart';
 import 'package:prostock/services/tax_service.dart';
 import 'package:prostock/utils/app_constants.dart';
 import 'package:prostock/utils/constants.dart';
+import 'package:prostock/services/local_database_service.dart';
+import 'package:prostock/utils/error_logger.dart';
 
 class ProductService {
   final FirebaseFirestore _firestore;
@@ -259,23 +261,100 @@ class ProductService {
     }
   }
 
-  Future<List<PriceHistory>> getPriceHistory(String productId) async {
+  Future<List<PriceHistory>> getPriceHistory(
+    String productId, {
+    bool forceOnline = false,
+  }) async {
     try {
-      // Fetch without orderBy to avoid composite index requirement
-      // Use server-side data to avoid stale cache
-      final snapshot = await priceHistory
-          .where('productId', isEqualTo: productId)
-          .get(const GetOptions(source: Source.server));
+      List<PriceHistory> historyList = [];
 
-      // Sort in memory by timestamp descending
-      final historyList = snapshot.docs.map((doc) {
-        return PriceHistory.fromFirestore(doc);
-      }).toList();
+      // Try to fetch from Firestore first (if online or forced)
+      if (forceOnline) {
+        try {
+          // Fetch from BOTH collections: priceHistory (old) and price_history (new)
+          final oldCollectionSnapshot = await _firestore
+              .collection('priceHistory')
+              .where('productId', isEqualTo: productId)
+              .get(const GetOptions(source: Source.server));
 
+          final newCollectionSnapshot = await _firestore
+              .collection('price_history')
+              .where('productId', isEqualTo: productId)
+              .get(const GetOptions(source: Source.server));
+
+          // Combine entries from both collections
+          final allDocs = [
+            ...oldCollectionSnapshot.docs,
+            ...newCollectionSnapshot.docs,
+          ];
+
+          historyList = allDocs.map((doc) {
+            return PriceHistory.fromFirestore(doc);
+          }).toList();
+
+          // Save to local database for offline access
+          final localDb = LocalDatabaseService.instance;
+          for (final history in historyList) {
+            await localDb.insertPriceHistory({
+              'id': history.id,
+              'productId': history.productId,
+              'price': history.price,
+              'timestamp': history.timestamp.toIso8601String(),
+              'batchId': history.batchId,
+              'batchNumber': history.batchNumber,
+              'cost': history.cost,
+              'reason': history.reason,
+            });
+          }
+
+          ErrorLogger.logInfo(
+            'Fetched ${historyList.length} price history entries from Firestore (${oldCollectionSnapshot.docs.length} from priceHistory, ${newCollectionSnapshot.docs.length} from price_history)',
+            context: 'ProductService.getPriceHistory',
+          );
+        } catch (e) {
+          ErrorLogger.logWarning(
+            'Failed to fetch from Firestore, falling back to local: $e',
+            context: 'ProductService.getPriceHistory',
+          );
+          // Fall back to local database
+          forceOnline = false;
+        }
+      }
+
+      // If not forced online or Firestore failed, use local database
+      if (!forceOnline) {
+        final localDb = LocalDatabaseService.instance;
+        final localData = await localDb.getPriceHistory(productId);
+
+        historyList = localData.map((map) {
+          return PriceHistory(
+            id: map['id'] as String,
+            productId: map['productId'] as String,
+            price: (map['price'] as num).toDouble(),
+            timestamp: DateTime.parse(map['timestamp'] as String),
+            batchId: map['batchId'] as String?,
+            batchNumber: map['batchNumber'] as String?,
+            cost: (map['cost'] as num?)?.toDouble(),
+            reason: map['reason'] as String?,
+          );
+        }).toList();
+
+        ErrorLogger.logInfo(
+          'Fetched ${historyList.length} price history entries from local database',
+          context: 'ProductService.getPriceHistory',
+        );
+      }
+
+      // Sort in memory by timestamp descending (newest first)
       historyList.sort((a, b) => b.timestamp.compareTo(a.timestamp));
 
       return historyList;
     } catch (e) {
+      ErrorLogger.logError(
+        'Failed to get price history',
+        error: e,
+        context: 'ProductService.getPriceHistory',
+      );
       throw FirestoreException('Failed to get price history: $e');
     }
   }

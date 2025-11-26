@@ -133,6 +133,7 @@ class InventoryReportTab extends StatelessWidget {
                                     'Inventory Summary': true,
                                     'Product Stock Breakdown': true,
                                     'Inventory Distribution by Category': true,
+                                    'Near Expiration Products (15 Days)': true,
                                     'Low Stock Products': true,
                                     'Out of Stock Products': true,
                                   };
@@ -415,6 +416,52 @@ class InventoryReportTab extends StatelessWidget {
                                 PdfReportSection(
                                   title: 'Inventory Distribution by Category',
                                   rows: distributionRows,
+                                ),
+                              );
+                            }
+
+                            // Near Expiration Products (Product, Expiry Date, Days Left, Stock, Value at Risk)
+                            final nearExpirationProducts = reportService
+                                .getNearExpirationProducts(provider.products);
+                            if (nearExpirationProducts.isNotEmpty) {
+                              final nearExpRows = <List<String>>[];
+                              double totalValueAtRisk = 0.0;
+                              int totalStockAtRisk = 0;
+
+                              for (final p in nearExpirationProducts) {
+                                final daysLeft = p.daysUntilExpiration ?? 0;
+                                final valueAtRisk = p.stock * p.cost;
+                                final urgency = reportService
+                                    .getExpirationUrgency(p.expirationDate!);
+
+                                nearExpRows.add([
+                                  p.name,
+                                  _formatDate(p.expirationDate!),
+                                  '$daysLeft days',
+                                  p.stock.toString(),
+                                  CurrencyUtils.formatCurrency(valueAtRisk),
+                                  urgency == 'critical'
+                                      ? '⚠ URGENT'
+                                      : '⚠ Warning',
+                                ]);
+
+                                totalStockAtRisk += p.stock;
+                                totalValueAtRisk += valueAtRisk;
+                              }
+
+                              nearExpRows.add([
+                                'Total',
+                                '',
+                                '',
+                                totalStockAtRisk.toString(),
+                                CurrencyUtils.formatCurrency(totalValueAtRisk),
+                                '',
+                              ]);
+
+                              sections.add(
+                                PdfReportSection(
+                                  title: 'Near Expiration Products (15 Days)',
+                                  rows: nearExpRows,
                                 ),
                               );
                             }
@@ -736,6 +783,228 @@ class InventoryReportTab extends StatelessWidget {
                   ),
 
                   const SizedBox(height: 24),
+
+                  // Near Expiration Alert Section
+                  Builder(
+                    builder: (context) {
+                      final nearExpirationProducts = reportService
+                          .getNearExpirationProducts(provider.products);
+
+                      if (nearExpirationProducts.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+
+                      final totalValueAtRisk = reportService
+                          .calculateNearExpirationValue(nearExpirationProducts);
+
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.schedule,
+                                color: Colors.red.shade700,
+                                size: 24,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Near Expiration Products',
+                                style: Theme.of(context).textTheme.titleLarge
+                                    ?.copyWith(fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: Colors.red.shade200,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.info_outline,
+                                  color: Colors.red.shade700,
+                                  size: 20,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    '${nearExpirationProducts.length} products expiring within 15 days • Value at risk: ${CurrencyUtils.formatCurrency(totalValueAtRisk)}',
+                                    style: TextStyle(
+                                      color: Colors.red.shade900,
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          ListView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            itemCount: nearExpirationProducts.length,
+                            itemBuilder: (context, index) {
+                              final product = nearExpirationProducts[index];
+                              final daysUntilExpiration =
+                                  product.daysUntilExpiration ?? 0;
+                              final urgency = reportService
+                                  .getExpirationUrgency(
+                                    product.expirationDate!,
+                                  );
+                              final isCritical = urgency == 'critical';
+                              final valueAtRisk = product.stock * product.cost;
+
+                              return Card(
+                                elevation: 1,
+                                margin: const EdgeInsets.only(bottom: 8),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: isCritical
+                                        ? Colors.red.shade300
+                                        : Colors.orange.shade300,
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(12),
+                                  child: Row(
+                                    children: [
+                                      // Warning Icon
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color: isCritical
+                                              ? Colors.red.shade100
+                                              : Colors.orange.shade100,
+                                          borderRadius: BorderRadius.circular(
+                                            8,
+                                          ),
+                                        ),
+                                        child: Icon(
+                                          isCritical
+                                              ? Icons.error_outline
+                                              : Icons.warning_amber,
+                                          color: isCritical
+                                              ? Colors.red.shade700
+                                              : Colors.orange.shade700,
+                                          size: 28,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 12),
+                                      // Product Info
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              product.name,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.bold,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Icon(
+                                                  Icons.calendar_today,
+                                                  size: 12,
+                                                  color: Colors.grey.shade600,
+                                                ),
+                                                const SizedBox(width: 4),
+                                                Text(
+                                                  'Expires: ${_formatDate(product.expirationDate!)}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 8,
+                                                        vertical: 2,
+                                                      ),
+                                                  decoration: BoxDecoration(
+                                                    color: isCritical
+                                                        ? Colors.red.shade100
+                                                        : Colors
+                                                              .orange
+                                                              .shade100,
+                                                    borderRadius:
+                                                        BorderRadius.circular(
+                                                          12,
+                                                        ),
+                                                  ),
+                                                  child: Text(
+                                                    '$daysUntilExpiration days left',
+                                                    style: TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight.bold,
+                                                      color: isCritical
+                                                          ? Colors.red.shade900
+                                                          : Colors
+                                                                .orange
+                                                                .shade900,
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Row(
+                                              children: [
+                                                Text(
+                                                  'Stock: ${product.stock} pcs',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    color: Colors.grey.shade700,
+                                                  ),
+                                                ),
+                                                const SizedBox(width: 12),
+                                                Text(
+                                                  'Value at risk: ${CurrencyUtils.formatCurrency(valueAtRisk)}',
+                                                  style: TextStyle(
+                                                    fontSize: 12,
+                                                    fontWeight: FontWeight.w600,
+                                                    color: isCritical
+                                                        ? Colors.red.shade700
+                                                        : Colors
+                                                              .orange
+                                                              .shade700,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 24),
+                        ],
+                      );
+                    },
+                  ),
+
                   const Text(
                     'Inventory Distribution',
                     style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -949,6 +1218,11 @@ class InventoryReportTab extends StatelessWidget {
         );
       },
     );
+  }
+
+  /// Format date to readable string
+  String _formatDate(DateTime date) {
+    return '${date.day}/${date.month}/${date.year}';
   }
 
   /// Calculate all metrics in a single batch operation

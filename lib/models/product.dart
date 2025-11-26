@@ -10,6 +10,7 @@ class Product {
   final int stock;
   final int minStock;
   final String? category;
+  final DateTime? expirationDate; // New field for product expiration
   final DateTime createdAt;
   final DateTime updatedAt;
   final int version;
@@ -23,6 +24,7 @@ class Product {
     required this.stock,
     this.minStock = 5,
     this.category,
+    this.expirationDate,
     required this.createdAt,
     required this.updatedAt,
     this.version = 1,
@@ -87,6 +89,7 @@ class Product {
       'stock': stock,
       'min_stock': minStock,
       'category': category,
+      'expiration_date': expirationDate?.toIso8601String(),
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt.toIso8601String(),
       'version': version,
@@ -109,6 +112,9 @@ class Product {
       stock: sanitizedStock,
       minStock: map['min_stock'] ?? 5,
       category: map['category'],
+      expirationDate: map['expiration_date'] != null
+          ? DateTime.parse(map['expiration_date'])
+          : null,
       createdAt: DateTime.parse(map['created_at']),
       updatedAt: DateTime.parse(map['updated_at']),
       version: map['version'] ?? 1,
@@ -124,6 +130,7 @@ class Product {
     int? stock,
     int? minStock,
     String? category,
+    DateTime? expirationDate,
     DateTime? createdAt,
     DateTime? updatedAt,
     int? version,
@@ -137,6 +144,7 @@ class Product {
       stock: stock ?? this.stock,
       minStock: minStock ?? this.minStock,
       category: category ?? this.category,
+      expirationDate: expirationDate ?? this.expirationDate,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
@@ -144,4 +152,25 @@ class Product {
   }
 
   bool get isLowStock => stock <= minStock;
+
+  /// Check if product is expiring soon (within 7 days)
+  bool get isExpiringSoon {
+    if (expirationDate == null) return false;
+    final daysUntilExpiration = expirationDate!
+        .difference(DateTime.now())
+        .inDays;
+    return daysUntilExpiration >= 0 && daysUntilExpiration <= 7;
+  }
+
+  /// Check if product is expired
+  bool get isExpired {
+    if (expirationDate == null) return false;
+    return DateTime.now().isAfter(expirationDate!);
+  }
+
+  /// Get days until expiration
+  int? get daysUntilExpiration {
+    if (expirationDate == null) return null;
+    return expirationDate!.difference(DateTime.now()).inDays;
+  }
 }

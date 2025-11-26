@@ -23,6 +23,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
   final _minStockController = TextEditingController(text: '5');
 
   String _selectedCategory = AppConstants.productCategories.first;
+  DateTime? _selectedExpirationDate;
   bool _isLoading = false;
 
   final List<String> _categories = AppConstants.productCategories;
@@ -39,6 +40,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
       _costController.text = product.cost.toString();
       _stockController.text = product.stock.toString();
       _minStockController.text = product.minStock.toString();
+      _selectedExpirationDate = product.expirationDate;
 
       // FIX: Ensure the product's category exists in the list
       if (_categories.contains(product.category)) {
@@ -135,6 +137,83 @@ class _AddProductDialogState extends State<AddProductDialog> {
                     }
                   },
                 ),
+                const SizedBox(height: 16),
+
+                // Expiration Date Field
+                InkWell(
+                  onTap: () async {
+                    final DateTime? picked = await showDatePicker(
+                      context: context,
+                      initialDate:
+                          _selectedExpirationDate ??
+                          DateTime.now().add(const Duration(days: 30)),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(
+                        const Duration(days: 3650),
+                      ), // 10 years
+                      helpText: 'Select Expiration Date',
+                    );
+                    if (picked != null) {
+                      setState(() {
+                        _selectedExpirationDate = picked;
+                      });
+                    }
+                  },
+                  child: InputDecorator(
+                    decoration: const InputDecoration(
+                      labelText: 'Expiration Date (Optional)',
+                      border: OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.calendar_today),
+                      suffixIcon: Icon(Icons.arrow_drop_down),
+                      helperText: 'Set expiration date for perishable products',
+                    ),
+                    child: Text(
+                      _selectedExpirationDate != null
+                          ? '${_selectedExpirationDate!.day}/${_selectedExpirationDate!.month}/${_selectedExpirationDate!.year}'
+                          : 'No expiration date set',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: _selectedExpirationDate != null
+                            ? Colors.black87
+                            : Colors.grey,
+                      ),
+                    ),
+                  ),
+                ),
+                if (_selectedExpirationDate != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Days until expiration: ${_selectedExpirationDate!.difference(DateTime.now()).inDays}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontStyle: FontStyle.italic,
+                            color: Colors.black54,
+                          ),
+                        ),
+                        TextButton.icon(
+                          onPressed: () {
+                            setState(() {
+                              _selectedExpirationDate = null;
+                            });
+                          },
+                          icon: const Icon(Icons.clear, size: 16),
+                          label: const Text('Clear'),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
                 const SizedBox(height: 16),
 
                 // Cost Row
@@ -322,6 +401,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
           stock: stock,
           minStock: minStock,
           category: _selectedCategory,
+          expirationDate: _selectedExpirationDate,
           updatedAt: DateTime.now(),
         );
         await inventoryProvider.updateProduct(updatedProduct);
@@ -343,6 +423,7 @@ class _AddProductDialogState extends State<AddProductDialog> {
           stock: stock,
           minStock: minStock,
           category: _selectedCategory,
+          expirationDate: _selectedExpirationDate,
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
         );

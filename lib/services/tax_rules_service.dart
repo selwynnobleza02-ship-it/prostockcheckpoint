@@ -4,6 +4,7 @@ import '../models/tax_rule.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'firestore/pricing_service.dart';
 import 'tax_service.dart';
+import 'batch_service.dart';
 
 class TaxRulesService {
   static const String _rulesKey = 'tax_rules';
@@ -441,88 +442,94 @@ class TaxRulesService {
     }
   }
 
-  /// When markup rules change, compute the new selling price for affected
-  /// products and write a `priceHistory` entry. This is best-effort and
-  /// intentionally ignores failures so rules UI remains responsive.
+  /// Record price history when VAT pricing is implemented.
+  /// This method is kept for backward compatibility but now records VAT-based prices.
+  /// Note: This is no longer triggered by rule changes since VAT is constant.
   static Future<void> _recordPriceHistoryForRuleChange({
     String? productId,
     String? categoryName,
     bool isGlobal = false,
   }) async {
+    // Deprecated: VAT is constant and doesn't change per product/category
+    // Rules are no longer used, so this method does nothing
+    // Kept for backward compatibility to prevent errors in existing code
+    return;
+  }
+
+  /// Trigger price recalculation for all products after VAT implementation
+  /// This creates price history entries showing the transition from tubo to VAT
+  static Future<void> recalculateAllPricesForVAT() async {
     final firestore = FirebaseFirestore.instance;
     final productsCol = firestore.collection('products');
     final priceHistoryCol = firestore.collection('priceHistory');
 
-    // Collect affected product documents
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> docs = [];
+    try {
+      final snap = await productsCol.get();
+      if (snap.docs.isEmpty) return;
 
-    if (productId != null && productId.isNotEmpty) {
-      final doc = await productsCol.doc(productId).get();
-      if (doc.exists) {
-        // Create a synthetic QueryDocument-like map for unified handling
-        final data = doc.data() as Map<String, dynamic>;
-        final fakeQuerySnap = await productsCol
-            .where(FieldPath.documentId, isEqualTo: productId)
-            .limit(1)
+      final batchService = BatchService();
+      final batch = firestore.batch();
+
+      for (final d in snap.docs) {
+        final data = d.data();
+        final id = d.id;
+        final double? manualSellingPrice = (data['selling_price'] as num?)
+            ?.toDouble();
+
+        // Get FIFO batch cost (the cost that determines displayed price)
+        final batches = await batchService.getBatchesByFIFO(id);
+        final double batchCost = batches.isNotEmpty
+            ? batches.first.unitCost
+            : (data['cost'] as num?)?.toDouble() ?? 0.0;
+
+        // Calculate new VAT-based price
+        final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
+          batchCost,
+          productId: id,
+          categoryName: data['category'] as String?,
+        );
+
+        // Respect manual override if set, otherwise use calculated price
+        final actualPrice = manualSellingPrice ?? calculatedPrice;
+
+        // Check if price changed from last recorded price
+        final lastPriceQuery = await priceHistoryCol
+            .where('productId', isEqualTo: id)
             .get();
-        if (fakeQuerySnap.docs.isNotEmpty) {
-          docs = fakeQuerySnap.docs;
-        } else {
-          // Fallback: if query fails, process single doc directly
-          final batch = firestore.batch();
-          final double cost = (data['cost'] as num?)?.toDouble() ?? 0.0;
-          final String? cat = data['category'] as String?;
-          final price = await TaxService.calculateSellingPriceWithRule(
-            cost,
-            productId: productId,
-            categoryName: cat,
-          );
+
+        bool shouldRecord = true;
+        if (lastPriceQuery.docs.isNotEmpty) {
+          final sortedDocs = lastPriceQuery.docs.toList()
+            ..sort((a, b) {
+              final aTimestamp = (a.data()['timestamp'] as Timestamp).toDate();
+              final bTimestamp = (b.data()['timestamp'] as Timestamp).toDate();
+              return bTimestamp.compareTo(aTimestamp);
+            });
+          final lastPrice =
+              (sortedDocs.first.data()['price'] as num?)?.toDouble() ?? 0.0;
+
+          // Only record if price changed (tolerance 0.009)
+          if ((actualPrice - lastPrice).abs() <= 0.009) {
+            shouldRecord = false;
+          }
+        }
+
+        if (shouldRecord) {
           final ref = priceHistoryCol.doc();
           batch.set(ref, {
-            'productId': productId,
-            'price': price,
+            'productId': id,
+            'price': actualPrice,
+            'cost': batchCost,
             'timestamp': FieldValue.serverTimestamp(),
+            'reason': 'VAT implementation (12%)',
           });
-          await batch.commit();
-          return;
         }
       }
-    } else if (categoryName != null && categoryName.isNotEmpty) {
-      final snap = await productsCol
-          .where('category', isEqualTo: categoryName)
-          .get();
-      docs = snap.docs;
-    } else if (isGlobal) {
-      final snap = await productsCol.get();
-      docs = snap.docs;
+
+      await batch.commit();
+    } catch (e) {
+      // Best effort - don't throw
+      print('Error recalculating prices for VAT: $e');
     }
-
-    if (docs.isEmpty) return;
-
-    final batch = firestore.batch();
-    for (final d in docs) {
-      final data = d.data();
-      final id = d.id;
-      final double cost = (data['cost'] as num?)?.toDouble() ?? 0.0;
-      final String? cat = data['category'] as String?;
-      final double? manualSellingPrice = (data['selling_price'] as num?)?.toDouble();
-
-      final calculatedPrice = await TaxService.calculateSellingPriceWithRule(
-        cost,
-        productId: id,
-        categoryName: cat,
-      );
-      // Respect manual override if set
-      final actualPrice = manualSellingPrice ?? calculatedPrice;
-
-      final ref = priceHistoryCol.doc();
-      batch.set(ref, {
-        'productId': id,
-        'price': actualPrice,
-        'timestamp': FieldValue.serverTimestamp(),
-      });
-    }
-
-    await batch.commit();
   }
 }

@@ -7,6 +7,7 @@ import 'package:prostock/widgets/add_product_dialog.dart';
 import 'package:prostock/widgets/price_history_dialog.dart';
 import 'package:prostock/widgets/batch_list_widget.dart';
 import 'package:prostock/services/tax_service.dart';
+import 'package:intl/intl.dart';
 
 class ExpandableProductCard extends StatefulWidget {
   final Product product;
@@ -180,6 +181,45 @@ class _ExpandableProductCardState extends State<ExpandableProductCard> {
                                 materialTapTargetSize:
                                     MaterialTapTargetSize.shrinkWrap,
                               ),
+                            if (widget.product.isExpired)
+                              Chip(
+                                avatar: Icon(
+                                  Icons.error_outline,
+                                  size: 16,
+                                  color: colorScheme.error,
+                                ),
+                                label: const Text('Expired'),
+                                labelStyle: textTheme.labelSmall?.copyWith(
+                                  color: colorScheme.error,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                backgroundColor: colorScheme.errorContainer,
+                                padding: EdgeInsets.zero,
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
+                            if (!widget.product.isExpired &&
+                                widget.product.isExpiringSoon)
+                              Chip(
+                                avatar: Icon(
+                                  Icons.warning_amber_rounded,
+                                  size: 16,
+                                  color: Colors.orange.shade800,
+                                ),
+                                label: Text(
+                                  'Expiring in ${widget.product.daysUntilExpiration} days',
+                                ),
+                                labelStyle: textTheme.labelSmall?.copyWith(
+                                  color: Colors.orange.shade800,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                backgroundColor: Colors.orange.shade100,
+                                padding: EdgeInsets.zero,
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize:
+                                    MaterialTapTargetSize.shrinkWrap,
+                              ),
                             if (isLowStock)
                               Chip(
                                 avatar: Icon(
@@ -258,6 +298,64 @@ class _ExpandableProductCardState extends State<ExpandableProductCard> {
                                   color: colorScheme.onSurfaceVariant,
                                   letterSpacing: 1.2,
                                 ),
+                              ),
+                            ),
+                          ),
+
+                        // Expiration Date (if exists)
+                        if (widget.product.expirationDate != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: widget.product.isExpired
+                                    ? colorScheme.errorContainer
+                                    : widget.product.isExpiringSoon
+                                    ? Colors.orange.shade100
+                                    : colorScheme.surfaceContainerHighest,
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: widget.product.isExpired
+                                      ? colorScheme.error
+                                      : widget.product.isExpiringSoon
+                                      ? Colors.orange.shade300
+                                      : colorScheme.outlineVariant,
+                                  width: 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    Icons.event,
+                                    size: 14,
+                                    color: widget.product.isExpired
+                                        ? colorScheme.error
+                                        : widget.product.isExpiringSoon
+                                        ? Colors.orange.shade800
+                                        : colorScheme.onSurfaceVariant,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Exp: ${DateFormat('MMM d, y').format(widget.product.expirationDate!)}',
+                                    style: textTheme.bodySmall?.copyWith(
+                                      color: widget.product.isExpired
+                                          ? colorScheme.error
+                                          : widget.product.isExpiringSoon
+                                          ? Colors.orange.shade800
+                                          : colorScheme.onSurfaceVariant,
+                                      fontWeight:
+                                          (widget.product.isExpired ||
+                                              widget.product.isExpiringSoon)
+                                          ? FontWeight.w600
+                                          : FontWeight.normal,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
@@ -397,7 +495,11 @@ class _ExpandableProductCardState extends State<ExpandableProductCard> {
                             ],
                           ),
                           const SizedBox(height: 8),
-                          BatchListWidget(batches: batches, showDepleted: true),
+                          BatchListWidget(
+                            batches: batches,
+                            showDepleted: true,
+                            product: widget.product,
+                          ),
                           const SizedBox(height: 8),
                           Container(
                             padding: const EdgeInsets.all(8),

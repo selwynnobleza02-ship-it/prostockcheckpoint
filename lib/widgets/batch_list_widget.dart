@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:prostock/models/inventory_batch.dart';
+import 'package:prostock/models/product.dart';
 
 class BatchListWidget extends StatelessWidget {
   final List<InventoryBatch> batches;
   final bool showDepleted;
+  final Product? product;
 
   const BatchListWidget({
     super.key,
     required this.batches,
     this.showDepleted = false,
+    this.product,
   });
 
   bool _isSystemNote(String? note) {
@@ -174,6 +177,94 @@ class BatchListWidget extends StatelessWidget {
                           ),
                         ],
                       ),
+                      // Expiration Date Row
+                      if (product?.expirationDate != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: product!.isExpired
+                                  ? Colors.red.shade50
+                                  : product!.isExpiringSoon
+                                  ? Colors.orange.shade50
+                                  : Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(
+                                color: product!.isExpired
+                                    ? Colors.red.shade300
+                                    : product!.isExpiringSoon
+                                    ? Colors.orange.shade300
+                                    : Colors.blue.shade300,
+                                width: 1,
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  product!.isExpired
+                                      ? Icons.error_outline
+                                      : product!.isExpiringSoon
+                                      ? Icons.warning_amber_rounded
+                                      : Icons.event,
+                                  size: 16,
+                                  color: product!.isExpired
+                                      ? Colors.red.shade700
+                                      : product!.isExpiringSoon
+                                      ? Colors.orange.shade700
+                                      : Colors.blue.shade700,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        product!.isExpired
+                                            ? 'Expired'
+                                            : 'Expiration Date',
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: product!.isExpired
+                                              ? Colors.red.shade700
+                                              : product!.isExpiringSoon
+                                              ? Colors.orange.shade700
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        DateFormat(
+                                          'MMM d, y',
+                                        ).format(product!.expirationDate!),
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: product!.isExpired
+                                              ? Colors.red.shade900
+                                              : product!.isExpiringSoon
+                                              ? Colors.orange.shade900
+                                              : Colors.black87,
+                                        ),
+                                      ),
+                                      if (product!.isExpiringSoon &&
+                                          !product!.isExpired)
+                                        Text(
+                                          '${product!.daysUntilExpiration} days remaining',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontStyle: FontStyle.italic,
+                                            color: Colors.orange.shade800,
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
                       const SizedBox(height: 12),
                       // Stock Status
                       Row(

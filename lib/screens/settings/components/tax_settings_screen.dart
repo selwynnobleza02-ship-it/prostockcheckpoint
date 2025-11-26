@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:prostock/services/tax_service.dart';
-import 'package:prostock/providers/auth_provider.dart';
-import 'package:provider/provider.dart';
 import 'tax_history_dialog.dart';
 
-// Deprecated: Use Markup Rules screen instead. This screen is no longer used.
+// Updated: Now displays VAT (Value Added Tax) information instead of configurable tubo
+// Settings are read-only as VAT rate is constant at 12%
 class TaxSettingsScreen extends StatefulWidget {
   const TaxSettingsScreen({super.key});
 
@@ -14,10 +13,7 @@ class TaxSettingsScreen extends StatefulWidget {
 
 class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _tuboAmountController = TextEditingController();
 
-  double _tuboAmount = 2.0; // Default ₱2
-  bool _tuboInclusive = true;
   bool _isLoading = false;
   String? _error;
 
@@ -29,7 +25,6 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
 
   @override
   void dispose() {
-    _tuboAmountController.dispose();
     super.dispose();
   }
 
@@ -37,86 +32,16 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
     setState(() => _isLoading = true);
 
     try {
-      // Load tubo settings using TaxService
-      _tuboAmount = await TaxService.getTuboAmount();
-      _tuboAmountController.text = _tuboAmount.toStringAsFixed(2);
-
-      _tuboInclusive = await TaxService.isTuboInclusive();
+      // Load VAT info using TaxService (currently just validates service is working)
+      await TaxService.getTuboInfo();
 
       setState(() {});
     } catch (e) {
       setState(() {
-        _error = 'Failed to load tubo settings: $e';
+        _error = 'Failed to load VAT settings: $e';
       });
     } finally {
       setState(() => _isLoading = false);
-    }
-  }
-
-  Future<void> _saveTaxSettings() async {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-      _error = null;
-    });
-
-    try {
-      final authProvider = context.read<AuthProvider>();
-      final currentUser = authProvider.currentUser;
-
-      if (currentUser == null) {
-        throw Exception('User not authenticated');
-      }
-
-      // Save tubo settings using TaxService with history tracking
-      final amountSuccess = await TaxService.setTuboAmount(
-        _tuboAmount,
-        changedByUserId: currentUser.id ?? 'unknown',
-        changedByUserName: currentUser.username,
-        source: 'settings_screen',
-      );
-
-      final inclusiveSuccess = await TaxService.setTuboInclusive(
-        _tuboInclusive,
-        changedByUserId: currentUser.id ?? 'unknown',
-        changedByUserName: currentUser.username,
-        source: 'settings_screen',
-      );
-
-      if (amountSuccess && inclusiveSuccess) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Tubo settings saved successfully!'),
-              backgroundColor: Colors.green,
-            ),
-          );
-        }
-      } else {
-        throw Exception('Failed to save one or more settings');
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _error = 'Failed to save tubo settings: $e';
-        });
-      }
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  void _updateTuboAmount(String value) {
-    final amount = double.tryParse(value);
-    if (amount != null && amount >= 0) {
-      setState(() {
-        _tuboAmount = amount;
-      });
     }
   }
 
@@ -124,7 +49,7 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Markup Settings'),
+        title: const Text('VAT Settings'),
         actions: [
           IconButton(
             onPressed: () {
@@ -136,14 +61,9 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
             icon: const Icon(Icons.history),
             tooltip: 'View History',
           ),
-          if (!_isLoading)
-            TextButton(
-              onPressed: _saveTaxSettings,
-              child: const Text('Save', style: TextStyle(color: Colors.white)),
-            ),
         ],
       ),
-      body: _isLoading && _tuboAmountController.text.isEmpty
+      body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : SingleChildScrollView(
               padding: const EdgeInsets.all(16.0),
@@ -152,7 +72,7 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Tubo Amount Section
+                    // VAT Information Section
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -161,10 +81,10 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                           children: [
                             const Row(
                               children: [
-                                Icon(Icons.attach_money, color: Colors.blue),
+                                Icon(Icons.percent, color: Colors.blue),
                                 SizedBox(width: 8),
                                 Text(
-                                  'Tubo Configuration',
+                                  'VAT Configuration',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -173,57 +93,57 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            TextFormField(
-                              controller: _tuboAmountController,
-                              decoration: InputDecoration(
-                                labelText: 'Tubo Amount (₱)',
-                                border: const OutlineInputBorder(),
-                                suffixText: '₱',
-                                helperText: 'Enter fixed tubo amount in pesos',
-                              ),
-                              keyboardType: TextInputType.numberWithOptions(
-                                decimal: true,
-                              ),
-                              onChanged: _updateTuboAmount,
-                              validator: (value) {
-                                if (value == null || value.isEmpty) {
-                                  return 'Tubo amount is required';
-                                }
-                                final amount = double.tryParse(value);
-                                if (amount == null) {
-                                  return 'Please enter a valid number';
-                                }
-                                if (amount < 0) {
-                                  return 'Tubo amount must be 0 or greater';
-                                }
-                                return null;
-                              },
-                            ),
-                            const SizedBox(height: 16),
                             Container(
-                              padding: const EdgeInsets.all(12),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: Colors.blue.withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(
                                   color: Colors.blue.withValues(alpha: 0.3),
+                                  width: 2,
                                 ),
                               ),
-                              child: Row(
+                              child: Column(
                                 children: [
-                                  const Icon(
-                                    Icons.info,
-                                    color: Colors.blue,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: Text(
-                                      'Current tubo: ₱${_tuboAmount.toStringAsFixed(2)}',
-                                      style: const TextStyle(
-                                        color: Colors.blue,
-                                        fontWeight: FontWeight.w500,
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      const Text(
+                                        'VAT Rate:',
+                                        style: TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w500,
+                                        ),
                                       ),
+                                      Text(
+                                        '12%',
+                                        style: TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.blue.shade700,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Divider(),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'Value Added Tax (VAT) is automatically applied to all products.',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.black87,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Example: Cost ₱100 → Selling Price ₱112',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.green.shade700,
+                                      fontWeight: FontWeight.w500,
                                     ),
                                   ),
                                 ],
@@ -235,7 +155,7 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Pricing Method Section
+                    // How VAT Works Section
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -247,7 +167,7 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                                 Icon(Icons.calculate, color: Colors.green),
                                 SizedBox(width: 8),
                                 Text(
-                                  'Tubo Method',
+                                  'How VAT is Calculated',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -256,32 +176,11 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                               ],
                             ),
                             const SizedBox(height: 16),
-                            RadioGroup<bool>(
-                              groupValue: _tuboInclusive,
-                              onChanged: (value) {
-                                setState(() {
-                                  _tuboInclusive = value ?? true;
-                                });
-                              },
-                              child: Column(
-                                children: [
-                                  RadioListTile<bool>(
-                                    title: const Text('Tubo Inclusive'),
-                                    subtitle: const Text(
-                                      'Selling price equals cost (tubo included)',
-                                    ),
-                                    value: true,
-                                  ),
-                                  RadioListTile<bool>(
-                                    title: const Text('Tubo Added on Top'),
-                                    subtitle: const Text(
-                                      'Tubo is added to the cost',
-                                    ),
-                                    value: false,
-                                  ),
-                                ],
-                              ),
+                            _buildTaxInfoRow(
+                              'Formula',
+                              'Selling Price = Cost × 1.12',
                             ),
+                            _buildTaxInfoRow('VAT Amount', 'Cost × 0.12'),
                             const SizedBox(height: 16),
                             Container(
                               padding: const EdgeInsets.all(12),
@@ -292,38 +191,22 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                                   color: Colors.green.withValues(alpha: 0.3),
                                 ),
                               ),
-                              child: Column(
+                              child: const Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Icon(
-                                        _tuboInclusive
-                                            ? Icons.check_circle
-                                            : Icons.add_circle,
-                                        color: Colors.green,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Text(
-                                        _tuboInclusive
-                                            ? 'Tubo Inclusive'
-                                            : 'Tubo Added on Top',
-                                        style: const TextStyle(
-                                          color: Colors.green,
-                                          fontWeight: FontWeight.w500,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
                                   Text(
-                                    _tuboInclusive
-                                        ? 'Example: Cost ₱100 → Selling ₱100 (tubo included)'
-                                        : 'Example: Cost ₱100 → Selling ₱${(100 + _tuboAmount).toStringAsFixed(0)} (₱100 + ₱${_tuboAmount.toStringAsFixed(0)} tubo)',
-                                    style: const TextStyle(
+                                    'Example Calculation:',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
                                       color: Colors.green,
-                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'Product Cost: ₱100\nVAT (12%): ₱12\nSelling Price: ₱112',
+                                    style: TextStyle(
+                                      color: Colors.green,
+                                      fontSize: 13,
                                     ),
                                   ),
                                 ],
@@ -335,7 +218,7 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                     ),
                     const SizedBox(height: 24),
 
-                    // Tax Information Section
+                    // Additional Information Section
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -347,7 +230,7 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                                 Icon(Icons.info_outline, color: Colors.orange),
                                 SizedBox(width: 8),
                                 Text(
-                                  'Tubo Information',
+                                  'Additional Information',
                                   style: TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
@@ -357,24 +240,20 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                             ),
                             const SizedBox(height: 16),
                             _buildTaxInfoRow(
-                              'Current Tubo',
-                              '₱${_tuboAmount.toStringAsFixed(2)}',
+                              'VAT Rate',
+                              '12% (Standard Philippine VAT)',
                             ),
                             _buildTaxInfoRow(
-                              'Tubo Method',
-                              _tuboInclusive
-                                  ? 'Tubo Inclusive'
-                                  : 'Tubo Added on Top',
+                              'Application',
+                              'Applied to all products',
                             ),
                             _buildTaxInfoRow(
-                              'Tubo Application',
-                              _tuboInclusive
-                                  ? 'Included in price'
-                                  : 'Added on top of cost',
+                              'Calculation',
+                              'Automatic on all sales',
                             ),
                             _buildTaxInfoRow(
-                              'Receipt Display',
-                              'Profit shown via tubo settings',
+                              'Manual Overrides',
+                              'Products with manual prices are preserved',
                             ),
                           ],
                         ),
@@ -412,25 +291,30 @@ class _TaxSettingsScreenState extends State<TaxSettingsScreen> {
                     ],
 
                     const SizedBox(height: 24),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _isLoading ? null : _saveTaxSettings,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
+                    // Info box explaining VAT is constant
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: Colors.blue.withValues(alpha: 0.3),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text(
-                                'Save Markup Settings',
-                                style: TextStyle(fontSize: 16),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.info, color: Colors.blue),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'VAT rate is constant at 12% as per Philippine law. No configuration changes are needed.',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                fontSize: 14,
                               ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ],

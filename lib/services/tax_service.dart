@@ -8,10 +8,13 @@ import 'dart:async';
 import '../models/tax_rule.dart';
 
 class TaxService extends ChangeNotifier {
+  // VAT Configuration
+  static const double VAT_RATE = 0.12; // 12% VAT (Philippines standard)
+
   static const String _tuboAmountKey = 'tubo_amount';
   static const String _tuboInclusiveKey = 'tubo_inclusive';
 
-  // Default values
+  // Default values (deprecated, kept for backwards compatibility)
   static const double _defaultTuboAmount = 2.0; // ₱2 default tubo
   static const bool _defaultTuboInclusive = true;
 
@@ -176,15 +179,14 @@ class TaxService extends ChangeNotifier {
     }
   }
 
-  /// Calculate selling price based on cost and tubo settings (synchronous)
+  /// Calculate selling price based on cost and VAT (synchronous)
   static double calculateSellingPriceSync(double cost) {
-    // Added-on-top only: selling price = cost + tubo, rounded to nearest peso
-    final tuboAmount = getCachedTuboAmount();
-    final rawPrice = cost + tuboAmount;
+    // VAT formula: selling price = cost × (1 + VAT%), rounded to nearest peso
+    final rawPrice = cost * (1 + VAT_RATE);
     return rawPrice.round().toDouble();
   }
 
-  /// Calculate selling price based on cost and tubo settings (async)
+  /// Calculate selling price based on cost and VAT (async)
   static Future<double> calculateSellingPrice(double cost) async {
     if (!_isInitialized) {
       await initialize();
@@ -278,7 +280,7 @@ class TaxService extends ChangeNotifier {
     }).toList();
   }
 
-  /// Calculate selling price with category-specific tubo rule
+  /// Calculate selling price with VAT (rules no longer used)
   static Future<double> calculateSellingPriceWithRule(
     double cost, {
     String? productId,
@@ -288,28 +290,17 @@ class TaxService extends ChangeNotifier {
       await initialize();
     }
 
-    final rule = await TaxRulesService.getBestRule(
-      productId: productId,
-      categoryName: categoryName,
-    );
-
-    if (rule != null && rule.id.isNotEmpty) {
-      // Use rule: always add-on-top
-      final rawPrice = cost + rule.tubo;
-      return rawPrice.round().toDouble();
-    }
-    // Fallback to global
+    // VAT is now applied universally, no category/product-specific rules
     return calculateSellingPriceSync(cost);
   }
 
-  /// Calculate selling price with category-specific tubo rule (synchronous)
+  /// Calculate selling price with VAT (synchronous)
   static double calculateSellingPriceWithRuleSync(
     double cost, {
     String? productId,
     String? categoryName,
   }) {
-    // For synchronous version, we can't easily get the rule without async
-    // So we fall back to global settings
+    // VAT is applied universally
     return calculateSellingPriceSync(cost);
   }
 
@@ -382,15 +373,13 @@ class TaxService extends ChangeNotifier {
     return await TaxRulesService.checkForConflicts(rule);
   }
 
-  /// Get tubo information for display
+  /// Get VAT information for display
   static Future<Map<String, dynamic>> getTuboInfo() async {
-    final tuboAmount = await getTuboAmount();
-
     return {
-      'tuboAmount': tuboAmount,
-      'isInclusive': false,
-      'tuboAmountFormatted': '₱${tuboAmount.toStringAsFixed(2)}',
-      'pricingMethod': 'Tubo Added on Top',
+      'vatRate': VAT_RATE,
+      'vatPercentage': VAT_RATE * 100,
+      'vatRateFormatted': '${(VAT_RATE * 100).toStringAsFixed(0)}%',
+      'pricingMethod': 'VAT (Value Added Tax)',
     };
   }
 

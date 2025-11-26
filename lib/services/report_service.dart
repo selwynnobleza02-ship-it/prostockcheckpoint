@@ -344,14 +344,9 @@ class ReportService {
     );
   }
 
-  /// Calculate price with a specific rule
+  /// Calculate price with VAT (rules no longer used)
   double _calculatePriceWithRule(double cost, TaxRule? rule) {
-    if (rule != null && rule.id.isNotEmpty) {
-      // Use rule: always add-on-top
-      final rawPrice = cost + rule.tubo;
-      return rawPrice.round().toDouble();
-    }
-    // Fallback to global settings
+    // VAT is now applied universally at 12%
     return TaxService.calculateSellingPriceSync(cost);
   }
 
@@ -464,5 +459,36 @@ class ReportService {
     final m = method.toLowerCase();
     // Treat standard immediate methods as sales; exclude credit and any payment entries
     return m == 'cash' || m == 'card' || m == 'gcash' || m == 'paymaya';
+  }
+
+  /// Get products with near expiration (within 15 days)
+  /// Returns a list of products sorted by expiration date (soonest first)
+  List<Product> getNearExpirationProducts(List<Product> products) {
+    final now = DateTime.now();
+    final fifteenDaysFromNow = now.add(const Duration(days: 15));
+
+    return products.where((product) {
+      if (product.expirationDate == null) return false;
+
+      // Include products expiring within 15 days (not yet expired)
+      return product.expirationDate!.isAfter(now) &&
+          product.expirationDate!.isBefore(fifteenDaysFromNow);
+    }).toList()..sort((a, b) => a.expirationDate!.compareTo(b.expirationDate!));
+  }
+
+  /// Calculate total value at risk for near expiration products
+  double calculateNearExpirationValue(List<Product> nearExpirationProducts) {
+    return nearExpirationProducts.fold(
+      0.0,
+      (sum, product) => sum + (product.stock * product.cost),
+    );
+  }
+
+  /// Get urgency level based on days until expiration
+  /// Returns: 'critical' (<= 7 days), 'warning' (8-15 days)
+  String getExpirationUrgency(DateTime expirationDate) {
+    final daysUntil = expirationDate.difference(DateTime.now()).inDays;
+    if (daysUntil <= 7) return 'critical';
+    return 'warning';
   }
 }
